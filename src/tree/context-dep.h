@@ -1,6 +1,7 @@
 // tree/context-dep.h
 
 // Copyright 2009-2011  Microsoft Corporation
+//           2015       Hainan Xu
 
 // See ../../COPYING for clarification regarding multiple authors
 //
