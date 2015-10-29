@@ -21,6 +21,7 @@
 #include "tree/context-dep-multi.h"
 #include "base/kaldi-math.h"
 #include "tree/build-tree.h"
+#include "tree/build-tree-virtual.h"
 
 namespace kaldi {
 
@@ -129,5 +130,10 @@ void ContextDependencyMulti::GetPdfInfo(
   }
 }
 
+void ContextDependencyMulti::BuildVirtualTree() {
+  vector<int32> phone2num_pdf_classes;
+  topo_.GetPhoneToNumPdfClasses(&phone2num_pdf_classes);
+  MultiTreePdfMap m(single_trees_, N_, P_, phone2num_pdf_classes);
+}
 } // end namespace kaldi.
 

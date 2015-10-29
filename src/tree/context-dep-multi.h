@@ -26,6 +26,7 @@
 #include "matrix/matrix-lib.h"
 #include "tree/cluster-utils.h"
 #include "tree/context-dep.h"
+#include "hmm/hmm-topology.h"
 
 namespace kaldi {
 
@@ -47,12 +48,12 @@ class ContextDependencyMulti: public ContextDependencyInterface {
     else return (int32) max_result+1;
   }
   virtual ContextDependencyInterface *Copy() const {
-    vector<EventMap*> trees;
+    vector<const EventMap*> trees;
     for (int i = 0; i < single_trees_.size(); i++) {
       trees.push_back(single_trees_[i]->Copy());
     }
 
-    return new ContextDependencyMulti(N_, P_, trees);
+    return new ContextDependencyMulti(N_, P_, trees, topo_);
   }
 
   /// Read context-dependency object from disk; throws on error
@@ -64,8 +65,9 @@ class ContextDependencyMulti: public ContextDependencyInterface {
 
   // Constructor takes ownership of pointers.
   ContextDependencyMulti(int32 N, int32 P,
-                         vector<EventMap*> single_trees):
-      N_(N), P_(P), single_trees_(single_trees) {
+                         const vector<const EventMap*> &single_trees,
+                         const HmmTopology &topo):
+      N_(N), P_(P), single_trees_(single_trees), topo_(topo) {
     BuildVirtualTree();
   }
 
@@ -90,15 +92,14 @@ class ContextDependencyMulti: public ContextDependencyInterface {
                   std::vector<std::vector<std::pair<int32, int32> > > *pdf_info)
       const;
 
-  void BuildVirtualTree() {
-
-  }
+  void BuildVirtualTree();
 
  private:
   int32 N_;  //
   int32 P_;
   EventMap *to_pdf_;  // owned here. This is the virtual tree
-  vector<EventMap*> single_trees_; // single trees, owned here
+  vector<const EventMap*> single_trees_; // single trees, owned here
+  HmmTopology topo_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(ContextDependencyMulti);
 };

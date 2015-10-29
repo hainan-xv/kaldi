@@ -5,7 +5,7 @@
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
 #include "hmm/hmm-topology.h"
-#include "tree/context-dep.h"
+#include "tree/context-dep-multi.h"
 #include "tree/build-tree.h"
 #include "tree/build-tree-utils.h"
 #include "tree/clusterable-classes.h"
@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
     std::vector<int32> phone2num_pdf_classes;
     topo.GetPhoneToNumPdfClasses(&phone2num_pdf_classes);
 
-    std::vector<EventMap*> to_pdf_vec;
+    std::vector<const EventMap*> to_pdf_vec;
 
     //////// Build the tree. ////////////
 
@@ -132,6 +132,7 @@ int main(int argc, char *argv[]) {
       }
     }
 
+/*
     for (size_t j = 0; j < num_trees; j++) {
       ContextDependency ctx_dep(N, P, to_pdf_vec[j]);  // takes ownership
     // of pointer "to_pdf", so set it NULL.
@@ -142,6 +143,8 @@ int main(int argc, char *argv[]) {
       // tree files are like tree-2
       WriteKaldiObject(ctx_dep, tree_out_filename+tree_affix, binary);
     }
+*/
+    ContextDependencyMulti ctx_dep(N, P, to_pdf_vec, topo);
 
     {  // This block is just doing some checks.
       std::vector<int32> all_phones;

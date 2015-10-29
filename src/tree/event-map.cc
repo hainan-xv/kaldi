@@ -68,7 +68,7 @@ EventMap *EventMap::Read(std::istream &is, bool binary) {
 }
 
 
-void ConstantEventMap::Write(std::ostream &os, bool binary) {
+void ConstantEventMap::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "CE");
   WriteBasicType(os, binary, answer_);
   if (os.fail()) {
@@ -145,7 +145,7 @@ EventMap* TableEventMap::MapValues(
 }
 
 
-void TableEventMap::Write(std::ostream &os, bool binary) {
+void TableEventMap::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "TE");
   WriteBasicType(os, binary, key_);
   uint32 size = table_.size();
@@ -219,7 +219,7 @@ EventMap* SplitEventMap::MapValues(
   }  
 }
 
-void SplitEventMap::Write(std::ostream &os, bool binary) {
+void SplitEventMap::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "SE");
   WriteBasicType(os, binary, key_);
   // WriteIntegerVector(os, binary, yes_set_);

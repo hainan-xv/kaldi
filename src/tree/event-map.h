@@ -169,7 +169,7 @@ class EventMap {
   }
 
   /// Write to stream.
-  virtual void Write(std::ostream &os, bool binary) = 0;
+  virtual void Write(std::ostream &os, bool binary) const = 0;
 
   virtual ~EventMap() {}
 
@@ -215,7 +215,7 @@ class ConstantEventMap: public EventMap {
   
   explicit ConstantEventMap(EventAnswerType answer): answer_(answer) { }
   
-  virtual void Write(std::ostream &os, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
   static ConstantEventMap *Read(std::istream &is, bool binary);
 
   virtual bool IsSameTree (const EventMap* other) const;
@@ -269,7 +269,7 @@ class TableEventMap: public EventMap {
   /// This initializer creates a ConstantEventMap for each value in the map.
   explicit TableEventMap(EventKeyType key, const std::map<EventValueType, EventAnswerType> &map_in);
 
-  virtual void Write(std::ostream &os, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
   static TableEventMap *Read(std::istream &is, bool binary);
 
   virtual EventMap *Copy(const std::vector<EventMap*> &new_leaves) const {
@@ -330,7 +330,7 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
     return new SplitEventMap(key_, yes_set_, yes_->Copy(new_leaves), no_->Copy(new_leaves));
   }
 
-  virtual void Write(std::ostream &os, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
   static SplitEventMap *Read(std::istream &is, bool binary);
 
   virtual EventMap *Prune() const;

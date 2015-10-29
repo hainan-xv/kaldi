@@ -95,7 +95,7 @@ EventMap *BuildTree(Questions &qopts,
 // same effect; the difference is,
 // 1. The splitting criteria is the original like_impr + lambda * entropy
 // 2. It returns a vector of pointers to trees
-std::vector<EventMap*> BuildTreeMulti(Questions &qopts,
+std::vector<const EventMap*> BuildTreeMulti(Questions &qopts,
                     const std::vector<std::vector<int32> > &phone_sets,
                     const std::vector<int32> &phone2num_pdf_classes,
                     const std::vector<bool> &share_roots,

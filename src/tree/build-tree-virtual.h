@@ -36,16 +36,16 @@ class MultiTreePdfMap {
  public:
   MultiTreePdfMap(const vector<const EventMap*> &trees,
                   size_t cxt_length, size_t center_phone,
-                  vector<int32> hmm_lengths);
+                  const vector<int32> &hmm_lengths);
   // return pointer owned by the caller
   EventMap* GenerateVirtualTree(
           unordered_map<int32, vector<int32> >& mappings);
 
  private:
-  void ConnectToNextTree(MultiTreeNodeInfo &this_node_info,
+  void ConnectToNextTree(const MultiTreeNodeInfo &this_node_info,
                          EventMap* this_node, vector<int32>& pdfs_of_leaf);
 
-  void ConnectToSplitNode(MultiTreeNodeInfo this_node_info,
+  void ConnectToSplitNode(const MultiTreeNodeInfo &this_node_info,
                           EventMap* this_node,
                           EventMap* yes,
                           EventMap* no,

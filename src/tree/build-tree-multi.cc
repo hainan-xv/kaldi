@@ -38,7 +38,7 @@ void StatsToEntropy(const BuildTreeStatsType &stats_in,
     }
 }
 
-std::vector<EventMap*> BuildTreeMulti(Questions &qopts,
+std::vector<const EventMap*> BuildTreeMulti(Questions &qopts,
                            const std::vector<std::vector<int32> > &phone_sets,
                            const std::vector<int32> &phone2num_pdf_classes,
                            const std::vector<bool> &share_roots,
@@ -135,7 +135,7 @@ std::vector<EventMap*> BuildTreeMulti(Questions &qopts,
   KALDI_ASSERT(IsSortedAndUniq(nonsplit_phones));
   BuildTreeStatsType filtered_stats;
   FilterStatsByKey(stats, P, nonsplit_phones, false, &filtered_stats);
-  vector<EventMap*> tree_split_vec;
+  vector<const EventMap*> tree_split_vec;
   tree_split_vec.resize(num_trees);
   
 
@@ -284,7 +284,7 @@ std::vector<EventMap*> BuildTreeMulti(Questions &qopts,
 
   BaseFloat diff = 0;
   if (cluster_thresh != 0.0) {   // Cluster the tree.
-    vector<EventMap*> tree_renumbered_vec;
+    vector<const EventMap*> tree_renumbered_vec;
     tree_renumbered_vec.resize(num_trees);
     for (size_t i = 0; i < num_trees; i++) {
       BaseFloat objf_before_cluster = ObjfGivenMap(stats, *tree_split_vec[i]); 
