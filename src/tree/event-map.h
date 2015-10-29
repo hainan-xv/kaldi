@@ -63,6 +63,11 @@ inline std::pair<EventKeyType, EventValueType> MakeEventPair (EventKeyType k, Ev
   return std::pair<EventKeyType, EventValueType>(k, v);
 }
 
+// This function returns true iff the set a and b have the same elements, 
+// (they could have different orders)
+bool SameSet(const ConstIntegerSet<EventValueType>& a,
+             const ConstIntegerSet<EventValueType>& b);
+
 void WriteEventType(std::ostream &os, bool binary, const EventType &vec);
 void ReadEventType(std::istream &is, bool binary, EventType *vec);
 
@@ -85,6 +90,7 @@ struct EventMapVectorEqual {  // Equality object for EventType pointers-- test e
 /// for overview.
 class EventMap {
  public:
+  friend class MultiTreePdfMap;
   static void Check(const EventType &event);  // will crash if not sorted and unique on key.
   static bool Lookup(const EventType &event, EventKeyType key, EventValueType *ans);
 
@@ -113,6 +119,18 @@ class EventMap {
   // Copy() does not take ownership of the pointers in new_leaves (it uses the Copy() function of those
   // EventMaps).
   virtual EventMap *Copy(const std::vector<EventMap*> &new_leaves) const = 0;
+
+  // This function tests if *this* and *other* are the same tree
+  // 2 trees are considered same if, all their corresponding child-trees
+  // are same, i.e. be of the same EventMap type, and if it is a split node,
+  // have the same question. We do allow the leaf-pdf to be the same for
+  // a ConstantEventMap type.
+  // This function is used in debugging the multi-tree setup, where
+  // if we have lambda = 0, then we could assert that all single trees, 
+  // along with the virtual tree, should be the same
+  // This function will NOT be called for TableEventMap therefore
+  // for TableEventMap we always return false
+  virtual bool IsSameTree (const EventMap* other) const = 0; 
   
   EventMap *Copy() const { std::vector<EventMap*> new_leaves; return Copy(new_leaves); }
 
@@ -165,6 +183,7 @@ class EventMap {
 
 class ConstantEventMap: public EventMap {
  public:
+  friend class MultiTreePdfMap;
   virtual bool Map(const EventType &event, EventAnswerType *ans) const {
     *ans = answer_;
     return true;
@@ -198,7 +217,11 @@ class ConstantEventMap: public EventMap {
   
   virtual void Write(std::ostream &os, bool binary);
   static ConstantEventMap *Read(std::istream &is, bool binary);
+
+  virtual bool IsSameTree (const EventMap* other) const;
  private:
+  // only called in MultiTreePdfMap
+  ConstantEventMap() {}
   EventAnswerType answer_;
   KALDI_DISALLOW_COPY_AND_ASSIGN(ConstantEventMap);
 };
@@ -257,6 +280,8 @@ class TableEventMap: public EventMap {
   virtual ~TableEventMap() {
     DeletePointers(&table_);
   }
+  virtual bool IsSameTree (const EventMap* other) const;
+
  private:
   EventKeyType key_;
   std::vector<EventMap*> table_;
@@ -269,6 +294,7 @@ class TableEventMap: public EventMap {
 class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
  public:
 
+  friend class MultiTreePdfMap;
   virtual bool Map(const EventType &event, EventAnswerType *ans) const {
     EventValueType value;
     if (Lookup(event, key_, &value)) {
@@ -322,8 +348,11 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
     KALDI_ASSERT(yes_ != NULL && no_ != NULL);
   }
 
+  virtual bool IsSameTree (const EventMap* other) const;
 
  private:
+  // only called in MultiTreePdfMap
+  SplitEventMap() {yes_ = no_ = NULL;}
   /// This constructor used in the Copy() function.
   SplitEventMap(EventKeyType key, const ConstIntegerSet<EventValueType> &yes_set,
                 EventMap *yes, EventMap *no): key_(key), yes_set_(yes_set), yes_(yes), no_(no) {
