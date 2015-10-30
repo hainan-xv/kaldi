@@ -178,6 +178,8 @@ class EventMap {
   /// a Read function that reads an arbitrary EventMap; also
   /// works for NULL pointers.
   static EventMap *Read(std::istream &is, bool binary);
+
+  virtual void ApplyOffsetToCentralPhone(int offset) = 0;
 };
 
 
@@ -219,6 +221,10 @@ class ConstantEventMap: public EventMap {
   static ConstantEventMap *Read(std::istream &is, bool binary);
 
   virtual bool IsSameTree (const EventMap* other) const;
+
+  virtual void ApplyOffsetToCentralPhone(int32 offset) {
+    KALDI_ASSERT(offset > 0);
+  }
  private:
   // only called in MultiTreePdfMap
   ConstantEventMap() {}
@@ -281,6 +287,11 @@ class TableEventMap: public EventMap {
     DeletePointers(&table_);
   }
   virtual bool IsSameTree (const EventMap* other) const;
+
+  virtual void ApplyOffsetToCentralPhone(int32 offset) {
+    KALDI_ASSERT(offset > 0);
+    key_ += offset;
+  }
 
  private:
   EventKeyType key_;
@@ -349,6 +360,11 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
   }
 
   virtual bool IsSameTree (const EventMap* other) const;
+
+  virtual void ApplyOffsetToCentralPhone(int32 offset) {
+    KALDI_ASSERT(offset > 0);
+    key_ += offset;
+  }
 
  private:
   // only called in MultiTreePdfMap

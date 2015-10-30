@@ -27,14 +27,37 @@ namespace kaldi {
 
 ContextDependencyMulti::ContextDependencyMulti(
                          const vector<std::pair<int32, int32> > &NPs,
-                         const vector<const EventMap*> &single_trees,
+                         const vector<EventMap*> &single_trees,
                          const HmmTopology &topo):
     topo_(topo) {
   KALDI_ASSERT(NPs.size() == single_trees.size());
-  for (int i = 0; i < NP.size(); i++) {
-
+  int num_left_context = 0;
+  int num_right_context = 0;
+  for (int i = 0; i < NPs.size(); i++) {
+    if (NPs[i].second > num_left_context) {
+      num_left_context = NPs[i].second;
+    }
+    if (NPs[i].first - 1 - NPs[i].second > num_right_context) {
+      num_right_context = NPs[i].first - 1 - NPs[i].second;
+    }
   }
+  N_ = num_left_context + 1 + num_right_context;
+  P_ = num_left_context;
+  
+  for (int i = 0; i < NPs.size(); i++) {
+    ConvertTreeContext(NPs[i].second, P_, single_trees[i]);
+    single_trees_.push_back(single_trees[i]); // not changing it from now
+  }
+
   BuildVirtualTree();
+}
+
+void ContextDependencyMulti::ConvertTreeContext(int32 old_P, int32 new_P,
+                                                EventMap* tree) {
+  if (old_P == new_P) {
+    return; // no need to do anything
+  }
+  tree->ApplyOffsetToCentralPhone(new_P - old_P);
 }
 
 bool ContextDependencyMulti::Compute(const std::vector<int32> &phoneseq,

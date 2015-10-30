@@ -38,7 +38,7 @@ class ContextDependencyMulti: public ContextDependencyInterface {
   /// returns success or failure; outputs pdf to pdf_id
   virtual bool Compute(const std::vector<int32> &phoneseq,
                        int32 pdf_class, int32 *pdf_id) const;
-virtual int32 NumPdfs() const { // this routine could be simplified to return to_pdf_->MaxResult()+1.  we're a
+  virtual int32 NumPdfs() const { // this routine could be simplified to return to_pdf_->MaxResult()+1.  we're a
     // bit more paranoid than that.
     if (!to_pdf_) return 0;
     EventAnswerType max_result = to_pdf_->MaxResult();
@@ -70,8 +70,10 @@ virtual int32 NumPdfs() const { // this routine could be simplified to return to
   }
 
   // Constructor for when individual trees don't have the same N and Ps
+  // We take the owndership of the input trees and also modify these trees
+  // hence not "const EventMap*"
   ContextDependencyMulti(const vector<std::pair<int32, int32> > &NPs,
-                         const vector<const EventMap*> &single_trees,
+                         const vector<EventMap*> &single_trees,
                          const HmmTopology &topo);
 
   void Write(std::ostream &os, bool binary) const;
@@ -98,7 +100,6 @@ virtual int32 NumPdfs() const { // this routine could be simplified to return to
                   std::vector<std::vector<std::pair<int32, int32> > > *pdf_info)
       const;
 
-  void BuildVirtualTree();
 
  private:
   int32 N_;  //
@@ -107,6 +108,10 @@ virtual int32 NumPdfs() const { // this routine could be simplified to return to
   vector<const EventMap*> single_trees_; // single trees, owned here
   HmmTopology topo_;
   unordered_map<int32, vector<int32> > mappings_;
+
+  void BuildVirtualTree();
+  void ConvertTreeContext(int32 old_P, int32 new_P, EventMap* new_tree);
+                          
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(ContextDependencyMulti);
 };
