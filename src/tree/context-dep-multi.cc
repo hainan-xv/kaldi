@@ -92,10 +92,12 @@ void ContextDependencyMulti::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "EndContextDependencyMulti");
 }
 
+//*
 void ContextDependencyMulti::WriteVirtualTree(std::ostream &os,
                                               bool binary) const {
   to_pdf_->Write(os, binary);
 }
+//*/
 
 void ContextDependencyMulti::WriteMapping(std::ostream &os,
                                           bool binary) const {

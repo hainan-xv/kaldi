@@ -55,7 +55,7 @@ class ContextDependencyMulti: public ContextDependencyInterface {
   }
 
   /// Read context-dependency object from disk; throws on error
-  void Read (std::istream &is, bool binary);
+  void Read(std::istream &is, bool binary);
 
   // Constructor with no arguments; will normally be called
   // prior to Read()
@@ -80,6 +80,12 @@ class ContextDependencyMulti: public ContextDependencyInterface {
 
   void WriteVirtualTree(std::ostream &os, bool binary) const;
   void WriteMapping(std::ostream &os, bool binary) const;
+
+  void GetVirtualTreeAndMapping(const EventMap** tree,
+                                unordered_map<int32, vector<int32> > *m) {
+    *tree = to_pdf_->Copy();
+    *m = mappings_;
+  }
 
   ~ContextDependencyMulti() {
     for (int i = 0; i < single_trees_.size(); i++) {

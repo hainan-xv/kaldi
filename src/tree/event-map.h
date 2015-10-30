@@ -290,7 +290,12 @@ class TableEventMap: public EventMap {
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
-    key_ += offset;
+    if (key_ != -1) {
+      key_ += offset;
+    }
+    for (int i = 0; i < table_.size(); i++) {
+      table_[i]->ApplyOffsetToCentralPhone(offset);
+    }
   }
 
  private:
@@ -363,7 +368,11 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
-    key_ += offset;
+    if (key_ != -1) {
+      key_ += offset;
+    }
+    yes_->ApplyOffsetToCentralPhone(offset);
+    no_->ApplyOffsetToCentralPhone(offset);
   }
 
  private:
