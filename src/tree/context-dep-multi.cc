@@ -25,6 +25,18 @@
 
 namespace kaldi {
 
+ContextDependencyMulti::ContextDependencyMulti(
+                         const vector<std::pair<int32, int32> > &NPs,
+                         const vector<const EventMap*> &single_trees,
+                         const HmmTopology &topo):
+    topo_(topo) {
+  KALDI_ASSERT(NPs.size() == single_trees.size());
+  for (int i = 0; i < NP.size(); i++) {
+
+  }
+  BuildVirtualTree();
+}
+
 bool ContextDependencyMulti::Compute(const std::vector<int32> &phoneseq,
                                      int32 pdf_class,
                                      int32 *pdf_id) const {
@@ -45,7 +57,7 @@ bool ContextDependencyMulti::Compute(const std::vector<int32> &phoneseq,
   return to_pdf_->Map(event_vec, pdf_id);
 }
 
-void ContextDependencyMulti::Write (std::ostream &os, bool binary) const {
+void ContextDependencyMulti::Write(std::ostream &os, bool binary) const {
   WriteToken(os, binary, "ContextDependencyMulti");
   WriteBasicType(os, binary, N_);
   WriteBasicType(os, binary, P_);
@@ -54,12 +66,21 @@ void ContextDependencyMulti::Write (std::ostream &os, bool binary) const {
   for (int i = 0; i < single_trees_.size(); i++) {
     single_trees_[i]->Write(os, binary);
   }
-  WriteToken(os, binary, "ToPdf");
-  to_pdf_->Write(os, binary);
   WriteToken(os, binary, "EndContextDependencyMulti");
 }
 
+void ContextDependencyMulti::WriteVirtualTree(std::ostream &os,
+                                              bool binary) const {
+  to_pdf_->Write(os, binary);
+}
+
+void ContextDependencyMulti::WriteMapping(std::ostream &os,
+                                          bool binary) const {
+  WriteMultiTreeMapping(mappings_, os, binary, single_trees_.size());
+}
+
 void ContextDependencyMulti::Read(std::istream &is, bool binary) {
+  // first clear the pointers
   if (to_pdf_) {
     delete to_pdf_;
     to_pdf_ = NULL;
@@ -69,6 +90,7 @@ void ContextDependencyMulti::Read(std::istream &is, bool binary) {
       delete single_trees_[i];
     }
   }
+
   ExpectToken(is, binary, "ContextDependencyMulti");
   ReadBasicType(is, binary, &N_);
   ReadBasicType(is, binary, &P_);
@@ -80,10 +102,9 @@ void ContextDependencyMulti::Read(std::istream &is, bool binary) {
   for (int i = 0; i < size; i++) {
     single_trees_[i] = EventMap::Read(is, binary);
   }
-
-  ExpectToken(is, binary, "ToPdf");
-  to_pdf_ = EventMap::Read(is , binary);
   ExpectToken(is, binary, "EndContextDependencyMulti");
+
+  BuildVirtualTree();
 }
 
 void ContextDependencyMulti::GetPdfInfo(
@@ -134,6 +155,7 @@ void ContextDependencyMulti::BuildVirtualTree() {
   vector<int32> phone2num_pdf_classes;
   topo_.GetPhoneToNumPdfClasses(&phone2num_pdf_classes);
   MultiTreePdfMap m(single_trees_, N_, P_, phone2num_pdf_classes);
+  to_pdf_ = m.GenerateVirtualTree(mappings_);
 }
 } // end namespace kaldi.
 

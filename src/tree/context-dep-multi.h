@@ -38,9 +38,7 @@ class ContextDependencyMulti: public ContextDependencyInterface {
   /// returns success or failure; outputs pdf to pdf_id
   virtual bool Compute(const std::vector<int32> &phoneseq,
                        int32 pdf_class, int32 *pdf_id) const;
-
-  virtual int32 NumPdfs() const {
-    // this routine could be simplified to return to_pdf_->MaxResult()+1.  we're a
+virtual int32 NumPdfs() const { // this routine could be simplified to return to_pdf_->MaxResult()+1.  we're a
     // bit more paranoid than that.
     if (!to_pdf_) return 0;
     EventAnswerType max_result = to_pdf_->MaxResult();
@@ -71,7 +69,15 @@ class ContextDependencyMulti: public ContextDependencyInterface {
     BuildVirtualTree();
   }
 
-  void Write (std::ostream &os, bool binary) const;
+  // Constructor for when individual trees don't have the same N and Ps
+  ContextDependencyMulti(const vector<std::pair<int32, int32> > &NPs,
+                         const vector<const EventMap*> &single_trees,
+                         const HmmTopology &topo);
+
+  void Write(std::ostream &os, bool binary) const;
+
+  void WriteVirtualTree(std::ostream &os, bool binary) const;
+  void WriteMapping(std::ostream &os, bool binary) const;
 
   ~ContextDependencyMulti() {
     for (int i = 0; i < single_trees_.size(); i++) {
@@ -100,21 +106,10 @@ class ContextDependencyMulti: public ContextDependencyInterface {
   EventMap *to_pdf_;  // owned here. This is the virtual tree
   vector<const EventMap*> single_trees_; // single trees, owned here
   HmmTopology topo_;
+  unordered_map<int32, vector<int32> > mappings_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(ContextDependencyMulti);
 };
-
-// Important note:
-// Statistics for training decision trees will be of type:
-// std::vector<std::pair<EventType, Clusterable*> >
-// We don't make this a typedef as it doesn't add clarity.
-// they will be sorted and unique on the EventType member, which
-// itself is sorted and unique on the name (see event-map.h).
-
-// See build-tree.h for functions relating to actually building the decision trees.
-
-
-
 
 }  // namespace Kaldi
 

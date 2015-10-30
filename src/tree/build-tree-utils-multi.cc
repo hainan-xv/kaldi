@@ -223,7 +223,7 @@ class MultiDecisionTreeSplitter {
   int32 num_trees_; 
 };
 
-vector<EventMap*> SplitDecisionTreeMulti(vector<EventMap*> input_map_vec, 
+vector<const EventMap*> SplitDecisionTreeMulti(vector<EventMap*> input_map_vec, 
                             const BuildTreeStatsType &stats,
                             Questions &q_opts,
                             BaseFloat thresh,
@@ -349,7 +349,7 @@ vector<EventMap*> SplitDecisionTreeMulti(vector<EventMap*> input_map_vec,
     }
   }
 
-  vector<EventMap*> answer_vec;
+  vector<const EventMap*> answer_vec;
   answer_vec.resize(num_trees);
   for (size_t j = 0; j < num_trees; j++)
   {  // Create the output EventMap.
