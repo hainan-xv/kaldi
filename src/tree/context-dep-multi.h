@@ -81,10 +81,16 @@ class ContextDependencyMulti: public ContextDependencyInterface {
   void WriteVirtualTree(std::ostream &os, bool binary) const;
   void WriteMapping(std::ostream &os, bool binary) const;
 
-  void GetVirtualTreeAndMapping(const EventMap** tree,
+  // caller takes ownership of the tree
+  void GetVirtualTreeAndMapping(EventMap** tree,
                                 unordered_map<int32, vector<int32> > *m) {
     *tree = to_pdf_->Copy();
     *m = mappings_;
+  }
+
+  // caller taking ownership of the pointer
+  EventMap* GetTree(size_t index) const {
+    return single_trees_[index]->Copy();
   }
 
   ~ContextDependencyMulti() {

@@ -1,6 +1,6 @@
 // bin/build-tree-entropy.cc
 
-// Copyright 2014 Hainan Xu
+// Copyright 2015 Hainan Xu
 
 #include "base/kaldi-common.h"
 #include "util/common-utils.h"
@@ -19,9 +19,9 @@ int main(int argc, char *argv[]) {
     const char *usage =
         "Train multiple decision trees\n"
         "Usage:  build-tree-entropy [options] <tree-stats-in> <roots-file> "
-        " <questions-file> <topo-file> <tree-out>\n"
+        " <questions-file> <topo-file> <tree-out-prefix> <virtual-tree>\n"
         "e.g.: \n"
-        " build-tree num-trees=2 treeacc roots.txt 1.qst topo tree\n";
+        " build-tree num-trees=2 treeacc roots.txt 1.qst topo tree vtree\n";
 
     bool binary = true;
     int32 P = 1, N = 3;
@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 5) {
+    if (po.NumArgs() != 6) {
       po.PrintUsage();
       exit(1);
     }
@@ -64,7 +64,9 @@ int main(int argc, char *argv[]) {
         roots_filename = po.GetArg(2),
         questions_filename = po.GetArg(3),
         topo_filename = po.GetArg(4),
-        tree_out_filename = po.GetArg(5);
+        tree_out_filename = po.GetArg(5),
+        virtual_tree_filename = po.GetArg(6),
+        mapping_filename = po.GetArg(7);
 
     std::vector<std::vector<int32> > phone_sets;
     std::vector<bool> is_shared_root;
@@ -145,6 +147,24 @@ int main(int argc, char *argv[]) {
     }
 */
     ContextDependencyMulti ctx_dep(N, P, to_pdf_vec, topo);
+
+    for (size_t j = 0; j < num_trees; j++) {
+    // of pointer "to_pdf", so set it NULL.
+      to_pdf_vec[j] = NULL;
+      char temp[4];
+      sprintf(temp, "-%d", (int)j);
+      std::string tree_affix(temp);
+      // tree files are like tree-2
+      ContextDependency c(N, P, ctx_dep.GetTree(j)); // take ownership
+      WriteKaldiObject(c, tree_out_filename+tree_affix, binary);
+    }
+
+    EventMap* vtree;
+    unordered_map<int32, vector<int32> > mapping;
+    ctx_dep.GetVirtualTreeAndMapping(&vtree, &mapping);
+    ContextDependency c(N, P, vtree);
+    WriteKaldiObject(c, virtual_tree_filename, binary);
+
 
     {  // This block is just doing some checks.
       std::vector<int32> all_phones;
