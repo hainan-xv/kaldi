@@ -287,7 +287,7 @@ EventMap *SplitDecisionTree(const EventMap &orig,
                             BaseFloat *smallest_split_change_out);
 
 /// This function build multiple decision trees
-std::vector<const EventMap*> SplitDecisionTreeMulti(std::vector<EventMap*> orig,
+std::vector<EventMap*> SplitDecisionTreeMulti(std::vector<EventMap*> orig,
                             const BuildTreeStatsType &stats,
                             Questions &qcfg,
                             BaseFloat thresh,

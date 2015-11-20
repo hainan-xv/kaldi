@@ -95,7 +95,13 @@ void ContextDependencyMulti::Write(std::ostream &os, bool binary) const {
 //*
 void ContextDependencyMulti::WriteVirtualTree(std::ostream &os,
                                               bool binary) const {
+  //to_pdf_->Write(os, binary);
+  WriteToken(os, binary, "ContextDependency");
+  WriteBasicType(os, binary, N_);
+  WriteBasicType(os, binary, P_);
+  WriteToken(os, binary, "ToPdf");
   to_pdf_->Write(os, binary);
+  WriteToken(os, binary, "EndContextDependency");
 }
 //*/
 

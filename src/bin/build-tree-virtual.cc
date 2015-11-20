@@ -7,6 +7,7 @@
 #include "util/stl-utils.h"
 #include "hmm/hmm-topology.h"
 #include "tree/context-dep.h"
+#include "tree/context-dep-multi.h"
 #include "tree/build-tree.h"
 #include "tree/build-tree-virtual.h"
 #include "tree/build-tree-utils.h"
@@ -15,6 +16,7 @@
 
 using std::string;
 using std::vector;
+using std::pair;
 
 int main(int argc, char *argv[]) {
   try {
@@ -34,7 +36,6 @@ int main(int argc, char *argv[]) {
         " mapping file.";
 
     bool binary = true;
-    int32 P = 1, N = 3;
     int32 num_trees = 1;
 
     std::string occs_out_filename;
@@ -79,7 +80,8 @@ int main(int argc, char *argv[]) {
     vector<ContextDependency*> ctx_deps(num_trees);
 
     // pointers not owned,
-    vector<const EventMap*> trees(num_trees);
+    vector<EventMap*> trees(num_trees);
+    vector<pair<int32, int32> > NPs(num_trees);
 
     for (int j = 0; j < num_trees; j++) {
       char temp[4];
@@ -88,23 +90,18 @@ int main(int argc, char *argv[]) {
 
       ctx_deps[j] = new ContextDependency();
       ReadKaldiObject(tree_prefix + tree_affix, (ctx_deps[j]));
-      if (j == 0) {
-        N = ctx_deps[j]->ContextWidth();
-        P = ctx_deps[j]->CentralPosition();
-      } else {
-        KALDI_ASSERT(N == ctx_deps[j]->ContextWidth());
-        KALDI_ASSERT(P == ctx_deps[j]->CentralPosition());
-      }
+
+      NPs[j].first = ctx_deps[j]->ContextWidth();
+      NPs[j].second = ctx_deps[j]->CentralPosition();
 
       trees[j] = &ctx_deps[j]->ToPdfMap();
     }
 
-    vector<int32> phone2num_pdf_classes;
-    topo.GetPhoneToNumPdfClasses(&phone2num_pdf_classes);
+    ContextDependencyMulti ctx_dep_multi(NPs, trees, topo);
 
-    MultiTreePdfMap virtual_tree(trees, N, P, phone2num_pdf_classes);
     unordered_map<int32, vector<int32> > mappings;
-    EventMap* tree_out = virtual_tree.GenerateVirtualTree(mappings);
+    EventMap* tree_out;
+    ctx_dep_multi.GetVirtualTreeAndMapping(&tree_out, &mappings);
 
     if (num_trees == 1) {
       bool same = (trees[0]->IsSameTree(tree_out));
@@ -148,21 +145,14 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    ContextDependency ctx_dep(N, P, tree_out);  // takes ownership
-    // of pointer "to_pdf", so set it NULL.
-    tree_out = NULL;
+    Output treefile_out(tree_out_filename, binary);
+    ctx_dep_multi.WriteVirtualTree(treefile_out.Stream(), binary);
 
-    WriteKaldiObject(ctx_dep, tree_out_filename, binary);
-    Output output(mapping_out_filename, binary);
-    WriteMultiTreeMapping(mappings, output.Stream(), binary, num_trees);
-    output.Close();
+    Output mapfile_output(mapping_out_filename, binary);
+    WriteMultiTreeMapping(mappings, mapfile_output.Stream(), binary, num_trees);
+    treefile_out.Close();
+    mapfile_output.Close();
     // tree files are like "tree-2"
-
-    // clean up memory
-    for (size_t j = 0; j < num_trees; j++) {
-      delete ctx_deps[j];
-    }
-    delete tree_out;
 
     return 0;
   } catch(const std::exception &e) {

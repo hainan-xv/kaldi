@@ -55,7 +55,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 6) {
+    if (po.NumArgs() != 5) {
       po.PrintUsage();
       exit(1);
     }
@@ -64,9 +64,7 @@ int main(int argc, char *argv[]) {
         roots_filename = po.GetArg(2),
         questions_filename = po.GetArg(3),
         topo_filename = po.GetArg(4),
-        tree_out_filename = po.GetArg(5),
-        virtual_tree_filename = po.GetArg(6),
-        mapping_filename = po.GetArg(7);
+        tree_out_filename = po.GetArg(5);
 
     std::vector<std::vector<int32> > phone_sets;
     std::vector<bool> is_shared_root;
@@ -104,7 +102,7 @@ int main(int argc, char *argv[]) {
     std::vector<int32> phone2num_pdf_classes;
     topo.GetPhoneToNumPdfClasses(&phone2num_pdf_classes);
 
-    std::vector<const EventMap*> to_pdf_vec;
+    std::vector<EventMap*> to_pdf_vec;
 
     //////// Build the tree. ////////////
 
@@ -134,7 +132,6 @@ int main(int argc, char *argv[]) {
       }
     }
 
-/*
     for (size_t j = 0; j < num_trees; j++) {
       ContextDependency ctx_dep(N, P, to_pdf_vec[j]);  // takes ownership
     // of pointer "to_pdf", so set it NULL.
@@ -145,26 +142,6 @@ int main(int argc, char *argv[]) {
       // tree files are like tree-2
       WriteKaldiObject(ctx_dep, tree_out_filename+tree_affix, binary);
     }
-*/
-    ContextDependencyMulti ctx_dep(N, P, to_pdf_vec, topo);
-
-    for (size_t j = 0; j < num_trees; j++) {
-    // of pointer "to_pdf", so set it NULL.
-      to_pdf_vec[j] = NULL;
-      char temp[4];
-      sprintf(temp, "-%d", (int)j);
-      std::string tree_affix(temp);
-      // tree files are like tree-2
-      ContextDependency c(N, P, ctx_dep.GetTree(j)); // take ownership
-      WriteKaldiObject(c, tree_out_filename+tree_affix, binary);
-    }
-
-    EventMap* vtree;
-    unordered_map<int32, vector<int32> > mapping;
-    ctx_dep.GetVirtualTreeAndMapping(&vtree, &mapping);
-    ContextDependency c(N, P, vtree);
-    WriteKaldiObject(c, virtual_tree_filename, binary);
-
 
     {  // This block is just doing some checks.
       std::vector<int32> all_phones;

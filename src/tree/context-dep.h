@@ -94,7 +94,7 @@ class ContextDependency: public ContextDependencyInterface {
 
   ~ContextDependency() { delete to_pdf_; }
 
-  const EventMap &ToPdfMap() const { return *to_pdf_; }
+  EventMap &ToPdfMap() const { return *to_pdf_; }
 
   /// GetPdfInfo returns a vector indexed by pdf-id, saying for each pdf which
   /// pairs of (phone, pdf-class) it can correspond to.  (Usually just one).
