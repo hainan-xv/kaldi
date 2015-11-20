@@ -17,11 +17,12 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KALDI_NNET3_NNET_COMBINE_H_
-#define KALDI_NNET3_NNET_COMBINE_H_
+#ifndef KALDI_NNET3_NNET_COMBINE_MULTI_H_
+#define KALDI_NNET3_NNET_COMBINE_MULTI_H_
 
 #include "nnet3/nnet-utils.h"
 #include "nnet3/nnet-compute.h"
+#include "nnet3/nnet-combine.h"
 #include "util/parse-options.h"
 #include "itf/options-itf.h"
 #include "nnet3/nnet-diagnostics.h"
@@ -29,56 +30,6 @@
 
 namespace kaldi {
 namespace nnet3 {
-
-/** Configuration class that controls neural net combination, where we combine a
-    number of neural nets.
-*/
-struct NnetCombineMultiConfig {
-  int32 num_iters; // The dimension of the space we are optimizing in is fairly
-                   // small (equal to the number of components times the number
-                   // of neural nets we were given), so we optimize with BFGS
-                   // (internally the code uses L-BFGS, but we set the the
-                   // number of vectors to be the same as the dimension of the
-                   // space, so it actually is regular BFGS.  The num-iters
-                   // corresponds to the number of function evaluations.
-
-
-  BaseFloat initial_impr;
-  int32 max_effective_inputs;
-  bool test_gradient;
-  bool enforce_positive_weights;
-  bool enforce_sum_to_one;
-  bool separate_weights_per_component;
-  NnetCombineMultiConfig(): num_iters(60),
-                       initial_impr(0.01),
-                       max_effective_inputs(15),
-                       test_gradient(false),
-                       enforce_positive_weights(false),
-                       enforce_sum_to_one(false),
-                       separate_weights_per_component(true) { }
-
-  void Register(OptionsItf *po) {
-    po->Register("num-iters", &num_iters, "Maximum number of function "
-                 "evaluations for BFGS to use when optimizing combination weights");
-    po->Register("max-effective-inputs", &max_effective_inputs, "Limits the number of "
-                 "parameters that have to be learn to be equivalent to the number of "
-                 "parameters we'd have to learn if the number of inputs nnets equalled "
-                 "this number.   Does this by using averages of nnets at close points "
-                 "in the sequence of inputs, as the actual inputs to the computation.");
-    po->Register("initial-impr", &initial_impr, "Amount of objective-function change "
-                 "we aim for on the first iteration (controls the initial step size).");
-    po->Register("test-gradient", &test_gradient, "If true, activate code that "
-                 "tests the gradient is accurate.");
-    po->Register("enforce-positive-weights", &enforce_positive_weights,
-                 "If true, enforce that all weights are positive.");
-    po->Register("enforce-sum-to-one", &enforce_sum_to_one, "If true, enforce that "
-                 "the model weights for each component should sum to one.");
-    po->Register("separate-weights-per-component", &separate_weights_per_component,
-                 "If true, have a separate weight for each updatable component in "
-                 "the nnet.");
-  }
-};
-
 
 /*
   You should use this class as follows:
@@ -92,8 +43,9 @@ class NnetCombinerMulti {
  public:
   /// Caution: this object retains a const reference to the "egs", so don't
   /// delete them until it goes out of scope.
-  NnetCombinerMulti(const NnetCombineMultiConfig &config,
+  NnetCombinerMulti(const NnetCombineConfig &config,
                int32 num_nnets,
+               int32 num_outputs,
                const std::vector<NnetExample> &egs,
                const Nnet &first_nnet);
   /// You should call this function num_nnets-1 times after calling
@@ -104,7 +56,7 @@ class NnetCombinerMulti {
 
   ~NnetCombinerMulti() { delete prob_computer_; }
  private:
-  const NnetCombineMultiConfig &config_;
+  const NnetCombineConfig &config_;
 
   const std::vector<NnetExample> &egs_;
 
@@ -116,6 +68,8 @@ class NnetCombinerMulti {
                                                  // component.
 
   int32 num_real_input_nnets_;  // number of actual nnet inputs.
+
+  int32 num_outputs_;
 
   int32 num_nnets_provided_;  // keeps track of the number of calls to AcceptNnet().
 

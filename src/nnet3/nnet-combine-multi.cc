@@ -23,14 +23,16 @@
 namespace kaldi {
 namespace nnet3 {
 
-NnetCombinerMulti::NnetCombinerMulti(const NnetCombineMultiConfig &config,
+NnetCombinerMulti::NnetCombinerMulti(const NnetCombineConfig &config,
                            int32 num_nnets,
+                           int32 num_outputs,
                            const std::vector<NnetExample> &egs,
                            const Nnet &first_nnet):
     config_(config),
     egs_(egs),
     nnet_(first_nnet),
     num_real_input_nnets_(num_nnets),
+    num_outputs_(num_outputs),
     nnet_params_(std::min(num_nnets, config_.max_effective_inputs),
                  NumParameters(first_nnet)),
     tot_input_weighting_(nnet_params_.NumRows()) {
@@ -424,15 +426,24 @@ double NnetCombinerMulti::ComputeObjfAndDerivFromNnet(
                                             end = egs_.end();
   for (; iter != end; ++iter)
     prob_computer_->Compute(*iter);
-  const SimpleObjectiveInfo *objf_info = prob_computer_->GetObjective("output");
-  if (objf_info == NULL)
-    KALDI_ERR << "Error getting objective info (unsuitable egs?)";
-  KALDI_ASSERT(objf_info->tot_weight > 0.0);
-  const Nnet &deriv = prob_computer_->GetDeriv();
-  VectorizeNnet(deriv, nnet_params_deriv);
-  // we prefer to deal with normalized objective functions.
-  nnet_params_deriv->Scale(1.0 / objf_info->tot_weight);
-  return objf_info->tot_objective / objf_info->tot_weight;
+
+  BaseFloat all_sum = 0.0;
+  for (int i = 0; i < num_outputs_; i++) {
+    std::ostringstream os;
+    os << i;
+    const SimpleObjectiveInfo *objf_info =
+             prob_computer_->GetObjective("output" + os.str());
+    KALDI_LOG << "output" + os.str();
+    if (objf_info == NULL)
+      KALDI_ERR << "Error getting objective info (unsuitable egs?)";
+    KALDI_ASSERT(objf_info->tot_weight > 0.0);
+    const Nnet &deriv = prob_computer_->GetDeriv();
+    VectorizeNnet(deriv, nnet_params_deriv);
+    // we prefer to deal with normalized objective functions.
+    nnet_params_deriv->Scale(1.0 / objf_info->tot_weight);
+    sum += objf_info->tot_objective / objf_info->tot_weight;
+  }
+  return all_sum / num_outputs_;  // TODO(hxu) taking the means
 }
 
 
