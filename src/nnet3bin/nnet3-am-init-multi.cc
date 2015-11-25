@@ -51,11 +51,11 @@ int main(int argc, char *argv[]) {
     
     po.Read(argc, argv);
     
-    if (po.NumArgs() < 3 || po.NumArgs() > 4) {
+/*    if (po.NumArgs() < 3 || po.NumArgs() > 4) {
       po.PrintUsage();
       exit(1);
     }
-
+*/
     std::string raw_nnet_rxfilename,
         am_nnet_wxfilename;
     vector<TransitionModel*> trans_models;
@@ -108,6 +108,9 @@ int main(int argc, char *argv[]) {
       am_nnet.Write(ko.Stream(), binary_write);
     }
 //    delete trans_model;
+    for (int i = 0; i < num_outputs; i++) {
+      delete trans_models[i];
+    }
     KALDI_LOG << "Initialized am-nnet (neural net acoustic model) and wrote to "
               << am_nnet_wxfilename;
     return 0;

@@ -43,11 +43,11 @@ static void ProcessFileMulti(const MatrixBase<BaseFloat> &feats,
                         int64 *num_frames_written,
                         int64 *num_egs_written,
                         NnetExampleWriter *example_writer) {
-  int num_trees = pdf_posts.size();
-  for (int i = 0; i < num_trees; i++) {
+  int num_outputs = pdf_posts.size();
+  for (int i = 0; i < num_outputs; i++) {
     KALDI_ASSERT(feats.NumRows() == static_cast<int32>(pdf_posts[i].size()));
   }
-  KALDI_ASSERT(num_pdfs_vec.size() == num_trees);
+  KALDI_ASSERT(num_pdfs_vec.size() == num_outputs);
   
   for (int32 t = 0; t < feats.NumRows(); t += frames_per_eg) {
 
@@ -92,7 +92,7 @@ static void ProcessFileMulti(const MatrixBase<BaseFloat> &feats,
       eg.io.push_back(NnetIo("ivector", 0, ivector));
     }
 
-    for (int j = 0; j < num_trees; j++) {
+    for (int j = 0; j < num_outputs; j++) {
       // add the labels.
       Posterior labels(frames_per_eg);
       for (int32 i = 0; i < actual_frames_per_eg; i++)

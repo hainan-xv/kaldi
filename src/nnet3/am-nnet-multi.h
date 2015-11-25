@@ -17,8 +17,8 @@
 // See the Apache 2 License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef KALDI_NNET3_AM_NNET_SIMPLE_H_
-#define KALDI_NNET3_AM_NNET_SIMPLE_H_
+#ifndef KALDI_NNET3_AM_NNET_MULTI_H_
+#define KALDI_NNET3_AM_NNET_MULTI_H_
 
 #include "base/kaldi-common.h"
 #include "matrix/matrix-lib.h"
@@ -77,6 +77,8 @@ class AmNnetMulti {
   void SetPriors(const VectorBase<BaseFloat> &priors, int i);
   
   const VectorBase<BaseFloat> &Priors(int i) const { return priors_vec_[i]; }
+
+  const std::vector<Vector<BaseFloat> > &Priors_vec() const { return priors_vec_; }
 
   std::string Info() const;
 

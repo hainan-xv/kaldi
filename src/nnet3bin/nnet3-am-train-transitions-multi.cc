@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
       ali_rspecifiers.push_back(po.GetArg(i));
     }
 
-    KALDI_ASSERT(ali_rspecifiers.size() == num_outputs);
+//    KALDI_ASSERT(ali_rspecifiers.size() == num_outputs);
 
     vector<TransitionModel*> trans_models;
 
