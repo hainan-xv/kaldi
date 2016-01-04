@@ -26,8 +26,8 @@ int main(int argc, char *argv[]) {
 
     const char *usage =
         "Expand the leaves of the input decision tree, add N questions\n"
-        "Usage:  build-tree-virtual [options]"
-        " <tree-in> <topo-file> <stats> <tree-out-prefix> \n";
+        "Usage:  build-tree-expand [options]"
+        " <tree-in> <topo-file> <question-file> <stats> <matrix-out> \n";
 
     bool binary = true;
     int32 num_qst = 1;
@@ -45,10 +45,10 @@ int main(int argc, char *argv[]) {
     }
 
     std::string tree_in = po.GetArg(1),
-        topo_filename = po.GetArg(2),
-        questions_filename = po.GetArg(3),
-        stats_filename = po.GetArg(4),
-        matrix_filename = po.GetArg(5);
+         topo_filename = po.GetArg(2),
+         questions_filename = po.GetArg(3),
+         stats_filename = po.GetArg(4),
+         matrix_filename = po.GetArg(5);
 
     HmmTopology topo;
     ReadKaldiObject(topo_filename, &topo);
@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
     ctx_dep_multi.GetVirtualTreeAndMapping(&merged_tree, &mappings);
 
     SparseMatrix<BaseFloat> matrix;
-    ExpandedMappingToSparseMatrix(mappings, &matrix);
+    ExpandedMappingToSparseMatrix(mappings, ctx_dep.NumPdfs(), &matrix);
 
     WriteKaldiObject(matrix, matrix_filename, binary);
 

@@ -94,7 +94,7 @@ bool ConstantEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void ConstantEventMap::ExpandTree(const std::vector<key_yesset> &questions, int* next) {
+void ConstantEventMap::ExpandTree(const std::vector<KeyYesset> &questions, int* next) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -188,7 +188,7 @@ bool TableEventMap::IsSameTree (const EventMap* other) const {
   return false;  // TableEventMap will NOT be used in virtual tree!
 }
 
-void TableEventMap::ExpandTree(const std::vector<key_yesset> &questions, int* next) {
+void TableEventMap::ExpandTree(const std::vector<KeyYesset> &questions, int* next) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -298,7 +298,7 @@ bool SplitEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void SplitEventMap::ExpandTree(const std::vector<key_yesset> &questions,
+void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
                                int* next) {
   std::vector<EventMap*> children;
   this->GetChildren(&children);
@@ -313,6 +313,10 @@ void SplitEventMap::ExpandTree(const std::vector<key_yesset> &questions,
       KALDI_ASSERT(c != NULL);
       EventAnswerType leaf_id;
       c->Map(EventType(), &leaf_id);
+
+      if (questions[leaf_id].key == KeyYesset::NO_KEY) {
+        continue;
+      }
 
       ConstantEventMap* d = new ConstantEventMap((*next)++);
 

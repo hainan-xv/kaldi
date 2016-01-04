@@ -16,7 +16,7 @@ use_sat_alignments=true
 . ./path.sh
 . ./utils/parse_options.sh
 
-nj=50
+nj=10
 
 if [ "$use_sat_alignments" == "true" ] ; then
   gmm_dir=exp/$mic/tri4a
@@ -54,7 +54,7 @@ for line in sys.stdin.readlines():
      mv $dir/wav.scp_scaled $dir/wav.scp
     fi
 
-    steps/make_mfcc.sh --nj 70 --mfcc-config conf/mfcc_hires.conf \
+    steps/make_mfcc.sh --nj $nj --mfcc-config conf/mfcc_hires.conf \
       --cmd "$train_cmd" data/$mic/${datadir}_hires exp/make_${mic}_hires/$datadir $mfccdir || exit 1;
     steps/compute_cmvn_stats.sh data/$mic/${datadir}_hires exp/make_${mic}_hires/$mic/$datadir $mfccdir || exit 1;
   done

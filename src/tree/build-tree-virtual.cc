@@ -135,6 +135,7 @@ void MappingToSparseMatrix(const unordered_map<int32, vector<int32> >& mapping,
 }
 
 void ExpandedMappingToSparseMatrix(const unordered_map<int32, vector<int32> >& mapping,
+                           int num_leaves,
                            SparseMatrix<BaseFloat> *out) {
   unordered_map<int32, vector<int32> >::const_iterator iter = mapping.begin();
   unordered_map<int32, vector<int32> >::const_iterator end = mapping.end();
@@ -143,24 +144,11 @@ void ExpandedMappingToSparseMatrix(const unordered_map<int32, vector<int32> >& m
 
   vector<int> num_leaves_vec(num_trees, 0);
   int num_virtual_leaves = 0;
-  int num_all_leaves;
 
   for (; iter != end; iter++) {
     int32 virtual_id = iter->first;
-    const vector<int32>& leaves_vec = iter->second;
-    KALDI_ASSERT(leaves_vec.size() == num_trees);
-
     num_virtual_leaves = std::max(num_virtual_leaves, virtual_id + 1);
-    for (int i = 0; i < num_trees; i++) {
-      num_leaves_vec[i] = std::max(num_leaves_vec[i], leaves_vec[i] + 1);
-    }
   }
-
-  for (int i = 1; i < num_leaves_vec.size(); i++) {
-    KALDI_ASSERT(num_leaves_vec[i] == num_leaves_vec[0]);
-  }
-
-  int num_leaves = num_leaves_vec[0] / 2;
 
   // working out the offsets for individual trees
   out->Resize(num_virtual_leaves, num_leaves * num_trees);
@@ -176,14 +164,9 @@ void ExpandedMappingToSparseMatrix(const unordered_map<int32, vector<int32> >& m
       }
     }
 
-    SparseVector<BaseFloat> row(num_all_leaves, pairs);
+    SparseVector<BaseFloat> row(num_trees * num_leaves, pairs);
 
     out->SetRow(virtual_leaf_id, row);
-
-  }
-
-  for (int i = 0; i < num_virtual_leaves; i++) {
-    KALDI_ASSERT(out->Row(i).Dim() == num_all_leaves);
   }
 }
 

@@ -29,6 +29,7 @@ void MappingToSparseMatrix(const unordered_map<int32, vector<int32> >& mapping,
                            SparseMatrix<BaseFloat> *out);
 
 void ExpandedMappingToSparseMatrix(const unordered_map<int32, vector<int32> >& mapping,
+                           int num_leaves,
                            SparseMatrix<BaseFloat> *out);
 
 struct MultiTreeNodeInfo {
