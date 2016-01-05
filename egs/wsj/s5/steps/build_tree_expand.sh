@@ -31,7 +31,7 @@ numtrees_L=1
 numtrees_R=1
 numtrees_T=1
 lambda=0
-lambda=0
+num_questions=2
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -39,7 +39,7 @@ echo "$0 $@"  # Print the command line for logging
 [ -f path.sh ] && . ./path.sh
 . parse_options.sh || exit 1;
 
-if [ $# != 6 ]; then
+if [ $# != 7 ]; then
   echo "Usage: steps/train_sat.sh <#leaves> <#gauss> <data> <lang> <ali-dir> <exp-dir>"
   echo " e.g.: steps/train_sat.sh 2500 15000 data/train_si84 data/lang exp/tri2b_ali_si84 exp/tri3b"
   echo "Main options (for others, see top of script file)"
@@ -55,6 +55,7 @@ data=$3
 lang=$4
 alidir=$5
 dir=$6
+virtualdir=$7
 
 for f in $data/feats.scp $lang/phones.txt $alidir/final.mdl $alidir/ali.1.gz; do
   [ ! -f $f ] && echo "train_sat.sh: no such file $f" && exit 1;
@@ -129,12 +130,12 @@ if [ $stage -le -3 ] && $train_tree; then
     --cluster-thresh=$cluster_thresh $dir/treeacc $lang/phones/roots.int \
     $dir/questions.qst $lang/topo $dir/tree || exit 1;
   $cmd $dir/log/build_tree_expand.log \
-    build-tree-expand --binary=false --num-questions=3 \
+    build-tree-expand --binary=false --num-questions=$num_questions \
     $dir/tree $lang/topo $dir/questions.qst $dir/treeacc \
-    tmp_matrix.txt || exit 1;
+    $virtualdir/matrix $dir/tree $virtualdir/tree || exit 1;
 fi
 
-exit
+num_trees=`ls $dir | grep tree_ | wc -l | awk '{print$1}'`
 
 if [ $stage -le -2 ]; then
   echo "$0: Initializing the model"

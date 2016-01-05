@@ -27,7 +27,7 @@ int main(int argc, char *argv[]) {
     const char *usage =
         "Expand the leaves of the input decision tree, add N questions\n"
         "Usage:  build-tree-expand [options]"
-        " <tree-in> <topo-file> <question-file> <stats> <matrix-out> \n";
+        " <tree-in> <topo-file> <question-file> <stats> <matrix-out> <tree-out>\n";
 
     bool binary = true;
     int32 num_qst = 1;
@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 5) {
+    if (po.NumArgs() != 7) {
       po.PrintUsage();
       exit(1);
     }
@@ -48,7 +48,8 @@ int main(int argc, char *argv[]) {
          topo_filename = po.GetArg(2),
          questions_filename = po.GetArg(3),
          stats_filename = po.GetArg(4),
-         matrix_filename = po.GetArg(5);
+         matrix_filename = po.GetArg(5),
+         tree_out = po.GetArg(6);
 
     HmmTopology topo;
     ReadKaldiObject(topo_filename, &topo);
@@ -88,10 +89,26 @@ int main(int argc, char *argv[]) {
     EventMap* merged_tree;
     ctx_dep_multi.GetVirtualTreeAndMapping(&merged_tree, &mappings);
 
+    KALDI_LOG << "Number of virtual leaves: " << mappings.size();
+    KALDI_LOG << "Number of leaves per tree before expanding: " << ctx_dep.NumPdfs();
+
     SparseMatrix<BaseFloat> matrix;
     ExpandedMappingToSparseMatrix(mappings, ctx_dep.NumPdfs(), &matrix);
 
     WriteKaldiObject(matrix, matrix_filename, binary);
+    WriteKaldiObject(*merged_tree, tree_out, binary);
+
+    for (size_t j = 0; j < out.size(); j++) {
+      ContextDependency ctx_dep(N, P, out[j]);  // takes ownership
+    // of pointer "to_pdf", so set it NULL.
+      out[j] = NULL;
+      char temp[4];
+      sprintf(temp, "-%d", (int)j);
+      std::string tree_affix(temp);
+      // tree files are like tree-2
+      WriteKaldiObject(ctx_dep, tree_out+tree_affix, binary);
+    }
+    delete merged_tree;
 
     return 0;
   } catch(const std::exception &e) {

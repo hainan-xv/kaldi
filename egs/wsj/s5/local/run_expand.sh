@@ -30,11 +30,10 @@ dir=exp/expanded_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
   steps/build_tree_expand.sh --cmd "$train_cmd" \
-      --numtrees_L $num_trees_L \
-      --numtrees_T $num_trees_T \
-      --numtrees_R $num_trees_R \
-      --lambda $lambda \
-      $num_leaves $num_gauss $data $lang $alidir $dir
+      --num-iters 1 --num-questions 2 \
+      $num_leaves $num_gauss $data $lang $alidir $dir $dir/virtual
+
+  num_trees=`ls $dir/ | grep tree_ | wc -l | awk '{print$1}'`
 
   for i in `seq 0 $[$num_trees-1]`; do
     cp $dir/tree_$i/final.mdl $dir/model-$i
@@ -44,15 +43,6 @@ if [ "$gmm" == "true" ]; then
       $data $lang $alidir $dir $dir/virtual
 
   utils/mkgraph.sh data/lang_test_bd_tgpr $dir/virtual $dir/virtual/graph_bd_tgpr
-
-  if [ "$gmm_decode" == "true" ]; then
-    steps/decode_multi.sh --cmd "$decode_cmd" --nj 10 \
-        --numtrees $num_trees --transform_dir exp/tri4b/decode_bd_tgpr_dev93 \
-        $dir/virtual/graph data/test_dev93 $dir/virtual/decode_dev93 $dir/virtual/tree-mapping &
-    steps/decode_multi.sh --cmd "$decode_cmd" --nj 8 \
-        --numtrees $num_trees --transform_dir exp/tri4b/decode_bd_tgpr_eval92 \
-        $dir/virtual/graph data/test_eval92 $dir/virtual/decode_eval92 $dir/virtual/tree-mapping &
-  fi
 fi
 
 nnet3dir=${dir}/../tdnn_${method}_${num_leaves}

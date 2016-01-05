@@ -55,10 +55,13 @@ cp $alidir/final.mat $outdir
 
 
 if [ $stage -le 3 ]; then
-  echo "Now generating the single virtual tree"
+  if [ ! -f $outdir/tree ]; then
+    echo "Now generating the single virtual tree"
 
-  (
-  build-tree-virtual --binary=false --num-trees=$numtrees $dir/tree $lang/topo $outdir/tree $outdir/tree-mapping $dir/treeacc || exit 1;) | tee virtual.log
+    (
+    build-tree-virtual --binary=false --num-trees=$numtrees $dir/tree $lang/topo $outdir/tree $outdir/tree-mapping $dir/treeacc || exit 1;) | tee virtual.log
+
+  fi
 
   #../../../src/bin/build-tree-virtual --num-trees=$numtrees exp/tri3m/tree data/lang/topo exp/tri3m/virtual-tree
 
