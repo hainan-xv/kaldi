@@ -49,7 +49,8 @@ int main(int argc, char *argv[]) {
          questions_filename = po.GetArg(3),
          stats_filename = po.GetArg(4),
          matrix_filename = po.GetArg(5),
-         tree_out = po.GetArg(6);
+         trees_out = po.GetArg(6),
+         tree_out = po.GetArg(7);
 
     HmmTopology topo;
     ReadKaldiObject(topo_filename, &topo);
@@ -99,16 +100,15 @@ int main(int argc, char *argv[]) {
     WriteKaldiObject(*merged_tree, tree_out, binary);
 
     for (size_t j = 0; j < out.size(); j++) {
-      ContextDependency ctx_dep(N, P, out[j]);  // takes ownership
+      ContextDependency ctx_dep(N, P, out[j]->Copy());  // takes ownership
     // of pointer "to_pdf", so set it NULL.
       out[j] = NULL;
       char temp[4];
-      sprintf(temp, "-%d", (int)j);
+      sprintf(temp, "-%d", (int)(j+1));
       std::string tree_affix(temp);
       // tree files are like tree-2
-      WriteKaldiObject(ctx_dep, tree_out+tree_affix, binary);
+      WriteKaldiObject(ctx_dep, trees_out+tree_affix, binary);
     }
-    delete merged_tree;
 
     return 0;
   } catch(const std::exception &e) {

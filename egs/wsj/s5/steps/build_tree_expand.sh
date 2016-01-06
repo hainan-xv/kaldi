@@ -27,10 +27,6 @@ power=0.2 # Exponent for number of gaussians according to occurrence counts
 cluster_thresh=-1  # for build-tree control final bottom-up clustering of leaves
 phone_map=
 train_tree=true
-numtrees_L=1
-numtrees_R=1
-numtrees_T=1
-lambda=0
 num_questions=2
 # End configuration section.
 
@@ -129,13 +125,15 @@ if [ $stage -le -3 ] && $train_tree; then
     --thresh=0 \
     --cluster-thresh=$cluster_thresh $dir/treeacc $lang/phones/roots.int \
     $dir/questions.qst $lang/topo $dir/tree || exit 1;
+
+  mkdir -p $virtualdir
   $cmd $dir/log/build_tree_expand.log \
     build-tree-expand --binary=false --num-questions=$num_questions \
     $dir/tree $lang/topo $dir/questions.qst $dir/treeacc \
     $virtualdir/matrix $dir/tree $virtualdir/tree || exit 1;
 fi
-
-num_trees=`ls $dir | grep tree_ | wc -l | awk '{print$1}'`
+echo dir is $dir
+numtrees=`ls $dir | grep tree- | wc -l | awk '{print$1}'`
 
 if [ $stage -le -2 ]; then
   echo "$0: Initializing the model"
@@ -162,6 +160,8 @@ if [ $stage -le -1 ]; then
   done
 fi
 
+echo numtrees is $numtrees
+
 for i in `seq 0 $[numtrees-1]`; do 
   (
     x=1
@@ -183,20 +183,10 @@ for i in `seq 0 $[numtrees-1]`; do
       [ $x -le $max_iter_inc ] && numgauss=$[$numgauss+$incgauss];
       x=$[$x+1];
     done
-    touch $dir/done.$i
   )
 done
 
-
-while [ `ls $dir/done* 2>/dev/null | wc -l` -ne $numtrees ]; do sleep 30; done
-
-if [ `ls $dir/tree_*/${num_iters}.mdl | wc -l` -ne $numtrees ]; then
-    echo something is wrong
-    exit 1
-fi
-
 echo training for all tree done
-rm $dir/done.*
 
 x=$num_iters
 
