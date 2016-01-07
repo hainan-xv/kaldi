@@ -25,23 +25,29 @@ set -e
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
-  steps/build_tree_expand.sh --cmd "$train_cmd" \
-      --stage 0 \
+  false && steps/build_tree_expand.sh --cmd "$train_cmd" \
+      --stage -3 \
       --num-iters 2 --num-questions ${num_questions} \
       $num_leaves $num_gauss $data $lang $alidir $dir $dir/virtual
 
-  num_trees=`ls $dir/ | grep tree_ | wc -l | awk '{print$1}'`
+  num_trees=`ls $dir/ | grep tree- | wc -l | awk '{print$1}'`
+  echo $num_trees
 
   for i in `seq 0 $[$num_trees-1]`; do
     cp $dir/tree_$i/final.mdl $dir/model-$i
   done
 
-  steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
+  false && steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
+      --expand true \
       $data $lang $alidir $dir $dir/virtual
 
-  utils/mkgraph.sh data/lang_test_bd_tgpr $dir/virtual $dir/virtual/graph_bd_tgpr
+  false && utils/mkgraph.sh data/lang_test_bd_tgpr $dir/virtual $dir/virtual/graph_bd_tgpr
 fi
 
 nnet3dir=${dir}/../tdnn_joint_${num_leaves}_${num_questions}
 
-./local/nnet3/run_tdnn_joint.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+cp $dir/virtual/matrix $nnet3dir
+
+./local/nnet3/run_tdnn_joint.sh --dir $nnet3dir \
+    --expand true \
+    $dir $dir/virtual $num_trees $dnn_stage

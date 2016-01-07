@@ -396,6 +396,12 @@ void FindNBestSplitsForKey(int32 N,
 
     BaseFloat this_objf_change = this_objf - unsplit_objf;
 
+    KALDI_LOG << "this_objf_change is " << this_objf_change;
+
+    if (this_objf_change < 0.000001) {
+      continue;
+    }
+
     if (yes_set_to_append.size() < N) {
       yes_set_to_append.push_back(questions_of_this_key[i]);
       impro_to_append.push_back(this_objf_change);

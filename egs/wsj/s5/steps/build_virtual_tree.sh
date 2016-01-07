@@ -16,6 +16,8 @@ norm_vars=false # deprecated.  Prefer --cmvn-opts "--norm-vars=true"
 cmvn_opts=
 # End configuration.
 
+expand=false
+
 numtrees=1
 
 set -e
@@ -55,7 +57,7 @@ cp $alidir/final.mat $outdir
 
 
 if [ $stage -le 3 ]; then
-  if [ ! -f $outdir/tree ]; then
+  if [ $expand == "false" ]; then
     echo "Now generating the single virtual tree"
 
     (

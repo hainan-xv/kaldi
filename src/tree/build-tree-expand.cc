@@ -21,14 +21,14 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
   qo.GetKeysWithQuestions(&all_keys);
 
   int num_trees = num_qst * all_keys.size();
-  vector<EventMap*> ans(num_trees, NULL);
-  for (int i = 0; i < num_trees; i++) {
+  vector<EventMap*> ans(num_trees + 1, NULL);
+  for (int i = 0; i < num_trees + 1; i++) {
     ans[i] = ctx_dep.ToPdfMap().Copy();
   }
 
 
   vector<vector<KeyYesset> > questions_for_trees(num_trees,
-      vector<KeyYesset>(num_leaves));
+                                                 vector<KeyYesset>(num_leaves));
   // questions_for_trees[i][j] would be KeyYesset for i'th tree, j'th leaf
   /*
   for (int i = 0; i < num_qst * all_keys.size(); i++) {
@@ -65,7 +65,7 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
   for (int i = 0; i < num_trees; i++) {
     EventAnswerType next = num_leaves;
     KALDI_ASSERT(questions_for_trees[i].size() == num_leaves);
-    ans[i]->ExpandTree(questions_for_trees[i], &next);
+    ans[i + 1]->ExpandTree(questions_for_trees[i], &next);
   }
   return ans;
 }

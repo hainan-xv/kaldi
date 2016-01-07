@@ -80,6 +80,7 @@ num_jobs_align=30       # Number of jobs for realignment
 frames_per_eg=8 # to be passed on to get_egs.sh
 num_outputs=2
 tree_mapping=
+expand=false
 
 trap 'for pid in $(jobs -pr); do kill -KILL $pid; done' INT QUIT TERM
 
@@ -216,10 +217,15 @@ if [ $stage -le -5 ]; then
 
   total_leaves=`echo $target_string | awk -F ',' '{for(i=1;i<=NF;i++)sum+=$i}{print sum}'`
 
-  convert-treemap-to-matrix $tree_mapping $dir/sparse.mat
+  if [ "$expand" == true ]; then
+    cp $dir/matrix $dir/sparse.mat
+  else
+    convert-treemap-to-matrix $tree_mapping $dir/sparse.mat
+  fi
   echo total leaves is $total_leaves
 
   num_virtual=`head -n 1 $tree_mapping | awk '{print$1}'`
+  echo num virtual is $num_virtual
   # create the config files for nnet initialization
   python steps/nnet3/make_tdnn_joint_configs.py  \
     --splice-indexes "$splice_indexes"  \
@@ -232,12 +238,15 @@ if [ $stage -le -5 ]; then
     --sparse-matrix $dir/sparse.mat \
    $dir/configs || exit 1;
 
+  echo made config
+
   # Initialize as "raw" nnet, prior to training the LDA-like preconditioning
   # matrix.  This first config just does any initial splicing that we do;
   # we do this as it's a convenient way to get the stats for the 'lda-like'
   # transform.
   $cmd $dir/log/nnet_init.log \
     nnet3-init --srand=-2 $dir/configs/init.config $dir/init.raw || exit 1;
+  echo init complete
 fi
 
 # sourcing the "vars" below sets

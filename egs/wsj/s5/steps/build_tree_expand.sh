@@ -130,9 +130,11 @@ if [ $stage -le -3 ] && $train_tree; then
   $cmd $dir/log/build_tree_expand.log \
     build-tree-expand --binary=false --num-questions=$num_questions \
     $dir/tree $lang/topo $dir/questions.qst $dir/treeacc \
-    $virtualdir/matrix $dir/tree $virtualdir/tree || exit 1;
+    $virtualdir/matrix $dir/tree $virtualdir/tree $virtualdir/tree-mapping || exit 1;
 fi
 echo dir is $dir
+diff $dir/tree $dir/tree-0
+
 numtrees=`ls $dir | grep tree- | wc -l | awk '{print$1}'`
 
 if [ $stage -le -2 ]; then

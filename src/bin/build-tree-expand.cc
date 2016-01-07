@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 7) {
+    if (po.NumArgs() != 8) {
       po.PrintUsage();
       exit(1);
     }
@@ -50,7 +50,8 @@ int main(int argc, char *argv[]) {
          stats_filename = po.GetArg(4),
          matrix_filename = po.GetArg(5),
          trees_out = po.GetArg(6),
-         tree_out = po.GetArg(7);
+         tree_out = po.GetArg(7),
+         map_out = po.GetArg(8);
 
     HmmTopology topo;
     ReadKaldiObject(topo_filename, &topo);
@@ -97,14 +98,23 @@ int main(int argc, char *argv[]) {
     ExpandedMappingToSparseMatrix(mappings, ctx_dep.NumPdfs(), &matrix);
 
     WriteKaldiObject(matrix, matrix_filename, binary);
-    WriteKaldiObject(*merged_tree, tree_out, binary);
+//    WriteKaldiObject(ctx_dep_multi, tree_out, binary);
+    {
+      Output o(tree_out, binary);
+      ctx_dep_multi.WriteVirtualTree(o.Stream(), binary);
+    }
+
+    {
+      Output mapfile_output(map_out, binary);
+      WriteMultiTreeMapping(mappings, mapfile_output.Stream(), binary, out.size());
+    }
 
     for (size_t j = 0; j < out.size(); j++) {
       ContextDependency ctx_dep(N, P, out[j]->Copy());  // takes ownership
     // of pointer "to_pdf", so set it NULL.
       out[j] = NULL;
       char temp[4];
-      sprintf(temp, "-%d", (int)(j+1));
+      sprintf(temp, "-%d", (int)(j));
       std::string tree_affix(temp);
       // tree files are like tree-2
       WriteKaldiObject(ctx_dep, trees_out+tree_affix, binary);

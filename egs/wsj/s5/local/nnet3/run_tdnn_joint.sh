@@ -12,6 +12,7 @@
 
 stage=0
 dir=
+expand=false
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -51,6 +52,7 @@ if [ $stage -le 8 ]; then
     --cmd "$decode_cmd" \
     --pnorm-input-dim 2000 \
     --pnorm-output-dim 250 \
+    --expand true \
     --tree-mapping $virtualdir/tree-mapping \
     data/train_si284_hires data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
 fi
