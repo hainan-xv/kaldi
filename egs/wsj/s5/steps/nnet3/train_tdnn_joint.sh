@@ -158,7 +158,7 @@ done
 # Set some variables.
 for i in `seq 0 $[$num_outputs-1]`; do
   tree-info ${alidir}_$i/tree 2>/dev/null | grep num-pdfs | awk '{print $2}'
-  num_leaves[$i]=`tree-info ${alidir}_$i/tree 2>/dev/null | grep num-pdfs | awk '{print $2}'` || exit 1
+  num_leaves[$i]=`tree-info ${alidir}_0/tree 2>/dev/null | grep num-pdfs | awk '{print $2}'` || exit 1
 
   echo num leaves for $i is ${num_leaves[$i]}
   [ -z $num_leaves[$i] ] && echo "\$num_leaves is unset" && exit 1
