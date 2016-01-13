@@ -6,6 +6,7 @@
 gmm=true
 gmm_decode=false
 dnn_stage=-100
+mic=ihm
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -16,16 +17,19 @@ num_leaves=$1
 num_gauss=$2
 num_questions=$3
 
-data=data/train_si284
+data=data/$mic/train
 lang=data/lang
-alidir=exp/tri4b_ali_si284
-dir=exp/expanded_${num_questions}/tri_${num_leaves}_${num_gauss}
+alidir=exp/$mic/tri4a_ali
+dir=exp/$mic/expanded_${num_questions}/tri_${num_leaves}_${num_gauss}
+
+final_lm=`cat data/local/lm/final_lm`
+LM=$final_lm.pr1-7
 
 set -e
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
-  steps/build_tree_expand.sh --cmd "$train_cmd" \
+false &&  steps/build_tree_expand.sh --cmd "$train_cmd" \
       --num-iters 2 --num-questions ${num_questions} \
       $num_leaves $num_gauss $data $lang $alidir $dir $dir/virtual
 
@@ -35,12 +39,11 @@ if [ "$gmm" == "true" ]; then
   for i in `seq 0 $[$num_trees-1]`; do
     cp $dir/tree_$i/final.mdl $dir/model-$i
   done
-
   steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
       --expand true \
-      $data $lang $alidir $dir $dir/virtual
+      $data $lang $alidir $dir $dir/virtual || exit 1
 
-  utils/mkgraph.sh data/lang_test_bd_tgpr $dir/virtual $dir/virtual/graph_bd_tgpr
+  $highmem_cmd $dir/virtual/graph_$LM/mkraph.log utils/mkgraph.sh ${lang}_$LM $dir/virtual $dir/virtual/graph_$LM || exit 1
 fi
 
 num_trees=`ls $dir/ | grep tree- | wc -l | awk '{print$1}'`

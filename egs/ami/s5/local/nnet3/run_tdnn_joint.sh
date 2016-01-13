@@ -10,7 +10,7 @@
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
 
-stage=9
+stage=-100
 dir=
 has_fisher=true
 mic=ihm
@@ -18,6 +18,7 @@ use_sat_alignments=true
 affix=
 speed_perturb=true
 common_egs_dir=
+expand=false
 
 . cmd.sh
 . ./path.sh
@@ -60,6 +61,7 @@ if [ $stage -le 8 ]; then
     --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
     --cmd "$decode_cmd" \
     --relu-dim 850 \
+    --expand $expand \
     --tree-mapping $virtualdir/tree-mapping \
     data/$mic/${train_set}_hires data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
 fi
