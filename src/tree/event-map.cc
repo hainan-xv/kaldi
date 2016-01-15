@@ -318,14 +318,18 @@ void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
         continue;
       }
 
+      KALDI_ASSERT(questions[leaf_id].improvement > 0);
+
       ConstantEventMap* d = new ConstantEventMap((*next)++);
 
       SplitEventMap* to_add = new SplitEventMap(questions[leaf_id].key,
                                                 questions[leaf_id].yes_set,
                                                 c, d);
       if (i == 0) {
+        KALDI_ASSERT(this->yes_ == c);
         this->yes_ = to_add;
       } else {
+        KALDI_ASSERT(this->no_ == c);
         this->no_ = to_add;
       }
     }

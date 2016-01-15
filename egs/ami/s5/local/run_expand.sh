@@ -29,7 +29,7 @@ set -e
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
-false &&  steps/build_tree_expand.sh --cmd "$train_cmd" \
+  steps/build_tree_expand.sh --cmd "$train_cmd" \
       --num-iters 2 --num-questions ${num_questions} \
       $num_leaves $num_gauss $data $lang $alidir $dir $dir/virtual
 

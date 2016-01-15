@@ -66,20 +66,20 @@ inline std::pair<EventKeyType, EventValueType> MakeEventPair (EventKeyType k, Ev
 struct KeyYesset;
 
 struct KeyYesset {
-  static const int NO_KEY = 999;
-  KeyYesset(): key(NO_KEY) {}
-  KeyYesset(EventKeyType k, const std::vector<EventValueType> &y):
-    key(k), yes_set(y) {}
+  static const int NO_KEY = -111;
+  KeyYesset(): key(NO_KEY), improvement(-1.0) {}
+  KeyYesset(EventKeyType k, const std::vector<EventValueType> &y, BaseFloat i):
+    key(k), yes_set(y), improvement(i) {}
   KeyYesset(const KeyYesset &other):
-    key(other.key), yes_set(other.yes_set) {}
+    key(other.key), yes_set(other.yes_set), improvement(other.improvement) {}
 
-  void operator= (const KeyYesset &other) {
-    key = other.key;
-    yes_set = other.yes_set;
+  bool operator< (const KeyYesset &other) const {
+    return improvement > other.improvement; // so that better ones stay in front
   }
 
   EventKeyType key;
   std::vector<EventValueType> yes_set;
+  BaseFloat improvement;
 };
 
 // This function returns true iff the set a and b have the same elements, 

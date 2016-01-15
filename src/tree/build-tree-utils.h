@@ -310,12 +310,11 @@ BaseFloat FindBestSplitForKey(const BuildTreeStatsType &stats,
                               EventKeyType key,
                               std::vector<EventValueType> *yes_set);
 
-void FindNBestSplitsForKey(int32 N,
-                           const BuildTreeStatsType &stats,
-                           const Questions &qc,
-                           EventKeyType key,
-                           std::vector<std::vector<EventValueType> > *yes_set,
-                           std::vector<BaseFloat> *improve_vec);
+void AppendNBestSplitsForKey(int32 N,
+                             const BuildTreeStatsType &stats,
+                             const Questions &qc,
+                             EventKeyType key,
+                             std::vector<KeyYesset> *yes_set);
 
 /// GetStubMap is used in tree-building functions to get the initial
 /// to-states map, before the decision-tree-building process.  It creates

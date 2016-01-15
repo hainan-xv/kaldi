@@ -19,6 +19,7 @@
 
 #include <set>
 #include <queue>
+#include <numeric>
 #include "util/stl-utils.h"
 #include "tree/build-tree-utils.h"
 #include "tree/clusterable-classes.h"
@@ -344,13 +345,13 @@ BaseFloat ComputeInitialSplit(const std::vector<Clusterable*> &summed_stats,
   return best_objf_change;
 }
 
-void FindNBestSplitsForKey(int32 N,
-                           const BuildTreeStatsType &stats,
-                           const Questions &qo,
-                           EventKeyType key,
-                           vector<vector<EventValueType> > *yes_set_out_vec,
-                           vector<BaseFloat> *improvements_vec) {
+void AppendNBestSplitsForKey(int32 N,
+                             const BuildTreeStatsType &stats,
+                             const Questions &qo,
+                             EventKeyType key,
+                             vector<KeyYesset> *yes_set_out_vec) {
   if (stats.size()<=1) return;  // cannot split if only zero or one instance of stats.
+//  if (key == -1) return;
   if (!PossibleValues(key, stats, NULL)) {
     return;  // Can't split as key not always defined.
   }
@@ -371,8 +372,7 @@ void FindNBestSplitsForKey(int32 N,
   const vector<std::vector<EventValueType> >
                &questions_of_this_key = key_opts.initial_questions;
 
-  vector<vector<EventValueType> > yes_set_to_append;
-  vector<BaseFloat> impro_to_append;
+  vector<KeyYesset> yes_set_to_append;
 
   for (size_t i = 0; i < questions_of_this_key.size(); i++) {
     const vector<EventValueType> &yes_set = questions_of_this_key[i];
@@ -398,35 +398,24 @@ void FindNBestSplitsForKey(int32 N,
 
 //    KALDI_LOG << "this_objf_change is " << this_objf_change;
 
-    if (this_objf_change < 0.000001) {
+//    int s = accumulate(assignments.begin(), assignments.end(), 0);
+//    if (s == 0 || s == assignments.size()) {
+//      continue;
+//    }
+
+    if (this_objf_change == 0) 
       continue;
-    }
 
-    if (yes_set_to_append.size() < N) {
-      yes_set_to_append.push_back(questions_of_this_key[i]);
-      impro_to_append.push_back(this_objf_change);
-    } else {
-      BaseFloat cur_min = impro_to_append[0];
-      int min_index = 0;
-      for (int k = 1; k < impro_to_append.size(); k++) {
-        if (impro_to_append[k] < cur_min) {
-          cur_min = impro_to_append[k];
-          min_index = k;
-        }
-      }
+    yes_set_to_append.push_back(
+        KeyYesset(key, questions_of_this_key[i], this_objf_change));
 
-      if (this_objf_change > cur_min) {
-        yes_set_to_append[min_index] = questions_of_this_key[i];
-        impro_to_append[min_index] = this_objf_change;
-      }
-    }
     DeletePointers(&clusters);
   }
 
-  yes_set_out_vec->insert(yes_set_out_vec->end(),
-                          yes_set_to_append.begin(), yes_set_to_append.end());
-  improvements_vec->insert(improvements_vec->begin(),
-                           impro_to_append.begin(), impro_to_append.end());
+  sort(yes_set_to_append.begin(), yes_set_to_append.end());
+
+  yes_set_out_vec->insert(yes_set_out_vec->end(), yes_set_to_append.begin(),
+      yes_set_to_append.begin() + std::min(size_t(N), yes_set_to_append.size()));
   DeletePointers(&summed_stats);
 }
 

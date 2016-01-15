@@ -78,6 +78,9 @@ int main(int argc, char *argv[]) {
 
     ContextDependency ctx_dep;
     ReadKaldiObject(tree_in, &ctx_dep);
+
+    KALDI_LOG << "Building expanding trees... ";
+
     vector<EventMap*> out = 
          ExpandDecisionTree(ctx_dep, stats, qo, num_qst);
 

@@ -25,9 +25,9 @@ parser.add_argument("--use-presoftmax-prior-scale", type=str,
                     help="if true, a presoftmax-prior-scale is added",
                     choices=['true', 'false'], default = "true")
 parser.add_argument("--num-targets", type=int,
-                    help="number of network targets (e.g. num-pdf-ids/num-leaves)")
+                    help="number of network targets (e.g. num-pdf-ids/num-leaves, output dim of sparse matrix)")
 parser.add_argument("--num-leaves-total", type=int,
-                    help="number of total leaves")
+                    help="number of total leaves, input dim to sparse matrix")
 parser.add_argument("--sparse-matrix", type=str,
                     help="sparse matrix")
 parser.add_argument("config_dir",
@@ -122,10 +122,6 @@ list=[ ('Offset(input, {0})'.format(n) if n != 0 else 'input' ) for n in splice_
 if args.ivector_dim > 0:
     print('input-node name=ivector dim=' + str(args.ivector_dim), file=f)
     list.append('ReplaceIndex(ivector, t, 0)')
-# example of next line:
-# output-node name=output input="Append(Offset(input, -3), Offset(input, -2), Offset(input, -1), ... , Offset(input, 3), ReplaceIndex(ivector, t, 0))"
-#for i in range(0, len(targets)):
-#    print('output-node name=output' + str(i) + ' input=Append({0})'.format(", ".join(list)), file=f)
 print('output-node name=output input=Append({0})'.format(", ".join(list)), file=f)
 
 f.close()
@@ -152,7 +148,6 @@ for l in range(1, num_hidden_layers + 1):
     print('component name=renorm{0} type=NormalizeComponent dim={1}'.format(
          l, nonlin_output_dim), file=f)
 
-#    for i in num_targets_list:
     print('component name=final-affine type=NaturalGradientAffineComponent '
       'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
       nonlin_output_dim, total_leaves), file=f)
@@ -164,15 +159,12 @@ for l in range(1, num_hidden_layers + 1):
     # really necessary as they will already exist, but it doesn't hurt and makes
     # the structure clearer.
     if use_presoftmax_prior_scale :
-#        for i in range(0, len(targets)):
         print('component name=final-fixed-scale type=FixedScaleComponent '
           'scales={0}/presoftmax_prior_scale.vec'.format(
           args.config_dir), file=f)
 
-#    for i in num_targets_list:
     print('component name=final-log-softmax type=LogSoftmaxComponent dim={0}'.format(
       num_virtual_leaves), file=f)
-#    nnn = nnn + 1
 
     print('# Now for the network structure', file=f)
     if l == 1:
@@ -195,7 +187,6 @@ for l in range(1, num_hidden_layers + 1):
     print('component-node name=renorm{0} component=renorm{0} input=nonlin{0}'.
           format(l), file=f)
 
-#    for i in range(0, len(targets)):
     print('component-node name=final-affine component=final-affine input=renorm{0}'.
       format(l), file=f)
 
@@ -210,7 +201,6 @@ for l in range(1, num_hidden_layers + 1):
         print('component-node name=final-log-softmax component=final-log-softmax '
           'input=sparse-combine', file=f)
 
-#    for i in range(0, len(targets)):
     print('output-node name=output input=final-log-softmax', file=f)
 
     f.close()
