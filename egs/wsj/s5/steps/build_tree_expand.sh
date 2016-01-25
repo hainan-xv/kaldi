@@ -122,6 +122,7 @@ if [ $stage -le -3 ] && $train_tree; then
   echo "$0: Building the tree"
   $cmd $dir/log/build_tree.log \
     build-tree $context_opts --verbose=1 --max-leaves=$numleaves \
+    --binary=false \
     --thresh=0 \
     --cluster-thresh=$cluster_thresh $dir/treeacc $lang/phones/roots.int \
     $dir/questions.qst $lang/topo $dir/tree || exit 1;

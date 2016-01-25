@@ -70,8 +70,8 @@ struct KeyYesset {
   KeyYesset(): key(NO_KEY), improvement(-1.0) {}
   KeyYesset(EventKeyType k, const std::vector<EventValueType> &y, BaseFloat i):
     key(k), yes_set(y), improvement(i) {}
-  KeyYesset(const KeyYesset &other):
-    key(other.key), yes_set(other.yes_set), improvement(other.improvement) {}
+//  KeyYesset(const KeyYesset &other):
+//    key(other.key), yes_set(other.yes_set), improvement(other.improvement) {}
 
   bool operator< (const KeyYesset &other) const {
     return improvement > other.improvement; // so that better ones stay in front
@@ -150,7 +150,7 @@ class EventMap {
   // This function will NOT be called for TableEventMap therefore
   // for TableEventMap we always return false
   virtual bool IsSameTree(const EventMap* other) const = 0; 
-  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next) = 0;
+  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next) = 0;
   
   EventMap *Copy() const { std::vector<EventMap*> new_leaves; return Copy(new_leaves); }
 
@@ -241,7 +241,7 @@ class ConstantEventMap: public EventMap {
   static ConstantEventMap *Read(std::istream &is, bool binary);
 
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
@@ -308,7 +308,7 @@ class TableEventMap: public EventMap {
     DeletePointers(&table_);
   }
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
@@ -387,7 +387,7 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
   }
 
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);

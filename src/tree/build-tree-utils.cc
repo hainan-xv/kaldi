@@ -351,7 +351,8 @@ void AppendNBestSplitsForKey(int32 N,
                              EventKeyType key,
                              vector<KeyYesset> *yes_set_out_vec) {
   if (stats.size()<=1) return;  // cannot split if only zero or one instance of stats.
-//  if (key == -1) return;
+  KALDI_LOG << "stats size is " << stats.size();
+//  if (key == -1) return;  // TODO(hxu) not sure of this
   if (!PossibleValues(key, stats, NULL)) {
     return;  // Can't split as key not always defined.
   }
@@ -387,12 +388,13 @@ void AppendNBestSplitsForKey(int32 N,
     BaseFloat this_objf = SumClusterableObjf(clusters);
 
     // turned off because it is not true any more for entropy_clusterable objects
-    if (dynamic_cast<EntropyClusterable*>(summed_stats[0]) != NULL
+    if (dynamic_cast<GaussClusterable*>(summed_stats[0]) != NULL
         && this_objf < unsplit_objf- 0.001*std::abs(unsplit_objf)) {  // got worse; should never happen.
       // of course small differences can be caused by roundoff.
       KALDI_WARN << "Objective function got worse when building tree: "<< this_objf << " < " << unsplit_objf;
       KALDI_ASSERT(!(this_objf < unsplit_objf - 0.01*(200 + std::abs(unsplit_objf))));  // do assert on more stringent check.
     }
+
 
     BaseFloat this_objf_change = this_objf - unsplit_objf;
 
@@ -403,19 +405,48 @@ void AppendNBestSplitsForKey(int32 N,
 //      continue;
 //    }
 
-    if (this_objf_change == 0) 
+    /*
+    if (this_objf_change < 0.00001) {
+      KALDI_LOG << "___bad change " << this_objf_change;
       continue;
+    }
+// */
+
+    if (clusters[0] == NULL || clusters[1] == NULL) {
+      DeletePointers(&clusters);
+      continue;
+    }
+
+    BaseFloat cc = 0.0;
+    for (int jj = 0; jj < 2; jj++) {
+      GaussClusterable *p = dynamic_cast<GaussClusterable*>(clusters[jj]);
+      KALDI_LOG << "child " << jj << "__counts are " << p->count();
+      cc += p->count();
+    }
+
+    std::cout << "key is " << key << "\nquestion is: ";
+    for (int jj = 0; jj < yes_set.size(); jj++) {
+      std::cout << yes_set[jj] << ' ';
+    }
+    std::cout << std::endl;
+    KALDI_LOG << "improvement is " << this_objf_change;
+//    KALDI_LOG << "__total count is " << cc;
 
     yes_set_to_append.push_back(
-        KeyYesset(key, questions_of_this_key[i], this_objf_change));
+        KeyYesset(key, yes_set, this_objf_change));
 
     DeletePointers(&clusters);
   }
 
+  delete total;
   sort(yes_set_to_append.begin(), yes_set_to_append.end());
+  
+  if (yes_set_to_append.size() > N) {
+    yes_set_to_append.resize(N);
+  }
 
   yes_set_out_vec->insert(yes_set_out_vec->end(), yes_set_to_append.begin(),
-      yes_set_to_append.begin() + std::min(size_t(N), yes_set_to_append.size()));
+      yes_set_to_append.end());
   DeletePointers(&summed_stats);
 }
 

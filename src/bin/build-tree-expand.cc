@@ -123,6 +123,10 @@ int main(int argc, char *argv[]) {
       WriteKaldiObject(ctx_dep, trees_out+tree_affix, binary);
     }
 
+    KALDI_LOG << "Wrote tree";
+
+    DeleteBuildTreeStats(&stats);
+
     return 0;
   } catch(const std::exception &e) {
     std::cerr << e.what();

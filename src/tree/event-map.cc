@@ -94,7 +94,7 @@ bool ConstantEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void ConstantEventMap::ExpandTree(const std::vector<KeyYesset> &questions, int* next) {
+void ConstantEventMap::ExpandTree(std::vector<KeyYesset> &questions, int* next) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -188,7 +188,7 @@ bool TableEventMap::IsSameTree (const EventMap* other) const {
   return false;  // TableEventMap will NOT be used in virtual tree!
 }
 
-void TableEventMap::ExpandTree(const std::vector<KeyYesset> &questions, int* next) {
+void TableEventMap::ExpandTree(std::vector<KeyYesset> &questions, int* next) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -298,7 +298,7 @@ bool SplitEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
+void SplitEventMap::ExpandTree(std::vector<KeyYesset> &questions,
                                int* next) {
   std::vector<EventMap*> children;
   this->GetChildren(&children);
@@ -312,6 +312,7 @@ void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
       ConstantEventMap* c = dynamic_cast<ConstantEventMap*>(children[i]);
       KALDI_ASSERT(c != NULL);
       EventAnswerType leaf_id;
+
       c->Map(EventType(), &leaf_id);
 
       if (questions[leaf_id].key == KeyYesset::NO_KEY) {
@@ -319,6 +320,11 @@ void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
       }
 
       KALDI_ASSERT(questions[leaf_id].improvement > 0);
+
+      KALDI_LOG << "___expanding leaf_id " << leaf_id
+                << " adding leaf_id " << *next
+                << " improvement is " << questions[leaf_id].improvement
+                << " key is " << questions[leaf_id].key;
 
       ConstantEventMap* d = new ConstantEventMap((*next)++);
 
@@ -332,6 +338,9 @@ void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
         KALDI_ASSERT(this->no_ == c);
         this->no_ = to_add;
       }
+
+      questions[leaf_id].key = KeyYesset::NO_KEY;
+
     }
   }
 }
