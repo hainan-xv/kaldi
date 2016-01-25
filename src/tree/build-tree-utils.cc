@@ -351,8 +351,6 @@ void AppendNBestSplitsForKey(int32 N,
                              EventKeyType key,
                              vector<KeyYesset> *yes_set_out_vec) {
   if (stats.size()<=1) return;  // cannot split if only zero or one instance of stats.
-  KALDI_LOG << "stats size is " << stats.size();
-//  if (key == -1) return;  // TODO(hxu) not sure of this
   if (!PossibleValues(key, stats, NULL)) {
     return;  // Can't split as key not always defined.
   }
@@ -398,39 +396,10 @@ void AppendNBestSplitsForKey(int32 N,
 
     BaseFloat this_objf_change = this_objf - unsplit_objf;
 
-//    KALDI_LOG << "this_objf_change is " << this_objf_change;
-
-//    int s = accumulate(assignments.begin(), assignments.end(), 0);
-//    if (s == 0 || s == assignments.size()) {
-//      continue;
-//    }
-
-    /*
-    if (this_objf_change < 0.00001) {
-      KALDI_LOG << "___bad change " << this_objf_change;
-      continue;
-    }
-// */
-
     if (clusters[0] == NULL || clusters[1] == NULL) {
       DeletePointers(&clusters);
       continue;
     }
-
-    BaseFloat cc = 0.0;
-    for (int jj = 0; jj < 2; jj++) {
-      GaussClusterable *p = dynamic_cast<GaussClusterable*>(clusters[jj]);
-      KALDI_LOG << "child " << jj << "__counts are " << p->count();
-      cc += p->count();
-    }
-
-    std::cout << "key is " << key << "\nquestion is: ";
-    for (int jj = 0; jj < yes_set.size(); jj++) {
-      std::cout << yes_set[jj] << ' ';
-    }
-    std::cout << std::endl;
-    KALDI_LOG << "improvement is " << this_objf_change;
-//    KALDI_LOG << "__total count is " << cc;
 
     yes_set_to_append.push_back(
         KeyYesset(key, yes_set, this_objf_change));

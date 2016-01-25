@@ -63,6 +63,8 @@ inline std::pair<EventKeyType, EventValueType> MakeEventPair (EventKeyType k, Ev
   return std::pair<EventKeyType, EventValueType>(k, v);
 }
 
+using std::map;
+
 struct KeyYesset;
 
 struct KeyYesset {
@@ -103,6 +105,8 @@ struct EventMapVectorEqual {  // Equality object for EventType pointers-- test e
 };
 
 
+class ConstantEventMap;
+class SplitEventMap;
 /// A class that is capable of representing a generic mapping from
 /// EventType (which is a vector of (key, value) pairs) to
 /// EventAnswerType which is just an integer.  See \ref tree_internals
@@ -150,7 +154,8 @@ class EventMap {
   // This function will NOT be called for TableEventMap therefore
   // for TableEventMap we always return false
   virtual bool IsSameTree(const EventMap* other) const = 0; 
-  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next) = 0;
+  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next,
+                          map<int, SplitEventMap*> *m) = 0;
   
   EventMap *Copy() const { std::vector<EventMap*> new_leaves; return Copy(new_leaves); }
 
@@ -241,7 +246,8 @@ class ConstantEventMap: public EventMap {
   static ConstantEventMap *Read(std::istream &is, bool binary);
 
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next,
+                          map<int, SplitEventMap*> *m);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
@@ -308,7 +314,8 @@ class TableEventMap: public EventMap {
     DeletePointers(&table_);
   }
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next,
+                          map<int, SplitEventMap*> *m);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);
@@ -387,7 +394,8 @@ class SplitEventMap: public EventMap {  // A decision tree [non-leaf] node.
   }
 
   virtual bool IsSameTree(const EventMap* other) const;
-  virtual void ExpandTree(std::vector<KeyYesset> &questions, int* next);
+  virtual void ExpandTree(const std::vector<KeyYesset> &questions, int* next,
+                          map<int, SplitEventMap*> *m);
 
   virtual void ApplyOffsetToCentralPhone(int32 offset) {
     KALDI_ASSERT(offset > 0);

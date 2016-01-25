@@ -94,7 +94,9 @@ bool ConstantEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void ConstantEventMap::ExpandTree(std::vector<KeyYesset> &questions, int* next) {
+void ConstantEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
+                                  int* next,
+                                  map<int, SplitEventMap*> *m) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -188,7 +190,9 @@ bool TableEventMap::IsSameTree (const EventMap* other) const {
   return false;  // TableEventMap will NOT be used in virtual tree!
 }
 
-void TableEventMap::ExpandTree(std::vector<KeyYesset> &questions, int* next) {
+void TableEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
+                               int* next,
+                               map<int, SplitEventMap*> *m) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -298,15 +302,16 @@ bool SplitEventMap::IsSameTree (const EventMap* other) const {
   return true;
 }
 
-void SplitEventMap::ExpandTree(std::vector<KeyYesset> &questions,
-                               int* next) {
+void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
+                               int* next,
+                               map<int, SplitEventMap*> *m) {
   std::vector<EventMap*> children;
   this->GetChildren(&children);
 
   // we know the size is 2
   for (size_t i = 0; i < children.size(); i++) {
     if (dynamic_cast<SplitEventMap*>(children[i]) != NULL) {
-      children[i]->ExpandTree(questions, next);
+      children[i]->ExpandTree(questions, next, m);
     }
     else {
       ConstantEventMap* c = dynamic_cast<ConstantEventMap*>(children[i]);
@@ -319,18 +324,21 @@ void SplitEventMap::ExpandTree(std::vector<KeyYesset> &questions,
         continue;
       }
 
-      KALDI_ASSERT(questions[leaf_id].improvement > 0);
+      SplitEventMap* to_add;
+      if (m->find(leaf_id) == m->end()) {
+        KALDI_ASSERT(questions[leaf_id].improvement > 0);
 
-      KALDI_LOG << "___expanding leaf_id " << leaf_id
-                << " adding leaf_id " << *next
-                << " improvement is " << questions[leaf_id].improvement
-                << " key is " << questions[leaf_id].key;
+        ConstantEventMap* d = new ConstantEventMap((*next)++);
 
-      ConstantEventMap* d = new ConstantEventMap((*next)++);
+        to_add = new SplitEventMap(questions[leaf_id].key,
+                                                  questions[leaf_id].yes_set,
+                                                  c, d);
+        (*m)[leaf_id] = to_add;
+      } else {
+        to_add = (*m)[leaf_id];
+        KALDI_LOG << "m size is " << m->size();
+      }
 
-      SplitEventMap* to_add = new SplitEventMap(questions[leaf_id].key,
-                                                questions[leaf_id].yes_set,
-                                                c, d);
       if (i == 0) {
         KALDI_ASSERT(this->yes_ == c);
         this->yes_ = to_add;
@@ -338,8 +346,9 @@ void SplitEventMap::ExpandTree(std::vector<KeyYesset> &questions,
         KALDI_ASSERT(this->no_ == c);
         this->no_ = to_add;
       }
-
-      questions[leaf_id].key = KeyYesset::NO_KEY;
+      
+//TODO(hxu)  might still need this?
+//      questions[leaf_id].key = KeyYesset::NO_KEY;
 
     }
   }
