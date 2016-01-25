@@ -96,7 +96,7 @@ bool ConstantEventMap::IsSameTree (const EventMap* other) const {
 
 void ConstantEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
                                   int* next,
-                                  map<int, SplitEventMap*> *m) {
+                                  map<int, int> *m) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -192,7 +192,7 @@ bool TableEventMap::IsSameTree (const EventMap* other) const {
 
 void TableEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
                                int* next,
-                               map<int, SplitEventMap*> *m) {
+                               map<int, int> *m) {
   // should never be called here
   KALDI_ASSERT(false);
 }
@@ -304,7 +304,7 @@ bool SplitEventMap::IsSameTree (const EventMap* other) const {
 
 void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
                                int* next,
-                               map<int, SplitEventMap*> *m) {
+                               map<int, int> *m) {
   std::vector<EventMap*> children;
   this->GetChildren(&children);
 
@@ -325,20 +325,20 @@ void SplitEventMap::ExpandTree(const std::vector<KeyYesset> &questions,
       }
 
       SplitEventMap* to_add;
+      KALDI_ASSERT(questions[leaf_id].improvement > 0);
+
+      ConstantEventMap* d;
       if (m->find(leaf_id) == m->end()) {
-        KALDI_ASSERT(questions[leaf_id].improvement > 0);
-
-        ConstantEventMap* d = new ConstantEventMap((*next)++);
-
-        to_add = new SplitEventMap(questions[leaf_id].key,
-                                                  questions[leaf_id].yes_set,
-                                                  c, d);
-        (*m)[leaf_id] = to_add;
+        d = new ConstantEventMap(*next);
+        (*m)[leaf_id] = *next;
+        (*next)++;
       } else {
-        to_add = (*m)[leaf_id];
-        KALDI_LOG << "m size is " << m->size();
+        d = new ConstantEventMap((*m)[leaf_id]);
       }
 
+      to_add = new SplitEventMap(questions[leaf_id].key,
+                                                questions[leaf_id].yes_set,
+                                                c, d);
       if (i == 0) {
         KALDI_ASSERT(this->yes_ == c);
         this->yes_ = to_add;
