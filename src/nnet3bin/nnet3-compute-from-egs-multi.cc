@@ -85,6 +85,7 @@ int main(int argc, char *argv[]) {
         apply_exp = false;
     std::string use_gpu = "yes";
     int32 num_outputs = 2;
+    int32 index = 0;
 
     ParseOptions po(usage);
     po.Register("binary", &binary_write, "Write output in binary mode");
@@ -93,6 +94,7 @@ int main(int argc, char *argv[]) {
     po.Register("use-gpu", &use_gpu,
                 "yes|no|optional|wait, only has effect if compiled with CUDA");
     po.Register("num-outputs", &num_outputs, "Number of outputs");
+    po.Register("output-index", &index, "output index");
 
     po.Read(argc, argv);
     
@@ -117,18 +119,27 @@ int main(int argc, char *argv[]) {
     int64 num_egs = 0;
     
     SequentialNnetExampleReader example_reader(examples_rspecifier);
-    std::vector<BaseFloatMatrixWriter*> matrix_writers;
+    std::vector<BaseFloatMatrixWriter*> matrix_writers(num_outputs);
 
     for (int i = 0; i < num_outputs; i++) {
+      if (i != index) {
+        continue; // this is probably the most ugly, yet effective way to 
+        //           change it to doing what I want, ;-)
+      }
       std::stringstream os;
       os << i;
       BaseFloatMatrixWriter* w =
-                 new BaseFloatMatrixWriter(matrix_wspecifier + os.str());
-      matrix_writers.push_back(w);
+//                 new BaseFloatMatrixWriter(matrix_wspecifier + os.str());
+                 new BaseFloatMatrixWriter(matrix_wspecifier);
+      matrix_writers[i] = w;
     }
     
     for (; !example_reader.Done(); example_reader.Next(), num_egs++) {
       for (int i = 0; i < num_outputs; i++) {
+        if (i != index) {
+          continue; // this is probably the most ugly, yet effective way to 
+          //           change it to doing what I want, ;-)
+        }
         Matrix<BaseFloat> output;
         computer.Compute(example_reader.Value(), i, &output);
         KALDI_ASSERT(output.NumRows() != 0);
