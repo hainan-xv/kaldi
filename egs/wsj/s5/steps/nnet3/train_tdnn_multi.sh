@@ -648,7 +648,7 @@ if [ $stage -le $[$num_iters+1] ]; then
   rm $dir/post.$x.*.vec 2>/dev/null
 #'''
   
-  for i in `seq 0 ${${num_outputs}-1}`; do
+  for i in `seq 0 $[${num_outputs}-1]`; do
     $cmd JOB=1:$num_jobs_compute_prior $prior_queue_opt $dir/log/get_post.$x.JOB.log \
       nnet3-copy-egs --frame=random $context_opts --srand=JOB ark:$cur_egs_dir/egs.$egs_part.ark ark:- \| \
       nnet3-subset-egs --srand=JOB --n=$prior_subset_size ark:- ark:- \| \
@@ -656,8 +656,8 @@ if [ $stage -le $[$num_iters+1] ]; then
       nnet3-compute-from-egs-multi $prior_gpu_opt --apply-exp=true \
         --num-outputs=$num_outputs \
         --output-index=$i \
-        "nnet3-am-copy-multi --raw=true $dir/combined.mdl -|" ark:- ark:- | \
-      matrix-sum-rows ark:$dir/egs.JOB.tmp$i ark:- \| vector-sum ark:- $dir/post.$x.JOB.vec$i || exit 1;
+        "nnet3-am-copy-multi --raw=true $dir/combined.mdl -|" ark:- ark:- \| \
+      matrix-sum-rows ark:- ark:- \| vector-sum ark:- $dir/post.$x.JOB.vec$i || exit 1;
 
     sleep 3;  # make sure there is time for $dir/post.$x.*.vec to appear.
 

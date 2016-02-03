@@ -8,6 +8,8 @@ method=joint # joint for joint training; multi for multi-output training
 gmm_decode=true
 dnn_stage=-100
 mic=ihm
+sp=true
+
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -29,11 +31,12 @@ LM=$final_lm.pr1-7
 data=data/$mic/train
 lang=data/lang
 alidir=exp/$mic/tri4a_ali
-dir=exp/$mic/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+dir=exp/$mic/$method/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
-false &&  steps/train_sat_LRT.sh --cmd "$train_cmd" \
+  steps/train_sat_LRT.sh --cmd "$train_cmd" \
+      --num-iters 2 \
       --numtrees_L $num_trees_L \
       --numtrees_T $num_trees_T \
       --numtrees_R $num_trees_R \
@@ -44,10 +47,14 @@ false &&  steps/train_sat_LRT.sh --cmd "$train_cmd" \
     cp $dir/tree_$i/final.mdl $dir/model-$i
   done
 
-false &&  steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
+  if [ "$sp" == "true" ]; then
+    alidir=exp/$mic/tri4a_sp_ali
+  fi
+
+  steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
       $data $lang $alidir $dir $dir/virtual
 
-false &&  $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
+  $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
 
 nj=30
 
@@ -62,11 +69,6 @@ nj=30
         $dir/virtual/graph_$LM data/$mic/eval $dir/virtual/decode_eval_$LM $dir/virtual/tree-mapping &
   fi
 fi
-nnet3dir=${dir}/../tdnn_${method}_${num_leaves}
+nnet3dir=${dir}/../tdnn_${num_leaves}
 
-./local/nnet3/run_tdnn_$method.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
-exit
-method=multi
-nnet3dir=${dir}/../tdnn_${method}_${num_leaves}
-#dnn_stage=81
 ./local/nnet3/run_tdnn_$method.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

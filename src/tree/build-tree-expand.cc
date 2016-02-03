@@ -38,9 +38,9 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
   }
 
   for (int l = 0; l < num_leaves; l++) {
-    if (splits[l].size() == 0) {
-      KALDI_ERR << "eh oh bad";
-    }
+//    if (splits[l].size() == 0) {
+//      KALDI_ERR << "eh oh bad";
+//    }
 
     // process stats mapped to the l'th leaf, i.e. in splits[l]
     vector<KeyYesset> key_yesset_vec;
@@ -84,6 +84,7 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
     SplitStatsByMap(stats, *ans[0], &local_splits);
 
     KALDI_LOG << 0 << "'th tree, size is " << local_splits.size();
+    /*
     for (int ii = 0; ii < local_splits.size(); ii++) {
       if (local_splits[ii].size() == 0) {
         KALDI_ERR << "This is bad!   "
@@ -92,6 +93,7 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
 
       }
     }
+    // */
     KALDI_LOG << "Tree " << 0 << " is good";
   }
 
@@ -100,7 +102,7 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
     KALDI_ASSERT(questions_for_trees[i].size() == num_leaves);
     KALDI_LOG << i + 1 <<"'th tree, length of questions vec is " << questions_for_trees[i].size();
 
-    std::map<ConstantEventMap*, SplitEventMap*> m;
+    std::map<int, int> m;
 
     ans[i + 1]->ExpandTree(questions_for_trees[i], &next, &m);
 
@@ -110,15 +112,15 @@ vector<EventMap*> ExpandDecisionTree(const ContextDependency &ctx_dep,
     KALDI_LOG << i + 1 << "'the tree, size is " << local_splits.size();
     for (int ii = 0; ii < local_splits.size(); ii++) {
 
+/*
       if (local_splits[ii].size() == 0) {
-//        /*
         KALDI_ERR << "This is bad!   "
                   << i + 1 << "'th tree, "
                   << ii << "'th leaf";
-//                  */
 
 
       }
+//                  */
     }
     KALDI_LOG << "Tree " << i + 1 << " is good";
   }

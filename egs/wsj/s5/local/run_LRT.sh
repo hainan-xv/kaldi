@@ -25,7 +25,9 @@ num_trees=$[$num_trees_L+$num_trees_T+$num_trees_L]
 data=data/train_si284
 lang=data/lang
 alidir=exp/tri4b_ali_si284
-dir=exp/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+dir=exp/$method/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+
+mkdir -p $dir
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
@@ -34,6 +36,7 @@ if [ "$gmm" == "true" ]; then
       --numtrees_T $num_trees_T \
       --numtrees_R $num_trees_R \
       --lambda $lambda \
+      --num-iters 2 \
       $num_leaves $num_gauss $data $lang $alidir $dir
 
   for i in `seq 0 $[$num_trees-1]`; do
@@ -55,11 +58,7 @@ if [ "$gmm" == "true" ]; then
   fi
 fi
 
-nnet3dir=${dir}/../tdnn_${method}_${num_leaves}
+nnet3dir=${dir}/../tdnn_${num_leaves}
 
-#./local/nnet3/run_tdnn_$method.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
-
-method=multi
-nnet3dir=${dir}/../tdnn_${method}_${num_leaves}
 #dnn_stage=81
 ./local/nnet3/run_tdnn_$method.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

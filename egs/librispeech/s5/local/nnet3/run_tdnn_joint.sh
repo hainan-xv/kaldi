@@ -10,20 +10,12 @@
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
 
-stage=-100
+stage=0
 dir=
-has_fisher=true
-mic=ihm
-use_sat_alignments=true
-affix=
-speed_perturb=true
-common_egs_dir=
 expand=false
-
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
-
 multidir=$1
 virtualdir=$2
 num_outputs=$3
@@ -42,49 +34,42 @@ fi
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
-     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/ami-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
+     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/lib-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
 #  train_stage=`ls $dir | grep .mdl | sed s=.mdl==g | sort -n | tail -n 1`
   echo train_stage $train_stage
 
-  train_set=
-  if [ "$speed_perturb" == "true" ]; then
-    train_set=train_sp
-  else
-    train_set=train
-  fi
-
   steps/nnet3/train_tdnn_joint.sh --stage $train_stage \
+    --cleanup false \
     --num-outputs $num_outputs \
-    --num-epochs 3 --num-jobs-initial 2 --num-jobs-final 12 \
-    --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 -3,3 0 0" \
+    --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+    --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
     --feat-type raw \
-    --online-ivector-dir exp/$mic/nnet3/ivectors_${train_set}_hires \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
-    --egs-dir "$common_egs_dir" \
-    --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
+    --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
     --cmd "$decode_cmd" \
-    --relu-dim 850 \
+    --pnorm-input-dim 2000 \
+    --pnorm-output-dim 250 \
     --expand $expand \
     --tree-mapping $virtualdir/tree-mapping \
-    data/$mic/${train_set}_hires data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
+    data/train_clean_100 data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
 fi
+
 
 if [ $stage -le 9 ]; then
   # this does offline decoding that should give the same results as the real
   # online decoding.
-  for decode_set in dev eval; do
-    num_jobs=`cat data/$mic/${decode_set}_hires/utt2spk|cut -d' ' -f2|sort -u|wc -l`
-    decode_dir=${dir}/decode_${decode_set}
-    graph_dir=${virtualdir}/graph_ami_fsh.o3g.kn.pr1-7
+  for test in test_clean test_other dev_clean dev_other; do
+    graph_dir=$virtualdir/graph_tgsmall
     # use already-built graphs.
-(      steps/nnet3/decode.sh --nj $num_jobs --cmd "$decode_cmd" \
-          --online-ivector-dir exp/$mic/nnet3/ivectors_${decode_set} \
-         $graph_dir data/$mic/${decode_set}_hires \
-         $decode_dir || exit 1; ) &
-    wait
-    echo done
+    false && steps/nnet3/decode.sh --nj 20 --cmd "$decode_cmd" \
+      $graph_dir data/$test $dir/decode_tgsmall_$test
+
+    steps/lmrescore_const_arpa.sh \
+      --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
+      data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
+    exit
   done
 fi
 

@@ -6,9 +6,7 @@
 gmm=true
 gmm_decode=false
 dnn_stage=-100
-mic=ihm
-sp=true
-
+stage=0
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -19,14 +17,10 @@ num_leaves=$1
 num_gauss=$2
 num_questions=$3
 
-data=data/$mic/train
+data=data/train_clean_100
 lang=data/lang
-alidir=exp/$mic/tri4a_ali
-
-dir=exp/$mic/expanded_${num_questions}/tri_${num_leaves}_${num_gauss}
-
-final_lm=`cat data/local/lm/final_lm`
-LM=$final_lm.pr1-7
+alidir=exp/tri4b_ali_clean_100
+dir=exp/expanded_${num_questions}/tri_${num_leaves}_${num_gauss}
 
 set -e
 
@@ -43,15 +37,11 @@ if [ "$gmm" == "true" ]; then
     cp $dir/tree_$i/final.mdl $dir/model-$i
   done
 
-  if [ "$sp" == "true" ]; then
-    alidir=exp/$mic/tri4a_sp_ali
-  fi
-
   steps/build_virtual_tree.sh --cmd "$train_cmd" --numtrees $num_trees \
       --expand true \
-      $data $lang $alidir $dir $dir/virtual || exit 1
+      $data $lang $alidir $dir $dir/virtual
 
-  $highmem_cmd $dir/virtual/graph_$LM/mkraph.log utils/mkgraph.sh ${lang}_$LM $dir/virtual $dir/virtual/graph_$LM || exit 1
+  utils/mkgraph.sh data/lang_test_tgsmall $dir/virtual $dir/virtual/graph_tgsmall
 fi
 
 num_trees=`ls $dir/ | grep tree- | wc -l | awk '{print$1}'`
@@ -62,5 +52,5 @@ cp $dir/virtual/matrix $nnet3dir/
 
 ./local/nnet3/run_tdnn_joint.sh --dir $nnet3dir \
     --expand true \
-    --speed-perturb $sp \
+    --stage $stage \
     $dir $dir/virtual $num_trees $dnn_stage
