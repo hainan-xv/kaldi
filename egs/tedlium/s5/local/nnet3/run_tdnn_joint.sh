@@ -13,6 +13,10 @@
 stage=0
 dir=
 expand=false
+
+pnormi=3500
+pnormo=350
+
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -41,16 +45,15 @@ if [ $stage -le 8 ]; then
   echo train_stage $train_stage
 
   steps/nnet3/train_tdnn_joint.sh --stage $train_stage \
-    --cleanup false \
     --num-outputs $num_outputs \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
     --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
     --feat-type raw \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
-    --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+    --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 2000 \
-    --pnorm-output-dim 250 \
+    --pnorm-input-dim $pnormi \
+    --pnorm-output-dim $pnormo \
     --expand $expand \
     --tree-mapping $virtualdir/tree-mapping \
     data/train data/lang $multidir/tree $virtualdir/ $dir  || exit 1;

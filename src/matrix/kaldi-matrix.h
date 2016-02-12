@@ -583,6 +583,13 @@ class MatrixBase {
                   const MatrixBase<Real>& B, MatrixTransposeType transB,
                   const Real beta);
 
+  /// A version of AddMatMat specialized for when the second argument
+  /// is a SparseMatrix
+  void AddMatSmat(const Real alpha,
+                  const MatrixBase<Real>& A, MatrixTransposeType transA,
+                  const SparseMatrix<Real>& B, MatrixTransposeType transB,
+                  const Real beta);
+
   /// A version of AddMatMat specialized for when the first argument
   /// contains a lot of zeroes.  
   void AddSmatMat(const Real alpha,

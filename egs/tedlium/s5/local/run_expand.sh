@@ -8,6 +8,9 @@ gmm_decode=false
 dnn_stage=-100
 echo "$0 $@"
 
+pnormi=8000
+pnormo=2000
+
 . ./utils/parse_options.sh || exit 1;
 
 #set -e
@@ -44,11 +47,12 @@ if [ "$gmm" == "true" ]; then
 fi
 
 num_trees=`ls $dir/ | grep tree- | wc -l | awk '{print$1}'`
-nnet3dir=${dir}/../tdnn_joint_${num_leaves}_${num_questions}
+nnet3dir=${dir}/../tdnn_joint_${num_leaves}_${num_questions}_${pnormi}_${pnormo}
 
 mkdir -p $nnet3dir
 cp $dir/virtual/matrix $nnet3dir/
 
 ./local/nnet3/run_tdnn_joint.sh --dir $nnet3dir \
+    --pnormi $pnormi --pnormo $pnormo \
     --expand true \
     $dir $dir/virtual $num_trees $dnn_stage

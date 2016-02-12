@@ -252,6 +252,43 @@ void MatrixBase<Real>::SymAddMat2(const Real alpha,
               A.Stride(), beta, this->data_, this->stride_);
 }
 
+template<typename Real>
+void MatrixBase<Real>::AddMatSmat(const Real alpha,
+                                  const MatrixBase<Real> &A,
+                                  MatrixTransposeType transA,
+                                  const SparseMatrix<Real> &B,
+                                  MatrixTransposeType transB,
+                                  const Real beta) {
+  KALDI_ASSERT((transA == kNoTrans && transB == kNoTrans && A.num_cols_ == B.NumRows() && A.num_rows_ == num_rows_ && B.NumCols() == num_cols_)
+               || (transA == kTrans && transB == kNoTrans && A.num_rows_ == B.NumRows() && A.num_cols_ == num_rows_ && B.NumCols() == num_cols_)
+               || (transA == kNoTrans && transB == kTrans && A.num_cols_ == B.NumCols() && A.num_rows_ == num_rows_ && B.NumRows() == num_cols_)
+               || (transA == kTrans && transB == kTrans && A.num_rows_ == B.NumCols() && A.num_cols_ == num_rows_ && B.NumRows() == num_cols_));
+  KALDI_ASSERT(&A !=  this); // && &B != this);
+
+  // We iterate over the columns of B.
+
+  MatrixIndexT Astride = A.stride_, stride = this->stride_;
+  Real *data = this->data_, *Adata = A.data_;
+//  MatrixIndexT num_cols = this->num_cols_; 
+  if (transB == kNoTrans) {
+
+  } else {
+    // this is a pretty bad implementation but still better than the 
+    // convert to MatrixBase method...
+    for (MatrixIndexT i = 0; i < B.rows_.size(); i++) {
+      for (MatrixIndexT jj = 0; jj < B.rows_[i].pairs_.size(); jj++) {
+        MatrixIndexT j = B.rows_[i].pairs_[jj].first;
+        BaseFloat val = B.rows_[i].pairs_[jj].second;
+
+        for (MatrixIndexT k = 0; k < A.num_rows_; k++) {
+//          (*this)(k, i) = (*this)(k, i) + A(k, j) * val;
+          *(data + k * stride + i) += *(Adata + k * Astride + j) * val;
+        }
+      }
+    }
+  }
+}
+
 
 template<typename Real>
 void MatrixBase<Real>::AddMatSmat(const Real alpha,

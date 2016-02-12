@@ -880,10 +880,11 @@ std::string SparseLinearComponent::Info() const {
   std::stringstream stream;
   BaseFloat linear_params_size = static_cast<BaseFloat>(linear_params_.NumRows())
       * static_cast<BaseFloat>(linear_params_.NumCols());
-  Matrix<BaseFloat> tmp(linear_params_.NumRows(), linear_params_.NumCols());
-  linear_params_.CopyToMat(&tmp);
-  BaseFloat sample_var = TraceMatMat(tmp, tmp, kTrans) /
-    ((linear_params_size <= 1) ? 1 : ( linear_params_size - 1));
+  // TODO(hxu) will get the following code back later perhaps
+//  Matrix<BaseFloat> tmp(linear_params_.NumRows(), linear_params_.NumCols());
+//  linear_params_.CopyToMat(&tmp);
+//  BaseFloat sample_var = TraceMatMat(tmp, tmp, kTrans) /
+//    ((linear_params_size <= 1) ? 1 : ( linear_params_size - 1));
   // Assuming nonzero elements are iid from standard normal distribution,
   // zero-prob can be estimated as 1 - sample_var
   BaseFloat frob_norm = linear_params_.FrobeniusNorm();
@@ -891,7 +892,7 @@ std::string SparseLinearComponent::Info() const {
     linear_params_.NumElements();
   stream << Type() << ", input-dim=" << InputDim()
          << ", output-dim=" << OutputDim()
-         << ", sparseness=" << 1 - sample_var
+//         << ", sparseness=" << 1 - sample_var
          << ", uncentered-var=" << uncentered_var
          << ", learning-rate=" << LearningRate()
          << ", is-updatable=" << (is_updatable_ ? "true" : "false")

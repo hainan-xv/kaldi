@@ -12,7 +12,7 @@
 
 stage=0
 train_stage=-10
-dir=exp/nnet3/nnet_tdnn_a
+dir=exp/nnet3/nnet_tdnn_larger_net_and_slower
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -39,10 +39,10 @@ if [ $stage -le 8 ]; then
     --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
     --feat-type raw \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
-    --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+    --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 2000 \
-    --pnorm-output-dim 250 \
+    --pnorm-input-dim 3500 \
+    --pnorm-output-dim 350 \
     data/train data/lang exp/tri3_ali $dir  || exit 1;
 fi
 

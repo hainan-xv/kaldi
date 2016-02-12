@@ -13,6 +13,8 @@
 stage=0
 dir=
 expand=false
+pnormi=6000
+pnormo=1000
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -49,8 +51,8 @@ if [ $stage -le 8 ]; then
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 2000 \
-    --pnorm-output-dim 250 \
+    --pnorm-input-dim $pnormi \
+    --pnorm-output-dim $pnormo \
     --expand $expand \
     --tree-mapping $virtualdir/tree-mapping \
     data/train_clean_100 data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
@@ -63,13 +65,12 @@ if [ $stage -le 9 ]; then
   for test in test_clean test_other dev_clean dev_other; do
     graph_dir=$virtualdir/graph_tgsmall
     # use already-built graphs.
-    false && steps/nnet3/decode.sh --nj 20 --cmd "$decode_cmd" \
+    steps/nnet3/decode.sh --nj 20 --cmd "$decode_cmd" \
       $graph_dir data/$test $dir/decode_tgsmall_$test
 
     steps/lmrescore_const_arpa.sh \
       --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
       data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
-    exit
   done
 fi
 

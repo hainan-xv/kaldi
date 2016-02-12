@@ -14,6 +14,8 @@ stage=-100
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
 dir=
+pnormi=6000
+pnormo=1000
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -44,13 +46,12 @@ if [ $stage -le 8 ]; then
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
     --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
     --feat-type raw \
-    --online-ivector-dir exp/nnet3/ivectors_train_si284 \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 2000 \
-    --pnorm-output-dim 250 \
-    data/train_si284_hires data/lang $multidir/tree $dir  || exit 1;
+    --pnorm-input-dim $pnormi \
+    --pnorm-output-dim $pnormo \
+    data/train_clean_100 data/lang $multidir/tree $dir  || exit 1;
 fi
 
 
@@ -69,6 +70,17 @@ if [ $stage -le 9 ]; then
     done
     wait
     echo done
+  done
+
+  for test in test_clean test_other dev_clean dev_other; do
+    graph_dir=$virtualdir/graph_tgsmall
+    # use already-built graphs.
+    steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
+      $graph_dir data/$test $virtualdir $dir/decode_tgsmall_$test
+
+    steps/lmrescore_const_arpa.sh \
+      --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
+      data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
   done
 fi
 

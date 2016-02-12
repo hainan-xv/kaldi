@@ -1085,9 +1085,9 @@ void CuMatrixBase<Real>::AddMatSmat(Real alpha, const CuMatrixBase<Real> &A, Mat
   } else
 #endif
   {
-    Matrix<Real> cpuB(B.num_rows_, B.num_cols_);
-    reinterpret_cast<const SparseMatrix<Real>*>(&B)->CopyToMat(&cpuB, kNoTrans);
-    Mat().AddMatMat(alpha, A.Mat(), transA, cpuB, transB, beta);
+//    Matrix<Real> cpuB(B.num_rows_, B.num_cols_);
+//    reinterpret_cast<const SparseMatrix<Real>*>(&B)->CopyToMat(&cpuB, kNoTrans);
+    Mat().AddMatSmat(alpha, A.Mat(), transA, B.Mat(), transB, beta);
   }
 }
 

@@ -38,6 +38,7 @@ namespace kaldi {
 template <typename Real>
 class SparseVector {
   friend class SparseMatrix<Real>;
+  friend class MatrixBase<Real>;
  public:
   MatrixIndexT Dim() const { return dim_; }
 
@@ -120,6 +121,7 @@ Real VecSvec(const VectorBase<Real> &vec,
 
 template <typename Real>
 class SparseMatrix {
+  friend class MatrixBase<Real>;
  public:
   MatrixIndexT NumRows() const;
 
