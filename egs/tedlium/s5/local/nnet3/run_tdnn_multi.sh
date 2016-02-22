@@ -25,6 +25,8 @@ multidir=$1
 virtualdir=$2
 num_outputs=$3
 train_stage=$4
+
+dir=${dir}_${pnormo}_${pnormi}
 echo dir is $dir
 
 if ! cuda-compiled; then

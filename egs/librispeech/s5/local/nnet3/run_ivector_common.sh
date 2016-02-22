@@ -16,13 +16,12 @@ stage=1
 
 
 if [ $stage -le 1 ]; then
-  for datadir in train_si284 test_eval93 test_dev93 test_eval92; do
+  for datadir in train_clean_100 test_clean test_other dev_clean dev_other; do
     utils/copy_data_dir.sh data/$datadir data/${datadir}_hires
     steps/make_mfcc.sh --nj 40 --mfcc-config conf/mfcc_hires.conf \
       --cmd "$train_cmd" data/${datadir}_hires exp/make_hires/$datadir $mfccdir || exit 1;
     steps/compute_cmvn_stats.sh data/${datadir}_hires exp/make_hires/$datadir $mfccdir || exit 1;
   done
-  utils/subset_data_dir.sh --first data/train_si284_hires 7138 data/train_si84_hires || exit 1
 fi
 
 if [ $stage -le 2 ]; then
@@ -30,7 +29,7 @@ if [ $stage -le 2 ]; then
   # to train the diag-UBM on top of.  We align the si84 data for this purpose.
 
   steps/align_fmllr.sh --nj 40 --cmd "$train_cmd" \
-    data/train_si84 data/lang exp/tri4b exp/nnet3/tri4b_ali_si84
+    data/train_clean_100 data/lang exp/tri4b exp/nnet3/tri4b_ali_clean_100
 fi
 
 if [ $stage -le 3 ]; then
@@ -40,21 +39,21 @@ if [ $stage -le 3 ]; then
   steps/train_lda_mllt.sh --cmd "$train_cmd" --num-iters 13 \
     --realign-iters "" \
     --splice-opts "--left-context=3 --right-context=3" \
-    5000 10000 data/train_si84_hires data/lang \
-     exp/nnet3/tri4b_ali_si84 exp/nnet3/tri5b
+    5000 10000 data/train_clean_100_hires data/lang \
+     exp/nnet3/tri4b_ali_clean_100 exp/nnet3/tri5b
 fi
 
 if [ $stage -le 4 ]; then
   mkdir -p exp/nnet3
 
   steps/online/nnet2/train_diag_ubm.sh --cmd "$train_cmd" --nj 30 \
-     --num-frames 400000 data/train_si84_hires 256 exp/nnet3/tri5b exp/nnet3/diag_ubm
+     --num-frames 400000 data/train_clean_100_hires 256 exp/nnet3/tri5b exp/nnet3/diag_ubm
 fi
 
 if [ $stage -le 5 ]; then
   # even though $nj is just 10, each job uses multiple processes and threads.
   steps/online/nnet2/train_ivector_extractor.sh --cmd "$train_cmd" --nj 10 \
-    data/train_si284_hires exp/nnet3/diag_ubm exp/nnet3/extractor || exit 1;
+    data/train_clean_100_hires exp/nnet3/diag_ubm exp/nnet3/extractor || exit 1;
 fi
 
 if [ $stage -le 6 ]; then
@@ -63,21 +62,23 @@ if [ $stage -le 6 ]; then
 
   # having a larger number of speakers is helpful for generalization, and to
   # handle per-utterance decoding well (iVector starts at zero).
-  steps/online/nnet2/copy_data_dir.sh --utts-per-spk-max 2 data/train_si284_hires \
-    data/train_si284_hires_max2
+ steps/online/nnet2/copy_data_dir.sh --utts-per-spk-max 2 data/train_clean_100_hires \
+    data/train_clean_100_hires_max2
 
   steps/online/nnet2/extract_ivectors_online.sh --cmd "$train_cmd" --nj 30 \
-    data/train_si284_hires_max2 exp/nnet3/extractor exp/nnet3/ivectors_train_si284 || exit 1;
+    data/train_clean_100_hires_max2 exp/nnet3/extractor exp/nnet3/ivectors_train_clean_100 || exit 1;
 fi
 
 if [ $stage -le 7 ]; then
   rm exp/nnet3/.error 2>/dev/null
-  for data in test_eval92 test_dev93 test_eval93; do
+  for data in test_clean test_other dev_clean dev_other; do
     steps/online/nnet2/extract_ivectors_online.sh --cmd "$train_cmd" --nj 8 \
       data/${data}_hires exp/nnet3/extractor exp/nnet3/ivectors_${data} || touch exp/nnet3/.error &
   done
   wait
   [ -f exp/nnet3/.error ] && echo "$0: error extracting iVectors." && exit 1;
 fi
+
+echo "ivector successful"
 
 exit 0;
