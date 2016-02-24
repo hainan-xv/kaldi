@@ -12,8 +12,8 @@
 
 stage=8
 train_stage=-100
-pnormi=3500
-pnormo=350
+pnormi=2400
+pnormo=300
 
 dir=exp/nnet3/nnet_tdnn_a_${pnormi}_$pnormo
 . cmd.sh
@@ -40,6 +40,7 @@ if [ $stage -le 8 ]; then
 #    --feat-type lda \
   steps/nnet3/train_tdnn.sh --stage $train_stage \
     --feat-type raw \
+    --online-ivector-dir exp/nnet3/ivectors_train_clean_100 \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
     --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 0" \
@@ -65,7 +66,6 @@ if [ $stage -le 9 ]; then
       --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
       data/$test $dir/decode_{tgsmall,tglarge}_$test ) &
 
-    exit
 
   done
   wait

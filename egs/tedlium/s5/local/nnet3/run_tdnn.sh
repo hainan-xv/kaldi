@@ -10,7 +10,7 @@
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
 
-stage=0
+stage=8
 train_stage=-10
 dir=exp/nnet3/nnet_tdnn_larger_net_and_slower
 . cmd.sh
@@ -26,7 +26,7 @@ where "nvcc" is installed.
 EOF
 fi
 
-#local/nnet3/run_ivector_common.sh --stage $stage || exit 1;
+local/nnet3/run_ivector_common.sh --stage $stage || exit 1;
 
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
@@ -34,16 +34,18 @@ if [ $stage -le 8 ]; then
      /export/b0{3,4,5,6}/$USER/kaldi-data/egs/tedlium-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
+#    --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
   steps/nnet3/train_tdnn.sh --stage $train_stage \
+    --online-ivector-dir exp/nnet3/ivectors_train \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
-    --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
+    --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 0" \
     --feat-type raw \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
     --cmd "$decode_cmd" \
     --pnorm-input-dim 3500 \
     --pnorm-output-dim 350 \
-    data/train data/lang exp/tri3_ali $dir  || exit 1;
+    data/train_hires data/lang exp/tri3_ali $dir  || exit 1;
 fi
 
 
@@ -54,7 +56,8 @@ if [ $stage -le 9 ]; then
   # use already-built graphs.
   for year in test dev; do
     steps/nnet3/decode.sh --nj 8 --cmd "$decode_cmd" \
-       $graph_dir data/${year} $dir/decode_${year} &
+       --online-ivector-dir exp/nnet3/ivectors_$year \
+       $graph_dir data/${year}_hires $dir/decode_${year} &
   done
   wait
 fi

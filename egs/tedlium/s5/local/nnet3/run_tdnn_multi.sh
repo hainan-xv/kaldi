@@ -43,17 +43,21 @@ if [ $stage -le 8 ]; then
      /export/b0{1,2,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
+  lr1=`echo 0.0015 / $num_outputs | bc -l`
+  lr2=`echo 0.00015 / $num_outputs | bc -l`
+
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
+    --online-ivector-dir exp/nnet3/ivectors_train \
     --num-outputs $num_outputs \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
-    --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
+    --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 0" \
     --feat-type raw \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
-    --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
+    --initial-effective-lrate $lr1 --final-effective-lrate $lr2 \
     --cmd "$decode_cmd" \
     --pnorm-input-dim $pnormi \
     --pnorm-output-dim $pnormo \
-    data/train data/lang $multidir/tree $dir  || exit 1;
+    data/train_hires data/lang $multidir/tree $dir  || exit 1;
 fi
 
 
@@ -63,7 +67,8 @@ if [ $stage -le 9 ]; then
     graph_dir=$virtualdir/graph
   for year in test dev; do
 (      steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
-       $graph_dir data/${year} \
+       --online-ivector-dir exp/nnet3/ivectors_$year \
+       $graph_dir data/${year}_hires \
        $virtualdir \
        $dir/decode_${year} || exit 1; ) &
   done
