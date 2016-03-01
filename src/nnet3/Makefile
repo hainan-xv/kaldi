@@ -26,11 +26,14 @@ OBJFILES = nnet-common.o nnet-compile.o nnet-component-itf.o \
   am-nnet-multi.o \
   nnet-am-decodable-multi.o \
   nnet-combine-multi.o \
-  nnet-optimize-utils.o nnet-simple-computer.o
+  nnet-optimize-utils.o nnet-simple-computer.o \
+  nnet-chain-example.o \
+  nnet-chain-training.o nnet-chain-diagnostics.o nnet-chain-combine.o
 
 LIBNAME = kaldi-nnet3
 
-ADDLIBS = ../thread/kaldi-thread.a ../lat/kaldi-lat.a ../gmm/kaldi-gmm.a \
+ADDLIBS = ../chain/kaldi-chain.a ../thread/kaldi-thread.a \
+       ../lat/kaldi-lat.a ../gmm/kaldi-gmm.a \
       ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a ../transform/kaldi-transform.a \
       ../cudamatrix/kaldi-cudamatrix.a ../matrix/kaldi-matrix.a \
       ../base/kaldi-base.a  ../util/kaldi-util.a

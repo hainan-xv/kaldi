@@ -145,14 +145,20 @@ else
   labels_tr_phn="ark:ali-to-phones --per-frame=true $alidir/final.mdl \"ark:gunzip -c $alidir/ali.*.gz |\" ark:- |"
 
   # get pdf-counts, used later for decoding/aligning,
-  analyze-counts --verbose=1 --binary=false "$labels_tr_pdf" $dir/ali_train_pdf.counts 2>$dir/log/analyze_counts_pdf.log || exit 1
+  analyze-counts --verbose=1 --binary=false \
+    ${frame_weights:+ "--frame-weights=$frame_weights"} \
+    ${utt_weights:+ "--utt-weights=$utt_weights"} \
+    "$labels_tr_pdf" $dir/ali_train_pdf.counts 2>$dir/log/analyze_counts_pdf.log || exit 1
   # copy the old transition model, will be needed by decoder,
   copy-transition-model --binary=false $alidir/final.mdl $dir/final.mdl || exit 1
   # copy the tree
   cp $alidir/tree $dir/tree || exit 1
 
   # make phone counts for analysis,
-  [ -e $lang/phones.txt ] && analyze-counts --verbose=1 --symbol-table=$lang/phones.txt "$labels_tr_phn" /dev/null 2>$dir/log/analyze_counts_phones.log || exit 1
+  [ -e $lang/phones.txt ] && analyze-counts --verbose=1 --symbol-table=$lang/phones.txt \
+    ${frame_weights:+ "--frame-weights=$frame_weights"} \
+    ${utt_weights:+ "--utt-weights=$utt_weights"} \
+    "$labels_tr_phn" /dev/null 2>$dir/log/analyze_counts_phones.log || exit 1
 fi
 
 ###### PREPARE FEATURES ######
@@ -365,12 +371,12 @@ if [ ! -z $nnet_init ]; then
 elif [ ! -z $nnet_proto ]; then
   echo "# initializing NN from prototype '$nnet_proto'";
   nnet_init=$dir/nnet.init; log=$dir/log/nnet_initialize.log
-  nnet-initialize --seed $seed $nnet_proto $nnet_init
+  nnet-initialize --seed=$seed $nnet_proto $nnet_init
 else 
   echo "# getting input/output dims :"
   # input-dim,
   get_dim_from=$feature_transform
-  [ ! -z $dbn ] && get_dim_from="nnet-concat $feature_transform $dbn -|"
+  [ ! -z "$dbn" ] && get_dim_from="nnet-concat $feature_transform '$dbn' -|"
   num_fea=$(feat-to-dim "$feats_tr nnet-forward \"$get_dim_from\" ark:- ark:- |" -)
 
   # output-dim,
@@ -424,12 +430,12 @@ else
   # initialize,
   nnet_init=$dir/nnet.init
   echo "# initializing the NN '$nnet_proto' -> '$nnet_init'"
-  nnet-initialize $nnet_proto $nnet_init
+  nnet-initialize --seed=$seed $nnet_proto $nnet_init
 
   # optionally prepend dbn to the initialization,
-  if [ ! -z $dbn ]; then
-    nnet_init_old=$nnet_init; nnet_init=$dir/nnet_$(basename $dbn)_dnn.init
-    nnet-concat $dbn $nnet_init_old $nnet_init || exit 1 
+  if [ ! -z "$dbn" ]; then
+    nnet_init_old=$nnet_init; nnet_init=$dir/nnet_dbn_dnn.init
+    nnet-concat "$dbn" $nnet_init_old $nnet_init || exit 1 
   fi
 fi
 
