@@ -26,7 +26,7 @@ OBJFILES = nnet-common.o nnet-compile.o nnet-component-itf.o \
   am-nnet-multi.o \
   nnet-am-decodable-multi.o \
   nnet-combine-multi.o \
-  nnet-optimize-utils.o nnet-simple-computer.o \
+  nnet-optimize-utils.o \
   nnet-chain-example.o \
   nnet-chain-training.o nnet-chain-diagnostics.o nnet-chain-combine.o
 

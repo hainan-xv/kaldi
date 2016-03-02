@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     Timer timer;
     bool allow_partial = false;
     LatticeFasterDecoderConfig config;
-    DecodableAmNnetSimpleOptions decodable_opts;
+    NnetMultiComputationOptions decodable_opts;
 
     BaseFloat exp_weight = 0.0;
 
@@ -185,10 +185,10 @@ int main(int argc, char *argv[]) {
             }
           }
 
-          DecodableAmNnetMulti nnet_decodable(num_outputs,
+          DecodableAmNnetMulti nnet_decodable(
               decodable_opts, trans_model, mapping, am_nnet,
               features, ivector, online_ivectors,
-              online_ivector_period, exp_weight);
+              online_ivector_period);
 
           double like;
           if (DecodeUtteranceLatticeFaster(
@@ -245,10 +245,10 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        DecodableAmNnetMulti nnet_decodable(num_outputs,
+        DecodableAmNnetMulti nnet_decodable(
             decodable_opts, trans_model, mapping, am_nnet,
             features, ivector, online_ivectors,
-            online_ivector_period, exp_weight);
+            online_ivector_period);
 
         double like;
         if (DecodeUtteranceLatticeFaster(
