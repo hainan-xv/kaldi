@@ -4,12 +4,13 @@
 . cmd.sh
 
 gmm=true
-method=joint # joint for joint training; multi for multi-output training
+method=multi # joint for joint training; multi for multi-output training
 gmm_decode=true
 dnn_stage=-100
-mic=ihm
-sp=true
+mic=sdm1
+sp=false
 extra_layer=false
+realign=false
 
 echo "$0 $@"
 
@@ -32,7 +33,24 @@ LM=$final_lm.pr1-7
 data=data/$mic/train
 lang=data/lang
 alidir=exp/$mic/tri4a_ali
-dir=exp/$mic/$method/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+dir=exp/$mic/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+
+if [ "$realign" == "true" ]; then
+  nj=30
+  steps/train_sat.sh  --cmd "$train_cmd" \
+    5000 80000 data/$mic/train data/lang exp/$mic/tri3a_ali exp/$mic/tri4a
+  # Decode,
+  graph_dir=exp/$mic/tri4a/graph_${LM}
+  $highmem_cmd $graph_dir/mkgraph.log \
+    utils/mkgraph.sh data/lang_${LM} exp/$mic/tri4a $graph_dir
+  steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd"  --config conf/decode.conf \
+    $graph_dir data/$mic/dev exp/$mic/tri4a/decode_dev_${LM} &
+  steps/decode_fmllr.sh --nj $nj --cmd "$decode_cmd" --config conf/decode.conf \
+    $graph_dir data/$mic/eval exp/$mic/tri4a/decode_eval_${LM} &
+
+  steps/align_fmllr.sh --nj $nj --cmd "$train_cmd" \
+    data/$mic/train data/lang exp/$mic/tri4a exp/$mic/tri4a_ali
+fi
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
@@ -56,20 +74,8 @@ if [ "$gmm" == "true" ]; then
       $data $lang $alidir $dir $dir/virtual
 
   $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
-
-nj=30
-
-  if [ "$gmm_decode" == "true" ]; then
-    steps/decode_multi.sh --cmd "$decode_cmd" --nj $nj \
-        --config conf/decode.conf \
-        --numtrees $num_trees --transform_dir exp/$mic/tri4a/decode_dev_$LM \
-        $dir/virtual/graph_$LM data/$mic/dev $dir/virtual/decode_dev_$LM $dir/virtual/tree-mapping &
-    steps/decode_multi.sh --cmd "$decode_cmd" --nj $nj \
-        --config conf/decode.conf \
-        --numtrees $num_trees --transform_dir exp/$mic/tri4a/decode_eval_$LM \
-        $dir/virtual/graph_$LM data/$mic/eval $dir/virtual/decode_eval_$LM $dir/virtual/tree-mapping &
-  fi
 fi
-nnet3dir=${dir}/../tdnn_${num_leaves}
 
-./local/nnet3/run_tdnn_$method.sh --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+nnet3dir=${dir}/../${method}_tdnn_${num_leaves}
+
+./local/nnet3/run_tdnn_$method.sh --mic $mic --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

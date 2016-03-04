@@ -4,7 +4,7 @@
 . cmd.sh
 
 gmm=true
-method=joint # joint for joint training; multi for multi-output training
+method=multi # joint for joint training; multi for multi-output training
 gmm_decode=false
 dnn_stage=-100
 echo "$0 $@"
