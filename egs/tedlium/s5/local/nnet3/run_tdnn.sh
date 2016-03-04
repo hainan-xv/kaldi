@@ -12,7 +12,9 @@
 
 stage=8
 train_stage=-10
-dir=exp/nnet3/nnet_tdnn_larger_net_and_slower
+pi=3000
+po=300
+dir=exp/nnet3/nnet_tdnn_${pi}_$po
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -43,8 +45,8 @@ if [ $stage -le 8 ]; then
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --initial-effective-lrate 0.0015 --final-effective-lrate 0.00015 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 3500 \
-    --pnorm-output-dim 350 \
+    --pnorm-input-dim $pi \
+    --pnorm-output-dim $po \
     data/train_hires data/lang exp/tri3_ali $dir  || exit 1;
 fi
 

@@ -22,6 +22,8 @@ remove_egs=true
 relu_dim=850
 num_epochs=3
 
+use_ihm_ali=false
+
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -53,7 +55,7 @@ if [ $use_ihm_ali == "true" ]; then
   ali_dir=${gmm_dir}_train_parallel_sp_ali
 else
   gmm_dir=exp/$mic/$gmm
-  ali_dir=${gmm_dir}_train_sp_ali
+  ali_dir=${gmm_dir}_${mic}_train_sp_ali
 fi
 
 final_lm=`cat data/local/lm/final_lm`
@@ -61,7 +63,7 @@ LM=$final_lm.pr1-7
 graph_dir=$gmm_dir/graph_${LM}
 dir=exp/$mic/nnet3/tdnn${speed_perturb:+_sp}${affix:+_$affix}
 
-
+train_set=train_sp
 
 if [ $stage -le 10 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then

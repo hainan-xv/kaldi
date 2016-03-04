@@ -359,8 +359,10 @@ def MakeConfigs(config_dir, splice_indexes_string,
 
     # write the files used by other scripts like steps/nnet3/get_egs.sh
     f = open(config_dir + "/vars", "w")
-    print('model_left_context=' + str(left_context), file=f)
-    print('model_right_context=' + str(right_context), file=f)
+    print('left_context=' + str(left_context), file=f)
+    print('right_context=' + str(right_context), file=f)
+#    print('model_left_context=' + str(left_context), file=f)
+#    print('model_right_context=' + str(right_context), file=f)
     print('num_hidden_layers=' + str(num_hidden_layers), file=f)
     f.close()
 

@@ -12,6 +12,8 @@ stage=1
 transform_dir=    # dir to find fMLLR transforms.
 nj=4 # number of decoding jobs.  If --transform-dir set, must match that number!
 acwt=0.1  # Just a default value, used for adaptation and beam-pruning..
+post_decode_acwt=1.0  # can be used in 'chain' systems to scale acoustics by 10 so the
+
 cmd=run.pl
 beam=15.0
 frames_per_chunk=50
@@ -24,6 +26,10 @@ num_threads=1 # if >1, will use gmm-latgen-faster-parallel
 parallel_opts=  # ignored now.
 scoring_opts=
 skip_scoring=false
+extra_left_context=0
+extra_right_context=0
+extra_left_context_initial=-1
+extra_right_context_final=-1
 feat_type=
 online_ivector_dir=
 minimize=false
@@ -59,6 +65,7 @@ virtual_dir=$3
 dir=$4
 srcdir=`dirname $dir`; # Assume model directory one level up from decoding directory.
 model=$srcdir/$iter.mdl
+
 
 [ ! -z "$online_ivector_dir" ] && \
   extra_files="$online_ivector_dir/ivector_online.scp $online_ivector_dir/ivector_period"
@@ -133,15 +140,30 @@ if [ ! -z "$online_ivector_dir" ]; then
   ivector_opts="--online-ivectors=scp:$online_ivector_dir/ivector_online.scp --online-ivector_period=$ivector_period"
 fi
 
+if [ "$post_decode_acwt" == 1.0 ]; then
+  lat_wspecifier="ark:|gzip -c >$dir/lat.JOB.gz"
+else
+  lat_wspecifier="ark:|lattice-scale --acoustic-scale=$post_decode_acwt ark:- ark:- | gzip -c >$dir/lat.JOB.gz"
+fi
+
+if [ -f $srcdir/frame_subsampling_factor ]; then
+  # e.g. for 'chain' systems
+  frame_subsampling_opt="--frame-subsampling-factor=$(cat $srcdir/frame_subsampling_factor)"
+fi
+
 if [ $stage -le 1 ]; then
   $cmd --num-threads $num_threads JOB=1:$nj $dir/log/decode.JOB.log \
-    nnet3-latgen-faster-multi $ivector_opts \
+    nnet3-latgen-faster-multi $ivector_opts $frame_subsampling_opt \
      --frames-per-chunk=$frames_per_chunk \
+     --extra-left-context=$extra_left_context \
+     --extra-right-context=$extra_right_context \
+     --extra-left-context-initial=$extra_left_context_initial \
+     --extra-right-context-final=$extra_right_context_final \
      --minimize=$minimize --max-active=$max_active --min-active=$min_active --beam=$beam \
      --lattice-beam=$lattice_beam --acoustic-scale=$acwt --allow-partial=true \
      --word-symbol-table=$graphdir/words.txt "$model" \
      $virtual_dir/1.mdl $virtual_dir/tree-mapping \
-     $graphdir/HCLG.fst "$feats" "ark:|gzip -c > $dir/lat.JOB.gz" || exit 1;
+     $graphdir/HCLG.fst "$feats" "$lat_wspecifier" || exit 1;
 fi
 
 # The output of this script is the files "lat.*.gz"-- we'll rescore this at
@@ -153,7 +175,7 @@ if [ $stage -le 2 ]; then
     [ ! -x local/score.sh ] && \
       echo "Not scoring because local/score.sh does not exist or not executable." && exit 1;
     echo "score best paths"
-    local/score.sh $scoring_opts --model $virtual_dir/final.mdl --cmd "$cmd" $data $graphdir $dir
+    local/score.sh $scoring_opts --cmd "$cmd" $data $graphdir $dir
     echo "score confidence and timing with sclite"
   fi
 fi

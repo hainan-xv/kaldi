@@ -26,7 +26,7 @@ virtualdir=$2
 num_outputs=$3
 train_stage=$4
 
-dir=${dir}_${pnormo}_${pnormi}
+dir=${dir}_${pnormo}_${pnormi}_extra
 echo dir is $dir
 
 if ! cuda-compiled; then
@@ -43,8 +43,10 @@ if [ $stage -le 8 ]; then
      /export/b0{1,2,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-  lr1=`echo 0.0015 / $num_outputs | bc -l`
-  lr2=`echo 0.00015 / $num_outputs | bc -l`
+#  lr1=`echo 0.0015 / $num_outputs | bc -l`
+#  lr2=`echo 0.00015 / $num_outputs | bc -l`
+  lr1=0.0015
+  lr2=0.00015
 
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
     --online-ivector-dir exp/nnet3/ivectors_train \

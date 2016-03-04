@@ -38,20 +38,22 @@ NnetDecodableMultiBase::NnetDecodableMultiBase(
     const Nnet &nnet,
     const vector<Vector<BaseFloat> > &priors_vec,
     const MatrixBase<BaseFloat> &feats,
+    const unordered_map<int32, vector<int32> > &mapping,
     const VectorBase<BaseFloat> *ivector,
     const MatrixBase<BaseFloat> *online_ivectors,
     int32 online_ivector_period):
     opts_(opts),
     nnet_(nnet),
-//    output_dim_(nnet_.OutputDim("output")), // TODO(hxu)
+    output_dim_(mapping.size()), // TODO(hxu)
 //    log_priors_vec_(priors_vec),
     feats_(feats),
+    mapping_(mapping),
     ivector_(ivector), online_ivector_feats_(online_ivectors),
     online_ivector_period_(online_ivector_period),
     compiler_(nnet_, opts_.optimize_config),
-    current_log_post_subsampled_offset_(0) {
-  num_outputs_ = opts_.num_outputs;
-  exp_weight_ = opts_.exp_weight;
+    current_log_post_subsampled_offset_(0),
+    num_outputs_(opts_.num_outputs),
+    exp_weight_(opts_.exp_weight) {
   num_subsampled_frames_ =
       (feats_.NumRows() + opts_.frame_subsampling_factor - 1) /
       opts_.frame_subsampling_factor;
@@ -66,6 +68,7 @@ NnetDecodableMultiBase::NnetDecodableMultiBase(
     log_priors_vec_[i].ApplyLog();
   }
   CheckAndFixConfigs();
+  current_log_post_vec_.resize(opts.num_outputs); // TODO(hxu) not sure
 }
 
 
@@ -79,7 +82,7 @@ DecodableAmNnetMulti::DecodableAmNnetMulti(
     const MatrixBase<BaseFloat> *online_ivectors,
     int32 online_ivector_period):
     NnetDecodableMultiBase(opts, am_nnet.GetNnet(), am_nnet.Priors_vec(),
-                           feats, ivector, online_ivectors,
+                           feats, mapping, ivector, online_ivectors,
                            online_ivector_period),
     trans_model_(trans_model) { }
 
@@ -94,7 +97,7 @@ BaseFloat DecodableAmNnetMulti::LogLikelihood(int32 frame,
 }
 
 BaseFloat NnetDecodableMultiBase::GetOutput(int32 subsampled_frame,
-                                          int32 pdf_id) {
+                                            int32 pdf_id) {
   if (subsampled_frame < current_log_post_subsampled_offset_ ||
       subsampled_frame >= current_log_post_subsampled_offset_
            + current_log_post_vec_[0].NumRows())
@@ -204,8 +207,30 @@ void NnetDecodableMultiBase::GetOutputForFrame(int32 subsampled_frame,
       subsampled_frame >= current_log_post_subsampled_offset_ +
       current_log_post_vec_[0].NumRows())
     EnsureFrameIsComputed(subsampled_frame);
-  output->CopyFromVec(current_log_post_vec_[0].Row(
-      subsampled_frame - current_log_post_subsampled_offset_));
+//  output->CopyFromVec(current_log_post_vec_[0].Row(
+//      subsampled_frame - current_log_post_subsampled_offset_));
+//    output->Resize(mapping_.size());
+    KALDI_ASSERT(mapping_.size() * sizeof(BaseFloat) == output->SizeInBytes());
+
+    vector<vector<BaseFloat> > sub_output_vec(num_outputs_);
+
+    for (int i = 0; i < num_outputs_; i++) {
+      for (int j = 0; j < current_log_post_vec_[i].NumCols(); j++) {
+        sub_output_vec[i][j] = current_log_post_vec_[i]
+          (subsampled_frame - current_log_post_subsampled_offset_, j);
+      }
+    }
+
+    for (unordered_map<int32, vector<int32> >::iterator iter = mapping_.begin();
+         iter != mapping_.end(); iter++) {
+      vector<int32> pdf_ids = iter->second;
+      vector<BaseFloat> scores;
+      for (int i = 0; i < num_outputs_; i++) {
+        scores.push_back(sub_output_vec[i][pdf_ids[i]]);
+      }
+
+      (*output)(iter->first) = Combine(scores, exp_weight_);
+    }
 }
 
 void NnetDecodableMultiBase::GetCurrentIvector(int32 output_t_start,
@@ -269,6 +294,7 @@ void NnetDecodableMultiBase::DoNnetComputation(
   }
 
   int32 subsample = opts_.frame_subsampling_factor;
+  request.outputs.resize(num_outputs_);
   for (int t = 0; t < num_outputs_; t++) {
     std::stringstream os;
     os << t;
@@ -279,8 +305,7 @@ void NnetDecodableMultiBase::DoNnetComputation(
     // leave n and x values at 0 (the constructor sets these).
     for (int32 i = 0; i < num_subsampled_frames; i++)
       output_spec.indexes[i].t = time_offset + output_t_start + i * subsample;
-    request.outputs.resize(1);
-    request.outputs[0].Swap(&output_spec);
+    request.outputs[t].Swap(&output_spec);
   }
 
   const NnetComputation *computation = compiler_.Compile(request);

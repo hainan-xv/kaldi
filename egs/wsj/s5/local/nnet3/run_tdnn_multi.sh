@@ -14,6 +14,9 @@ stage=-100
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
 dir=
+extra_layer=false
+pi=2000
+po=250
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -21,7 +24,6 @@ dir=
 multidir=$1
 virtualdir=$2
 num_outputs=$3
-train_stage=$4
 echo dir is $dir
 
 if ! cuda-compiled; then
@@ -40,6 +42,7 @@ if [ $stage -le 8 ]; then
 
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
     --cleanup false \
+    --extra_layer $extra_layer \
     --num-outputs $num_outputs \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
     --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
@@ -48,8 +51,8 @@ if [ $stage -le 8 ]; then
     --cmvn-opts "--norm-means=false --norm-vars=false" \
     --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
     --cmd "$decode_cmd" \
-    --pnorm-input-dim 2000 \
-    --pnorm-output-dim 250 \
+    --pnorm-input-dim $pi \
+    --pnorm-output-dim $po \
     data/train_si284_hires data/lang $multidir/tree $dir  || exit 1;
 fi
 
@@ -65,7 +68,7 @@ if [ $stage -le 9 ]; then
           --online-ivector-dir exp/nnet3/ivectors_test_$year \
          $graph_dir data/test_${year}_hires \
          $virtualdir \
-         $dir/decode_${lm_suffix}_${year}_expweight || exit 1; ) &
+         $dir/decode_${lm_suffix}_${year} || exit 1; ) &
     done
     wait
     echo done

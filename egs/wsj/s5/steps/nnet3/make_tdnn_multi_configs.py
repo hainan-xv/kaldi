@@ -30,6 +30,8 @@ parser.add_argument("config_dir",
                     help="Directory to write config files and variables");
 parser.add_argument("--num-targets-multi", type=str,
                     help="number of network targets (e.g. num-pdf-ids/num-leaves)")
+parser.add_argument("--extra-layer", type=int,
+                    help="if == 1 then add one more non-linear layer before the outputs", default=0)
 
 print(' '.join(sys.argv))
 
@@ -50,6 +52,8 @@ targets = args.num_targets_multi.split(",");
 num_targets_list = [];
 for i in targets:
   num_targets_list.append(int(i))
+
+extra_layer = args.extra_layer
 
 if not args.relu_dim is None:
     if not args.pnorm_input_dim is None or not args.pnorm_output_dim is None:
@@ -147,6 +151,13 @@ for l in range(1, num_hidden_layers + 1):
 
     nnn=0
     for i in num_targets_list:
+        if extra_layer == 1:
+          print('component name=extra-affine' + str(l) + '_' + str(nnn) + ' type=NaturalGradientAffineComponent '
+                'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
+                nonlin_output_dim, args.pnorm_input_dim), file=f)
+          print('component name=extra-nonlin{0}_{1} type=PnormComponent input-dim={2} output-dim={3}'.
+                format(l, nnn, args.pnorm_input_dim, args.pnorm_output_dim), file=f)
+
         print('component name=final-affine' + str(nnn) + ' type=NaturalGradientAffineComponent '
           'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
           nonlin_output_dim, i), file=f)
@@ -188,7 +199,14 @@ for l in range(1, num_hidden_layers + 1):
           format(l), file=f)
 
     for i in range(0, len(targets)):
-        print('component-node name=final-affine' + str(i) + ' component=final-affine' + str(i) + ' input=renorm{0}'.
+        if extra_layer == 1:
+          print('component-node name=extra-affine' + str(l) + '_' + str(i) + ' component=extra-affine' + str(l) + '_' + str(i) + ' input=renorm{0}'.
+            format(l), file=f)
+          print('component-node name=extra-nonlin' + str(l) + '_' + str(i) + ' component=extra-nonlin' + str(l) + '_' + str(i)
+                             + ' input=extra-affine' + str(l) + '_' + str(i), file=f)
+          print('component-node name=final-affine' + str(i) + ' component=final-affine' + str(i) + ' input=extra-nonlin' + str(l) + '_' + str(i), file=f)
+        else:
+          print('component-node name=final-affine' + str(i) + ' component=final-affine' + str(i) + ' input=renorm{0}'.
           format(l), file=f)
         if use_presoftmax_prior_scale:
             print('component-node name=final-fixed-scale' + str(i) + ' component=final-fixed-scale' + str(i) + ' input=final-affine' + str(i) + '',

@@ -65,7 +65,7 @@ struct NnetMultiComputationOptions {
 
   void Register(OptionsItf *opts) {
     opts->Register("num-outputs", &num_outputs,
-                   "number of outputs");
+                   "number of outputs"); // TODO(hxu)
     opts->Register("exp-weight", &exp_weight,
                    "exp weight");
     opts->Register("extra-left-context", &extra_left_context,
@@ -144,6 +144,7 @@ class NnetDecodableMultiBase {
                          const Nnet &nnet,
                          const vector<Vector<BaseFloat> > &priors_vec,
                          const MatrixBase<BaseFloat> &feats,
+                         const unordered_map<int32, vector<int32> > &mapping,
                          const VectorBase<BaseFloat> *ivector = NULL,
                          const MatrixBase<BaseFloat> *online_ivectors = NULL,
                          int32 online_ivector_period = 1);
@@ -202,6 +203,9 @@ class NnetDecodableMultiBase {
   // the log priors (or the empty vector if the priors are not set in the model)
   vector<CuVector<BaseFloat> > log_priors_vec_;
   const MatrixBase<BaseFloat> &feats_;
+
+  unordered_map<int32, vector<int32> > mapping_;
+
   // note: num_subsampled_frames_ will equal feats_.NumRows() in the normal case
   // when opts_.frame_subsampling_factor == 1.
   int32 num_subsampled_frames_;
@@ -225,8 +229,6 @@ class NnetDecodableMultiBase {
   // opts_.frame_subsampling_factor > 1, this will be measured in subsampled
   // frames.
   int32 current_log_post_subsampled_offset_;
-
-  unordered_map<int32, vector<int32> > mapping_;
 
   int32 num_outputs_;
   BaseFloat exp_weight_;

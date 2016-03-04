@@ -211,6 +211,11 @@ fi
 # left_context=(something)
 # right_context=(something)
 # num_hidden_layers=(something)
+mv $dir/configs/vars $dir/configs/vars.old
+
+cat $dir/configs/vars.old | sed "s=model_==g" > $dir/configs/vars
+cat $dir/configs/vars
+
 . $dir/configs/vars || exit 1;
 
 context_opts="--left-context=$left_context --right-context=$right_context"

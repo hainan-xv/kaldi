@@ -9,6 +9,7 @@ gmm_decode=true
 dnn_stage=-100
 mic=ihm
 sp=true
+extra_layer=false
 
 echo "$0 $@"
 

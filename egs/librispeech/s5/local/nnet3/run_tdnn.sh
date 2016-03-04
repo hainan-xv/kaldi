@@ -13,7 +13,7 @@
 stage=8
 train_stage=-100
 pnormi=2400
-pnormo=300
+pnormo=400
 
 dir=exp/nnet3/nnet_tdnn_a_${pnormi}_$pnormo
 . cmd.sh
