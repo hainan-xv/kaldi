@@ -151,7 +151,7 @@ for l in range(1, num_hidden_layers + 1):
 
     nnn=0
     for i in num_targets_list:
-        if extra_layer == 1:
+        if l == num_hidden_layers and extra_layer == 1:
           print('component name=extra-affine' + str(l) + '_' + str(nnn) + ' type=NaturalGradientAffineComponent '
                 'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
                 nonlin_output_dim, args.pnorm_input_dim), file=f)
@@ -199,7 +199,7 @@ for l in range(1, num_hidden_layers + 1):
           format(l), file=f)
 
     for i in range(0, len(targets)):
-        if extra_layer == 1:
+        if l == num_hidden_layers and extra_layer == 1:
           print('component-node name=extra-affine' + str(l) + '_' + str(i) + ' component=extra-affine' + str(l) + '_' + str(i) + ' input=renorm{0}'.
             format(l), file=f)
           print('component-node name=extra-nonlin' + str(l) + '_' + str(i) + ' component=extra-nonlin' + str(l) + '_' + str(i)

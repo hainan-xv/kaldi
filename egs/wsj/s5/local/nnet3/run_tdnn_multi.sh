@@ -65,6 +65,7 @@ if [ $stage -le 9 ]; then
     # use already-built graphs.
     for year in eval92 dev93; do
 (      steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
+          --num-outputs $num_outputs \
           --online-ivector-dir exp/nnet3/ivectors_test_$year \
          $graph_dir data/test_${year}_hires \
          $virtualdir \

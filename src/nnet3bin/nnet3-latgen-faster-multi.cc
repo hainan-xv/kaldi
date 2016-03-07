@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     LatticeFasterDecoderConfig config;
     NnetMultiComputationOptions decodable_opts;
 
-    BaseFloat exp_weight = 0.0;
+//    BaseFloat exp_weight = 0.0;
 
     std::string word_syms_filename;
     std::string ivector_rspecifier,
@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
     po.Register("online-ivector-period", &online_ivector_period, "Number of frames "
                 "between iVectors in matrices supplied to the --online-ivectors "
                 "option");
-    po.Register("exp-weight", &exp_weight, "for combining exp-weighted");
+//    po.Register("exp-weight", &exp_weight, "for combining exp-weighted");
 
     po.Read(argc, argv);
 

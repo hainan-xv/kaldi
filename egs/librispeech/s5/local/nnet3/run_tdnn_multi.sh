@@ -58,29 +58,19 @@ fi
 if [ $stage -le 9 ]; then
   # this does offline decoding that should give the same results as the real
   # online decoding.
-  for lm_suffix in bd_tgpr; do
-    graph_dir=$virtualdir/graph_${lm_suffix}
-    # use already-built graphs.
-    for year in eval92 dev93; do
-(      steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
-          --online-ivector-dir exp/nnet3/ivectors_test_$year \
-         $graph_dir data/test_${year}_hires \
-         $virtualdir \
-         $dir/decode_${lm_suffix}_${year}_expweight || exit 1; ) &
-    done
-    wait
-    echo done
-  done
 
   for test in test_clean test_other dev_clean dev_other; do
-    graph_dir=$virtualdir/graph_tgsmall
+(    graph_dir=$virtualdir/graph_tgsmall
     # use already-built graphs.
     steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
+      --num-outputs $num_outputs \
       $graph_dir data/$test $virtualdir $dir/decode_tgsmall_$test
 
     steps/lmrescore_const_arpa.sh \
       --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
       data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
+      ) &
   done
+  wait
 fi
 

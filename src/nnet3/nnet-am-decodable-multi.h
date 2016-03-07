@@ -53,7 +53,7 @@ struct NnetMultiComputationOptions {
 
   NnetMultiComputationOptions():
       num_outputs(2),
-      exp_weight(10),
+      exp_weight(0.0),
       extra_left_context(0),
       extra_right_context(0),
       extra_left_context_initial(-1),

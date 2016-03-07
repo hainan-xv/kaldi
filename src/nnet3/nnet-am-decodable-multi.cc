@@ -23,13 +23,25 @@
 namespace kaldi {
 namespace nnet3 {
 
+int aaa = 0;
+
 BaseFloat Combine(const std::vector<BaseFloat>& scores, BaseFloat exp_weight) {
+  if (aaa < 10) {
+    KALDI_LOG << "Expweight is " << exp_weight;
+  }
   BaseFloat sum = 0.0;
   BaseFloat norm = 0.0;
   for (int i = 0; i < scores.size(); i++) {
+    if (aaa < 10) {
+      KALDI_LOG << "score-" << i << " is " << scores[i];
+    }
     sum += scores[i] * exp(scores[i] * exp_weight);
     norm += exp(scores[i] * exp_weight);
   }
+  if (aaa < 10) {
+    KALDI_LOG << "averaged is " << sum / norm;
+  }
+  aaa++;
   return sum / norm;
 }
 
@@ -63,6 +75,7 @@ NnetDecodableMultiBase::NnetDecodableMultiBase(
   KALDI_ASSERT(!(ivector != NULL && online_ivectors != NULL));
   KALDI_ASSERT(!(online_ivectors != NULL && online_ivector_period <= 0 &&
                  "You need to set the --online-ivector-period option!"));
+  KALDI_ASSERT(num_outputs_ = priors_vec.size());
   for (int i = 0; i < opts.num_outputs; i++) {
     log_priors_vec_.push_back(priors_vec[i]);
     log_priors_vec_[i].ApplyLog();

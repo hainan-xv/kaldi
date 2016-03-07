@@ -33,6 +33,7 @@ extra_right_context_final=-1
 feat_type=
 online_ivector_dir=
 minimize=false
+num_outputs=
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -154,6 +155,7 @@ fi
 if [ $stage -le 1 ]; then
   $cmd --num-threads $num_threads JOB=1:$nj $dir/log/decode.JOB.log \
     nnet3-latgen-faster-multi $ivector_opts $frame_subsampling_opt \
+     --num-outputs=$num_outputs \
      --frames-per-chunk=$frames_per_chunk \
      --extra-left-context=$extra_left_context \
      --extra-right-context=$extra_right_context \
@@ -175,7 +177,7 @@ if [ $stage -le 2 ]; then
     [ ! -x local/score.sh ] && \
       echo "Not scoring because local/score.sh does not exist or not executable." && exit 1;
     echo "score best paths"
-    local/score.sh $scoring_opts --cmd "$cmd" $data $graphdir $dir
+    local/score.sh $scoring_opts --model $virtual_dir/1.mdl --cmd "$cmd" $data $graphdir $dir
     echo "score confidence and timing with sclite"
   fi
 fi

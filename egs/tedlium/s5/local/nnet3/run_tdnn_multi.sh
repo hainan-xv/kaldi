@@ -26,7 +26,7 @@ virtualdir=$2
 num_outputs=$3
 train_stage=$4
 
-dir=${dir}_${pnormo}_${pnormi}_extra
+dir=${dir}_${pnormo}_${pnormi}
 echo dir is $dir
 
 if ! cuda-compiled; then
@@ -69,6 +69,7 @@ if [ $stage -le 9 ]; then
     graph_dir=$virtualdir/graph
   for year in test dev; do
 (      steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
+       --num-outputs $num_outputs \
        --online-ivector-dir exp/nnet3/ivectors_$year \
        $graph_dir data/${year}_hires \
        $virtualdir \
