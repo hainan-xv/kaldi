@@ -178,6 +178,7 @@ if [ $stage -le 2 ]; then
       echo "Not scoring because local/score.sh does not exist or not executable." && exit 1;
     echo "score best paths"
     local/score.sh $scoring_opts --model $virtual_dir/1.mdl --cmd "$cmd" $data $graphdir $dir
+#    local/score.sh $scoring_opts --cmd "$cmd" $data $graphdir $dir
     echo "score confidence and timing with sclite"
   fi
 fi

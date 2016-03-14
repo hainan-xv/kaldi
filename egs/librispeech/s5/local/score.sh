@@ -13,6 +13,7 @@ reverse=false
 word_ins_penalty=0.0,0.5,1.0
 min_lmwt=9
 max_lmwt=20
+model=
 #end configuration section.
 
 [ -f ./path.sh ] && . ./path.sh

@@ -588,11 +588,13 @@ if [ $stage -le $num_iters ]; then
   # as if there are many models it can give out-of-memory error; and we set
   # num-threads to 8 to speed it up (this isn't ideal...)
 
+# TODO(hxu)
+
   $cmd $combine_queue_opt $dir/log/combine.log \
     nnet3-combine --num-iters=40 \
        --enforce-sum-to-one=true --enforce-positive-weights=true \
        --verbose=3 "${nnets_list[@]}" "ark:nnet3-merge-egs --minibatch-size=1024 ark:$cur_egs_dir/combine.egs ark:-|" \
-    "|nnet3-am-copy --set-raw-nnet=- $dir/$num_iters.mdl $dir/combined.mdl" || exit 1;
+    "|nnet3-am-copy --set-raw-nnet=- $dir/$num_iters.mdl $dir/combined.mdl" || cp $dir/${num_iters}.mdl $dir/combined.mdl
 
   # Compute the probability of the final, combined model with
   # the same subset we used for the previous compute_probs, as the

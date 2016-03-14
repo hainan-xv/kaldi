@@ -62,4 +62,6 @@ if [ "$extra_layer" == "true" ]; then
 fi
 
 #dnn_stage=81
-./local/nnet3/run_tdnn_$method.sh --pi $pi --po $po --extra-layer $extra_layer --stage $stage --train-stage $dnn_stage --dir $nnet3dir $dir $dir/virtual $num_trees 
+#./local/nnet3/run_tdnn_$method.sh --pi $pi --po $po --extra-layer $extra_layer --stage $stage --train-stage $dnn_stage --dir $nnet3dir $dir $dir/virtual $num_trees 
+nnet3dir=${nnet3dir}_baseline
+./local/nnet3/run_tdnn.sh --alidir $dir/tree_0/ --stage $stage --train-stage $dnn_stage --dir $nnet3dir $dir $dir/virtual $num_trees 

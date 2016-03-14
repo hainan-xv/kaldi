@@ -13,6 +13,7 @@
 stage=0
 train_stage=-10
 dir=exp/nnet3/nnet_tdnn_a
+alidir=exp/tri4b_ali_si284
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
@@ -44,7 +45,7 @@ if [ $stage -le 8 ]; then
     --cmd "$decode_cmd" \
     --pnorm-input-dim 2000 \
     --pnorm-output-dim 250 \
-    data/train_si284_hires data/lang exp/tri4b_ali_si284 $dir  || exit 1;
+    data/train_si284_hires data/lang $alidir $dir  || exit 1;
 fi
 
 

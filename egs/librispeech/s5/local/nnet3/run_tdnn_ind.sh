@@ -49,14 +49,12 @@ fi
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
-     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
+     /export/b0{1,2,5,4}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
 #    --cleanup false \
 
-  steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
-    --last-factor $last_factor \
-    --extra-layer $extra_layer \
+  steps/nnet3/train_tdnn_ind.sh --stage $train_stage \
     --num-outputs $num_outputs \
     --feat-type raw \
     --online-ivector-dir exp/nnet3/ivectors_train_clean_100 \

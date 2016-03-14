@@ -249,7 +249,7 @@ std::string UpdatableComponent::Info() const {
          << LearningRate();
   if (is_gradient_)
     stream << ", is-gradient=true";
-  stream << ", is-updatable=" << (is_updatable_ ? "true" : "false");
+//  stream << ", is-updatable=" << (is_updatable_ ? "true" : "false");
   if (learning_rate_factor_ != 1.0)
     stream << ", learning-rate-factor=" << learning_rate_factor_;
   return stream.str();

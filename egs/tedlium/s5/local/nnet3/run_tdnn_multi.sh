@@ -14,8 +14,10 @@ stage=-100
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
 dir=
-pnormi=3500
-pnormo=350
+pnormi=3000
+pnormo=300
+extra_layer=false
+last_factor=1
 
 . cmd.sh
 . ./path.sh
@@ -27,6 +29,15 @@ num_outputs=$3
 train_stage=$4
 
 dir=${dir}_${pnormo}_${pnormi}
+
+if [ "$extra_layer" == "true" ]; then
+  dir=${dir}_extra
+fi
+
+if [ "$last_factor" != "1" ]; then
+  dir=${dir}_enlarge$last_factor
+fi
+
 echo dir is $dir
 
 if ! cuda-compiled; then
@@ -49,6 +60,8 @@ if [ $stage -le 8 ]; then
   lr2=0.00015
 
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
+    --last-factor $last_factor \
+    --extra-layer $extra_layer \
     --online-ivector-dir exp/nnet3/ivectors_train \
     --num-outputs $num_outputs \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \

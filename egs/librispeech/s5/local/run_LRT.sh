@@ -8,6 +8,8 @@ method=multi # joint for joint training; multi for multi-output training
 gmm_decode=false
 dnn_stage=-100
 stage=0
+extra=false
+factor=1
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -54,4 +56,4 @@ fi
 nnet3dir=${dir}/../${method}_tdnn_${num_leaves}
 
 #dnn_stage=81
-./local/nnet3/run_tdnn_$method.sh --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+./local/nnet3/run_tdnn_$method.sh --last-factor $factor --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

@@ -79,8 +79,6 @@ num_jobs_align=30       # Number of jobs for realignment
 # End configuration section.
 frames_per_eg=8 # to be passed on to get_egs.sh
 num_outputs=2
-extra_layer=false
-last_factor=1
 
 trap 'for pid in $(jobs -pr); do kill -KILL $pid; done' INT QUIT TERM
 
@@ -210,15 +208,9 @@ if [ $stage -le -5 ]; then
 
   echo dim_opts $dim_opts
 
-  layer_args=
-  if [ "$extra_layer" == "true" ]; then
-    layer_args="--extra-layer 1"
-  fi
-
   # create the config files for nnet initialization
-  python steps/nnet3/make_tdnn_multi_configs.py  \
+  python steps/nnet3/make_tdnn_ind_configs.py  \
     $layer_args \
-    --last-factor $last_factor \
     --splice-indexes "$splice_indexes"  \
     --feat-dim $feat_dim \
     --ivector-dim $ivector_dim  \

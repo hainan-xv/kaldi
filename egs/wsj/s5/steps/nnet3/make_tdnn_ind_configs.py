@@ -30,10 +30,6 @@ parser.add_argument("config_dir",
                     help="Directory to write config files and variables");
 parser.add_argument("--num-targets-multi", type=str,
                     help="number of network targets (e.g. num-pdf-ids/num-leaves)")
-parser.add_argument("--extra-layer", type=int,
-                    help="if == 1 then add one more non-linear layer before the outputs", default=0)
-parser.add_argument("--last-factor", type=int,
-                    help="enlarge the last layer by a factor (maybe it should be equal to num-outputs?)", default=1)
 
 print(' '.join(sys.argv))
 
@@ -54,9 +50,6 @@ targets = args.num_targets_multi.split(",");
 num_targets_list = [];
 for i in targets:
   num_targets_list.append(int(i))
-
-extra_layer = args.extra_layer
-last_factor = args.last_factor
 
 if not args.relu_dim is None:
     if not args.pnorm_input_dim is None or not args.pnorm_output_dim is None:
@@ -132,105 +125,86 @@ f.close()
 
 for l in range(1, num_hidden_layers + 1):
     f = open(args.config_dir + "/layer{0}.config".format(l), "w")
-    print('# Config file for layer {0} of the network'.format(l), file=f)
-    if l == 1:
-        print('component name=lda type=FixedAffineComponent matrix={0}/lda.mat'.
-              format(args.config_dir), file=f)
-    cur_dim = (nonlin_output_dim * len(splice_array[l-1]) if l > 1 else input_dim)
 
-    enlarge_factor = 1
-    if (l == num_hidden_layers):
-      enlarge_factor = last_factor
+    for o in range(0, len(num_targets_list)):
+      if (o == 0):
+          print('# Config file for layer {0} of the network'.format(l), file=f)
+          if l == 1:
+              print('component name=lda type=FixedAffineComponent matrix={0}/lda.mat'.
+                    format(args.config_dir), file=f)
+          cur_dim = (nonlin_output_dim * len(splice_array[l-1]) if l > 1 else input_dim)
 
-    print('# Note: param-stddev in next component defaults to 1/sqrt(input-dim).', file=f)
-    print('component name=affine{0} type=NaturalGradientAffineComponent '
-          'input-dim={1} output-dim={2} bias-stddev=0'.
-        format(l, cur_dim, nonlin_input_dim * enlarge_factor), file=f)
-    if args.relu_dim is not None: # TODO(hxu) not finished for here yet
-        print('component name=nonlin{0} type=RectifiedLinearComponent dim={1}'.
-              format(l, args.relu_dim), file=f)
-    else:
-        print('# In nnet3 framework, p in P-norm is always 2.', file=f)
-        print('component name=nonlin{0} type=PnormComponent input-dim={1} output-dim={2}'.
-              format(l, args.pnorm_input_dim * enlarge_factor, enlarge_factor * args.pnorm_output_dim), file=f)
-    print('component name=renorm{0} type=NormalizeComponent dim={1}'.format(
-         l, nonlin_output_dim * enlarge_factor), file=f)
+      print('# Note: param-stddev in next component defaults to 1/sqrt(input-dim).', file=f)
+      print('component name=affine{0}-{3} type=NaturalGradientAffineComponent '
+            'input-dim={1} output-dim={2} bias-stddev=0'.
+          format(l, cur_dim, nonlin_input_dim, o), file=f)
+      if args.relu_dim is not None: # TODO(hxu) not finished for here yet
+          print('component name=nonlin{0}-{2} type=RectifiedLinearComponent dim={1}'.
+                format(l, args.relu_dim, o), file=f)
+      else:
+          print('# In nnet3 framework, p in P-norm is always 2.', file=f)
+          print('component name=nonlin{0}-{3} type=PnormComponent input-dim={1} output-dim={2}'.
+                format(l, args.pnorm_input_dim, args.pnorm_output_dim, o), file=f)
+      print('component name=renorm{0}-{2} type=NormalizeComponent dim={1}'.format(
+           l, nonlin_output_dim, o), file=f)
 
-    nnn=0
-    for i in num_targets_list:
-        if extra_layer == 1:
-          print('component name=extra-affine' + str("") + '_' + str(nnn) + ' type=NaturalGradientAffineComponent '
-                'input-dim={0} output-dim={1} param-stddev=0.0001 bias-stddev=0.0001'.format(
-                nonlin_output_dim * enlarge_factor, args.pnorm_input_dim), file=f)
-          print('component name=extra-nonlin{0}_{1} type=PnormComponent input-dim={2} output-dim={3}'.
-                format("", nnn, args.pnorm_input_dim, args.pnorm_output_dim), file=f)
-          print('component name=extra-renorm{0} type=NormalizeComponent dim={1}'.format(
-               nnn, args.pnorm_output_dim), file=f)
+      nnn=0
+#      for i in num_targets_list:
+      print('component name=final-affine-' + str(o) + ' type=NaturalGradientAffineComponent '
+        'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
+        nonlin_output_dim, num_targets_list[o]), file=f)
+#          nnn = nnn + 1
+      # printing out the next two, and their component-nodes, for l > 1 is not
+      # really necessary as they will already exist, but it doesn't hurt and makes
+      # the structure clearer.
+      if use_presoftmax_prior_scale :
+#          for i in range(0, len(targets)):
+          print('component name=final-fixed-scale-' + str(o) + ' type=FixedScaleComponent '
+            'scales={0}/presoftmax_prior_scale.vec'.format(
+            args.config_dir) + str(o), file=f)
 
-        print('component name=final-affine' + str(nnn) + ' type=NaturalGradientAffineComponent '
-          'input-dim={0} output-dim={1} param-stddev=0 bias-stddev=0'.format(
-          nonlin_output_dim, i), file=f)
-        nnn = nnn + 1
-    # printing out the next two, and their component-nodes, for l > 1 is not
-    # really necessary as they will already exist, but it doesn't hurt and makes
-    # the structure clearer.
-    if use_presoftmax_prior_scale :
-        for i in range(0, len(targets)):
-            print('component name=final-fixed-scale' + str(i) + ' type=FixedScaleComponent '
-              'scales={0}/presoftmax_prior_scale.vec'.format(
-              args.config_dir) + str(i), file=f)
-
-    nnn = 0
-    for i in num_targets_list:
-        print('component name=final-log-softmax' + str(nnn) + ' type=LogSoftmaxComponent dim={0}'.format(
-          i), file=f)
-        nnn = nnn + 1
+      print('component name=final-log-softmax-' + str(o) + ' type=LogSoftmaxComponent dim={0}'.format(
+        num_targets_list[o]), file=f)
 
     print('# Now for the network structure', file=f)
-    if l == 1:
-        splices = [ ('Offset(input, {0})'.format(n) if n != 0 else 'input') for n in splice_array[l-1] ]
-        if args.ivector_dim > 0: splices.append('ReplaceIndex(ivector, t, 0)')
-        orig_input='Append({0})'.format(', '.join(splices))
-        # e.g. orig_input = 'Append(Offset(input, -2), ... Offset(input, 2), ivector)'
-        print('component-node name=lda component=lda input={0}'.format(orig_input),
-              file=f)
-        cur_input='lda'
-    else:
-        # e.g. cur_input = 'Append(Offset(renorm1, -2), renorm1, Offset(renorm1, 2))'
-        splices = [ ('Offset(renorm{0}, {1})'.format(l-1, n) if n !=0 else 'renorm{0}'.format(l-1))
-                    for n in splice_array[l-1] ]
-        cur_input='Append({0})'.format(', '.join(splices))
-    print('component-node name=affine{0} component=affine{0} input={1} '.
-          format(l, cur_input), file=f)
-    print('component-node name=nonlin{0} component=nonlin{0} input=affine{0}'.
-          format(l), file=f)
-    print('component-node name=renorm{0} component=renorm{0} input=nonlin{0}'.
-          format(l), file=f)
 
-    for i in range(0, len(targets)):
-        if extra_layer == 1:
-          print('component-node name=extra-affine' + str("") + '_' + str(i) + ' component=extra-affine' + str("") + '_' + str(i) + ' input=renorm{0} '.
-            format(l), file=f)
-          print('component-node name=extra-nonlin' + str("") + '_' + str(i) + ' component=extra-nonlin' + str("") + '_' + str(i)
-                             + ' input=extra-affine' + str("") + '_' + str(i), file=f)
-          print('component-node name=extra-renorm{0} component=extra-renorm{0} input=extra-nonlin_{0}'.
-                format(i), file=f)
-          print('component-node name=final-affine' + str(i) + ' component=final-affine' + str(i) + ' input=extra-renorm' + str("") + str(i), file=f)
-        else:
-          print('component-node name=final-affine' + str(i) + ' component=final-affine' + str(i) + ' input=renorm{0}'.
-          format(l), file=f)
-        if use_presoftmax_prior_scale:
-            print('component-node name=final-fixed-scale' + str(i) + ' component=final-fixed-scale' + str(i) + ' input=final-affine' + str(i) + '',
-              file=f)
-            print('component-node name=final-log-softmax' + str(i) + ' component=final-log-softmax' + str(i) + ' '
-              'input=final-fixed-scale' + str(i), file=f)
-        else:
-            print('component-node name=final-log-softmax' + str(i) + ' component=final-log-softmax' + str(i) + ' '
-              'input=final-affine', file=f)
+    for o in range(0, len(num_targets_list)):
+      if l == 1:
+          if o == 0:
+              splices = [ ('Offset(input, {0})'.format(n) if n != 0 else 'input') for n in splice_array[l-1] ]
+              if args.ivector_dim > 0: splices.append('ReplaceIndex(ivector, t, 0)')
+              orig_input='Append({0})'.format(', '.join(splices))
+              # e.g. orig_input = 'Append(Offset(input, -2), ... Offset(input, 2), ivector)'
+              print('component-node name=lda component=lda input={0}'.format(orig_input),
+                    file=f)
+              cur_input='lda'
+      else:
+          # e.g. cur_input = 'Append(Offset(renorm1, -2), renorm1, Offset(renorm1, 2))'
+          splices = [ ('Offset(renorm{0}-{2}, {1})'.format(l-1, n, o) if n !=0 else 'renorm{0}-{1}'.format(l-1, o))
+                      for n in splice_array[l-1] ]
+          cur_input='Append({0})'.format(', '.join(splices))
+      print('component-node name=affine{0}-{2} component=affine{0}-{2} input={1} '.
+            format(l, cur_input, o), file=f)
+      print('component-node name=nonlin{0}-{1} component=nonlin{0}-{1} input=affine{0}-{1}'.
+            format(l, o), file=f)
+      print('component-node name=renorm{0}-{1} component=renorm{0}-{1} input=nonlin{0}-{1}'.
+            format(l, o), file=f)
 
-    for i in range(0, len(targets)):
-        print('output-node name=output' + str(i) + ' input=final-log-softmax' + str(i), file=f)
+      print('component-node name=final-affine-' + str(o) + ' component=final-affine-' + str(o) + ' input=renorm{0}-{1}'.
+        format(l, o), file=f)
+      if use_presoftmax_prior_scale:
+          i = o
+          print('component-node name=final-fixed-scale-' + str(i) + ' component=final-fixed-scale-' + str(i) + ' input=final-affine-' + str(i) + '',
+            file=f)
+          print('component-node name=final-log-softmax-' + str(i) + ' component=final-log-softmax-' + str(i) + ' '
+            'input=final-fixed-scale-' + str(i), file=f)
+      else:
+          i = o
+          print('component-node name=final-log-softmax-' + str(i) + ' component=final-log-softmax-' + str(i) + ' '
+            'input=final-affine-', file=f)
 
+      print('output-node name=output' + str(i) + ' input=final-log-softmax-' + str(o), file=f)
+    # end of for o = 1 ... num_trees loop
     f.close()
 
 # component name=nonlin1 type=PnormComponent input-dim=$pnorm_input_dim output-dim=$pnorm_output_dim

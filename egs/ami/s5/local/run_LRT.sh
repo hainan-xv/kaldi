@@ -35,8 +35,8 @@ lang=data/lang
 alidir=exp/$mic/tri4a_ali
 dir=exp/$mic/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
 
+nj=30
 if [ "$realign" == "true" ]; then
-  nj=30
   steps/train_sat.sh  --cmd "$train_cmd" \
     5000 80000 data/$mic/train data/lang exp/$mic/tri3a_ali exp/$mic/tri4a
   # Decode,
@@ -75,6 +75,16 @@ if [ "$gmm" == "true" ]; then
 
   $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
 fi
+
+false && for i in `seq 0 $[num_trees-1]`; do 
+  echo Re-aligning $i-th tree with sp
+  nj=10
+  alidir=exp/sdm1/tri3a_sdm1_train_sp_ali
+  cp $dir/tree_$i/ $dir/tree_sp_${i} -r
+  $train_cmd JOB=1:$nj $dir/tree_sp_$i/log/convert.JOB.log \
+    convert-ali $phone_map_opt $alidir/final.mdl $dir/tree_sp_$i/final.mdl $dir/tree-$i \
+     "ark:gunzip -c $alidir/ali.JOB.gz|" "ark:|gzip -c >$dir/tree_sp_$i/ali.JOB.gz" || exit 1;
+done
 
 nnet3dir=${dir}/../${method}_tdnn_${num_leaves}
 

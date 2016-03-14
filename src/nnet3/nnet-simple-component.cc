@@ -2491,7 +2491,7 @@ void ConstantFunctionComponent::UnVectorize(const VectorBase<BaseFloat> &params)
 NaturalGradientAffineComponent::NaturalGradientAffineComponent():
     max_change_per_sample_(0.0),
     update_count_(0.0), active_scaling_count_(0.0),
-    max_change_scale_stats_(0.0) { }
+    max_change_scale_stats_(0.0) {is_updatable_ = true; }
 
 // virtual
 void NaturalGradientAffineComponent::Resize(

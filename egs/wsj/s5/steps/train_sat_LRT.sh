@@ -150,6 +150,7 @@ if [ $stage -le -3 ] && $train_tree; then
         $dir/questions.qst $lang/topo $dir/tree || exit 1;)&
     fi
 
+#    numleaves=`echo $numleaves / 2 | bc `
     if [ "$numtrees_R" -gt 0 ]; then
     echo building left tree
     (  $cmd $dir/log/build_tree.R.log \

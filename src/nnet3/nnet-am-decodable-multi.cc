@@ -23,25 +23,13 @@
 namespace kaldi {
 namespace nnet3 {
 
-int aaa = 0;
-
 BaseFloat Combine(const std::vector<BaseFloat>& scores, BaseFloat exp_weight) {
-  if (aaa < 10) {
-    KALDI_LOG << "Expweight is " << exp_weight;
-  }
   BaseFloat sum = 0.0;
   BaseFloat norm = 0.0;
   for (int i = 0; i < scores.size(); i++) {
-    if (aaa < 10) {
-      KALDI_LOG << "score-" << i << " is " << scores[i];
-    }
     sum += scores[i] * exp(scores[i] * exp_weight);
     norm += exp(scores[i] * exp_weight);
   }
-  if (aaa < 10) {
-    KALDI_LOG << "averaged is " << sum / norm;
-  }
-  aaa++;
   return sum / norm;
 }
 

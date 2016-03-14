@@ -14,8 +14,8 @@ stage=-100
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
 dir=
-pnormi=2400
-pnormo=400
+pnormi=3000
+pnormo=300
 extra_layer=false
 last_factor=1
 
@@ -27,6 +27,8 @@ multidir=$1
 virtualdir=$2
 num_outputs=$3
 train_stage=$4
+
+dir=${dir}_${pnormo}_${pnormi}
 
 if [ "$extra_layer" == "true" ]; then
   dir=${dir}_extra
@@ -52,41 +54,37 @@ if [ $stage -le 8 ]; then
      /export/b0{1,2,5,6}/$USER/kaldi-data/egs/wsj-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
-#    --cleanup false \
+#  lr1=`echo 0.0015 / $num_outputs | bc -l`
+#  lr2=`echo 0.00015 / $num_outputs | bc -l`
+  lr1=0.0015
+  lr2=0.00015
 
-  steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
-    --last-factor $last_factor \
-    --extra-layer $extra_layer \
+  steps/nnet3/train_tdnn_ind.sh --stage $train_stage \
+    --online-ivector-dir exp/nnet3/ivectors_train \
     --num-outputs $num_outputs \
-    --feat-type raw \
-    --online-ivector-dir exp/nnet3/ivectors_train_clean_100 \
-    --cmvn-opts "--norm-means=false --norm-vars=false" \
     --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
     --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 0" \
-    --initial-effective-lrate 0.015 --final-effective-lrate 0.0015 \
+    --feat-type raw \
+    --cmvn-opts "--norm-means=false --norm-vars=false" \
+    --initial-effective-lrate $lr1 --final-effective-lrate $lr2 \
     --cmd "$decode_cmd" \
     --pnorm-input-dim $pnormi \
     --pnorm-output-dim $pnormo \
-    data/train_clean_100_hires data/lang $multidir/tree $dir  || exit 1;
+    data/train_hires data/lang $multidir/tree $dir  || exit 1;
 fi
 
 
 if [ $stage -le 9 ]; then
   # this does offline decoding that should give the same results as the real
   # online decoding.
-
-  for test in test_clean test_other dev_clean dev_other; do
-(    graph_dir=$virtualdir/graph_tgsmall
-    # use already-built graphs.
-    steps/nnet3/decode_multi.sh --nj 20 --cmd "$decode_cmd" \
-      --online-ivector-dir exp/nnet3/ivectors_$test \
-      --num-outputs $num_outputs \
-      $graph_dir data/${test}_hires $virtualdir $dir/decode_tgsmall_$test
-
-    steps/lmrescore_const_arpa.sh \
-      --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
-      data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
-      ) &
+    graph_dir=$virtualdir/graph
+  for year in test dev; do
+(      steps/nnet3/decode_multi.sh --nj 8 --cmd "$decode_cmd" \
+       --num-outputs $num_outputs \
+       --online-ivector-dir exp/nnet3/ivectors_$year \
+       $graph_dir data/${year}_hires \
+       $virtualdir \
+       $dir/decode_${year} || exit 1; ) &
   done
   wait
 fi

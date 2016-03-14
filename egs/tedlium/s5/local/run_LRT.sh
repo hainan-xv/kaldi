@@ -8,6 +8,7 @@ method=multi # joint for joint training; multi for multi-output training
 gmm_decode=false
 dnn_stage=-100
 stage=0
+extra=false
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -60,4 +61,5 @@ num_trees=$[$num_trees_L+${num_trees_T}+${num_trees_R}]
 #o=`echo "$f" | awk '{print int($1*350)}'`
 #i=$[10*$o]
 #echo $o and $i
-./local/nnet3/run_tdnn_$method.sh --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+#./local/nnet3/run_tdnn_$method.sh --last-factor $num_trees --pnormi 4000 --pnormo 400 --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+./local/nnet3/run_tdnn_$method.sh --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
