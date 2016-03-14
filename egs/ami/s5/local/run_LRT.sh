@@ -11,6 +11,7 @@ mic=sdm1
 sp=false
 extra_layer=false
 realign=false
+stage=8
 
 echo "$0 $@"
 
@@ -88,4 +89,4 @@ done
 
 nnet3dir=${dir}/../${method}_tdnn_${num_leaves}
 
-./local/nnet3/run_tdnn_$method.sh --mic $mic --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+./local/nnet3/run_tdnn_$method.sh --stage $stage --mic $mic --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

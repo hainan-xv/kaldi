@@ -39,6 +39,16 @@ where "nvcc" is installed.
 EOF
 fi
 
+train_set=
+dir_prefix=$multidir/tree
+if [ "$speed_perturb" == "true" ]; then
+  train_set=train_sp
+  dir=${dir}_sp
+  dir_prefix=${dir_prefix}_sp
+else
+  train_set=train
+fi
+
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
@@ -48,15 +58,6 @@ if [ $stage -le 8 ]; then
 #  train_stage=`ls $dir | grep .mdl | sed s=.mdl==g | sort -n | tail -n 1`
   echo train_stage $train_stage
 
-  train_set=
-  dir_prefix=$multidir/tree
-  if [ "$speed_perturb" == "true" ]; then
-    train_set=train_sp
-    dir=${dir}_sp
-    dir_prefix=${dir_prefix}_sp
-  else
-    train_set=train
-  fi
 
   steps/nnet3/train_tdnn_ind.sh --stage $train_stage \
     --get-egs-stage 8 \
@@ -81,12 +82,14 @@ if [ $stage -le 9 ]; then
     decode_dir=${dir}/decode_${decode_set}
     graph_dir=${virtualdir}/graph_ami_fsh.o3g.kn.pr1-7
     # use already-built graphs.
-(      steps/nnet3/decode.sh --nj $num_jobs --cmd "$decode_cmd" \
+(      steps/nnet3/decode_multi.sh --nj $num_jobs --cmd "$decode_cmd" \
+          --num-outputs $num_outputs \
           --online-ivector-dir exp/$mic/nnet3/ivectors_${decode_set} \
          $graph_dir data/$mic/${decode_set}_hires \
+         $virtualdir \
          $decode_dir || exit 1; ) &
-    wait
     echo done
   done
+  wait
 fi
 

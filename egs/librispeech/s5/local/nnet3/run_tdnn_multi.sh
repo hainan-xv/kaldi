@@ -10,7 +10,7 @@
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
 
-stage=-100
+stage=8
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
 dir=

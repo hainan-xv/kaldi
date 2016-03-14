@@ -23,7 +23,7 @@ parser.add_argument("--relu-dim", type=int,
                     help="dimension of ReLU nonlinearities")
 parser.add_argument("--use-presoftmax-prior-scale", type=str,
                     help="if true, a presoftmax-prior-scale is added",
-                    choices=['true', 'false'], default = "true")
+                    choices=['true', 'false'], default = "false")
 parser.add_argument("--num-targets", type=int,
                     help="number of network targets (e.g. num-pdf-ids/num-leaves, output dim of sparse matrix)")
 parser.add_argument("--num-leaves-total", type=int,
@@ -162,6 +162,14 @@ for l in range(1, num_hidden_layers + 1):
         print('component name=final-fixed-scale type=FixedScaleComponent '
           'scales={0}/presoftmax_prior_scale.vec'.format(
           args.config_dir), file=f)
+    else:
+#        print('component name=per-element-offset type=PerElementOffsetComponent '
+#            'dim={0} vector={1}/presoftmax_prior_scale.vec'.format(
+#          num_virtual_leaves, args.config_dir), file=f)
+        print('component name=per-element-offset type=PerElementOffsetComponent '
+            'dim={0} param-mean=0 param-stddev=0'.format(
+          num_virtual_leaves, args.config_dir), file=f)
+
 
     print('component name=final-log-softmax type=LogSoftmaxComponent dim={0}'.format(
       num_virtual_leaves), file=f)
@@ -198,6 +206,8 @@ for l in range(1, num_hidden_layers + 1):
         print('component-node name=final-log-softmax component=final-log-softmax '
           'input=final-fixed-scale', file=f)
     else:
+        print('component-node name=per-element-offset component=per-element-offset '
+           'input=sparse-combine', file=f)
         print('component-node name=final-log-softmax component=final-log-softmax '
           'input=sparse-combine', file=f)
 

@@ -90,6 +90,18 @@ EventMap *BuildTree(Questions &qopts,
                     BaseFloat cluster_thresh,  // typically == thresh.  If negative, use smallest split.
                     int32 P);
 
+EventMap *BuildTreeRandom(Questions &qopts,
+                    const std::vector<std::vector<int32> > &phone_sets,
+                    const std::vector<int32> &phone2num_pdf_classes,
+                    const std::vector<bool> &share_roots,
+                    const std::vector<bool> &do_split,
+                    const BuildTreeStatsType &stats,
+                    BaseFloat thresh,
+                    int32 max_leaves,
+                    BaseFloat cluster_thresh,  // typically == thresh.  If negative, use smallest split.
+                    int32 P,
+                    BaseFloat rand_prob);
+
 // BuildTreeMulti is for building multiple decision trees
 // It is very similar to BuildTree, with a lot of the argument having the 
 // same effect; the difference is,

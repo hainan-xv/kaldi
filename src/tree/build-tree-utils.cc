@@ -498,6 +498,114 @@ BaseFloat FindBestSplitForKey(const BuildTreeStatsType &stats,
 }
 
 
+/*
+  DecisionTreeRandomBuilder is a class used in SplitDecisionTreeRandom
+*/
+
+class DecisionTreeRandomSplitter {
+ public:
+  EventMap *GetMap() {
+    if (!yes_) {  // leaf.
+      return new ConstantEventMap(leaf_);
+    } else {
+      return new SplitEventMap(key_, yes_set_, yes_->GetMap(), no_->GetMap());
+    }
+  }
+  BaseFloat BestSplit() { return best_split_impr_; } // returns objf improvement (>=0) of best possible split.
+  void DoSplit(int32 *next_leaf) {
+    if (!yes_) {  // not already split; we are a leaf, so split.
+      DoSplitInternal(next_leaf);
+    } else {  // find which of our children is best to split, and split that.
+      (yes_->BestSplit() >= no_->BestSplit() ? yes_ : no_)->DoSplit(next_leaf);
+      best_split_impr_ = std::max(yes_->BestSplit(), no_->BestSplit());  // may have changed.
+    }
+  }
+  DecisionTreeRandomSplitter(EventAnswerType leaf, const BuildTreeStatsType &stats,
+                      const Questions &q_opts, BaseFloat rand_prob): q_opts_(q_opts), yes_(NULL), no_(NULL), leaf_(leaf), stats_(stats), rand_prob_(rand_prob) {
+    // not, this must work when stats is empty too. [just gives zero improvement, non-splittable].
+    FindBestSplit();
+  }
+  ~DecisionTreeRandomSplitter() {
+    delete yes_;
+    delete no_;
+  }
+ private:
+  void DoSplitInternal(int32 *next_leaf) {
+    // Does the split; applicable only to leaf nodes.
+    KALDI_ASSERT(!yes_);  // make sure children not already set up.
+    KALDI_ASSERT(best_split_impr_ > 0);
+    EventAnswerType yes_leaf = leaf_, no_leaf = (*next_leaf)++;
+    leaf_ = -1;  // we now have no leaf.
+    // Now split the stats.
+    BuildTreeStatsType yes_stats, no_stats;
+    yes_stats.reserve(stats_.size()); no_stats.reserve(stats_.size());  //  probably better than multiple resizings.
+    for (BuildTreeStatsType::const_iterator iter = stats_.begin(); iter != stats_.end(); ++iter) {
+      const EventType &vec = iter->first;
+      EventValueType val;
+      if (!EventMap::Lookup(vec, key_, &val)) KALDI_ERR << "DoSplitInternal: key has no value.";
+      if (std::binary_search(yes_set_.begin(), yes_set_.end(), val)) yes_stats.push_back(*iter);
+      else no_stats.push_back(*iter);
+    }
+#ifdef KALDI_PARANOID
+    {  // Check objf improvement.
+      Clusterable *yes_clust = SumStats(yes_stats), *no_clust = SumStats(no_stats);
+      BaseFloat impr_check = yes_clust->Distance(*no_clust);
+      // this is a negated objf improvement from merging (== objf improvement from splitting).
+      if (!ApproxEqual(impr_check, best_split_impr_, 0.01)) {
+        KALDI_WARN << "DoSplitInternal: possible problem: "<< impr_check << " != " << best_split_impr_;
+      }
+      delete yes_clust; delete no_clust;
+    }
+#endif
+    yes_ = new DecisionTreeRandomSplitter(yes_leaf, yes_stats, q_opts_, rand_prob_);
+    no_ = new DecisionTreeRandomSplitter(no_leaf, no_stats, q_opts_, rand_prob_);
+    best_split_impr_ = std::max(yes_->BestSplit(), no_->BestSplit());
+    stats_.clear();  // note: pointers in stats_ were not owned here.
+  }
+  void FindBestSplit() {
+    // This sets best_split_impr_, key_ and yes_set_.
+    // May just pick best question, or may iterate a bit (depends on
+    // q_opts; see FindBestSplitForKey for details)
+    std::vector<EventKeyType> all_keys;
+    q_opts_.GetKeysWithQuestions(&all_keys);
+    if (all_keys.size() == 0) {
+      KALDI_WARN << "DecisionTreeRandomSplitter::FindBestSplit(), no keys available to split on (maybe no key covered all of your events, or there was a problem with your questions configuration?)";
+    }
+    best_split_impr_ = 0;
+    for (size_t i = 0; i < all_keys.size(); i++) {
+      if (q_opts_.HasQuestionsForKey(all_keys[i])) {
+        std::vector<EventValueType> temp_yes_set;
+        BaseFloat split_improvement = FindBestSplitForKey(stats_, q_opts_, all_keys[i], &temp_yes_set);
+        if (i == 0 || (double(rand()) / RAND_MAX < rand_prob_ && split_improvement > best_split_impr_)) {
+          best_split_impr_ = split_improvement;
+          yes_set_ = temp_yes_set;
+          key_ = all_keys[i];
+        }
+      }
+    }
+  }
+
+
+
+  // Data members... Always used:
+  const Questions &q_opts_;
+  BaseFloat best_split_impr_;
+
+  // If already split:
+  DecisionTreeRandomSplitter *yes_;
+  DecisionTreeRandomSplitter *no_;
+
+  // Otherwise:
+  EventAnswerType leaf_;
+  BuildTreeStatsType stats_;  // vector of stats.  pointers inside there not owned here.
+
+  BaseFloat rand_prob_;
+
+  // key and "yes set" of best split:
+  EventKeyType key_;
+  std::vector<EventValueType> yes_set_;
+
+};
 
 /*
   DecisionTreeBuilder is a class used in SplitDecisionTree
@@ -600,11 +708,81 @@ class DecisionTreeSplitter {
   EventAnswerType leaf_;
   BuildTreeStatsType stats_;  // vector of stats.  pointers inside there not owned here.
 
+  BaseFloat rand_prob_;
+
   // key and "yes set" of best split:
   EventKeyType key_;
   std::vector<EventValueType> yes_set_;
 
 };
+
+EventMap *SplitDecisionTreeRandom(const EventMap &input_map,
+                            const BuildTreeStatsType &stats,
+                            Questions &q_opts,
+                            BaseFloat thresh,
+                            int32 max_leaves,  // max_leaves<=0 -> no maximum.
+                            BaseFloat rand_prob,
+                            int32 *num_leaves,
+                            BaseFloat *obj_impr_out,
+                            BaseFloat *smallest_split_change_out) {
+  KALDI_ASSERT(num_leaves != NULL && *num_leaves > 0);  // can't be 0 or input_map would be empty.
+  int32 num_empty_leaves = 0;
+  BaseFloat like_impr = 0.0;
+  BaseFloat smallest_split_change = 1.0e+20;
+  std::vector<DecisionTreeRandomSplitter*> builders;
+  {  // set up "builders" [one for each current leaf].  This array is never extended.
+    // the structures generated during splitting remain as trees at each array location.
+    std::vector<BuildTreeStatsType> split_stats;
+    SplitStatsByMap(stats, input_map, &split_stats);
+    KALDI_ASSERT(split_stats.size() != 0);
+    builders.resize(split_stats.size());  // size == #leaves.
+    for (size_t i = 0;i < split_stats.size();i++) {
+      EventAnswerType leaf = static_cast<EventAnswerType>(i);
+      if (split_stats[i].size() == 0) num_empty_leaves++;
+      builders[i] = new DecisionTreeRandomSplitter(leaf, split_stats[i], q_opts, rand_prob);
+    }
+  }
+
+  {  // Do the splitting.
+    int32 count = 0;
+    std::priority_queue<std::pair<BaseFloat, size_t> > queue;  // use size_t because logically these
+    // are just indexes into the array, not leaf-ids (after splitting they are no longer leaf id's).
+    // Initialize queue.
+    for (size_t i = 0; i < builders.size(); i++)
+      queue.push(std::make_pair(builders[i]->BestSplit(), i));
+    // Note-- queue's size never changes from now.  All the alternatives leaves to split are
+    // inside the "DecisionTreeSplitter*" objects, in a tree structure.
+    while (queue.top().first > thresh
+          && (max_leaves<=0 || *num_leaves < max_leaves)) {
+      smallest_split_change = std::min(smallest_split_change, queue.top().first);
+      size_t i = queue.top().second;
+      like_impr += queue.top().first;
+      builders[i]->DoSplit(num_leaves);
+      queue.pop();
+      queue.push(std::make_pair(builders[i]->BestSplit(), i));
+      count++;
+    }
+    KALDI_LOG << "DoDecisionTreeSplit: split "<< count << " times, #leaves now " << (*num_leaves);
+  }
+
+  if (smallest_split_change_out)
+    *smallest_split_change_out = smallest_split_change;
+
+  EventMap *answer = NULL;
+
+  {  // Create the output EventMap.
+    std::vector<EventMap*> sub_trees(builders.size());
+    for (size_t i = 0; i < sub_trees.size();i++) sub_trees[i] = builders[i]->GetMap();
+    answer = input_map.Copy(sub_trees);
+    for (size_t i = 0; i < sub_trees.size();i++) delete sub_trees[i];
+  }
+  // Free up memory.
+  for (size_t i = 0;i < builders.size();i++) delete builders[i];
+
+  if (obj_impr_out != NULL) *obj_impr_out = like_impr;
+  return answer;
+}
+
 
 EventMap *SplitDecisionTree(const EventMap &input_map,
                             const BuildTreeStatsType &stats,

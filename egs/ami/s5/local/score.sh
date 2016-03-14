@@ -14,6 +14,7 @@ stage=0
 min_lmwt=9 # unused,
 max_lmwt=15 # unused,
 asclite=true
+model=
 #end configuration section.
 
 [ -f ./path.sh ] && . ./path.sh

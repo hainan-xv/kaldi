@@ -286,6 +286,16 @@ EventMap *SplitDecisionTree(const EventMap &orig,
                             BaseFloat *objf_impr_out,
                             BaseFloat *smallest_split_change_out);
 
+EventMap *SplitDecisionTreeRandom(const EventMap &orig,
+                            const BuildTreeStatsType &stats,
+                            Questions &qcfg,
+                            BaseFloat thresh,
+                            int32 max_leaves,  // max_leaves<=0 -> no maximum.
+                            BaseFloat rand_prob,
+                            int32 *num_leaves,
+                            BaseFloat *objf_impr_out,
+                            BaseFloat *smallest_split_change_out);
+
 /// This function build multiple decision trees
 std::vector<EventMap*> SplitDecisionTreeMulti(std::vector<EventMap*> orig,
                             const BuildTreeStatsType &stats,

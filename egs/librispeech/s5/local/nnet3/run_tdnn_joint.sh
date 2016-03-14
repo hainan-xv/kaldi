@@ -10,14 +10,18 @@
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
 
-stage=0
+stage=8
 dir=
 expand=false
-pnormi=6000
-pnormo=1000
+pnormi=2400
+pnormo=400
+extra_layer=false
+last_factor=1
+
 . cmd.sh
 . ./path.sh
 . ./utils/parse_options.sh
+
 multidir=$1
 virtualdir=$2
 num_outputs=$3
@@ -36,26 +40,28 @@ fi
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
-     /export/b0{1,2,5,6}/$USER/kaldi-data/egs/lib-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
+     /export/b0{1,2,3,5}/$USER/kaldi-data/egs/lib-$(date +'%m_%d_%H_%M')/s5/$dir/egs/storage $dir/egs/storage
   fi
 
 #  train_stage=`ls $dir | grep .mdl | sed s=.mdl==g | sort -n | tail -n 1`
   echo train_stage $train_stage
 
   steps/nnet3/train_tdnn_joint.sh --stage $train_stage \
+    --get-egs-stage 100 \
     --cleanup false \
     --num-outputs $num_outputs \
-    --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
-    --splice-indexes "-4,-3,-2,-1,0,1,2,3,4  0  -2,2  0  -4,4 0" \
     --feat-type raw \
+    --online-ivector-dir exp/nnet3/ivectors_train_clean_100 \
     --cmvn-opts "--norm-means=false --norm-vars=false" \
-    --initial-effective-lrate 0.005 --final-effective-lrate 0.0005 \
+    --num-epochs 8 --num-jobs-initial 2 --num-jobs-final 14 \
+    --splice-indexes "-2,-1,0,1,2 -1,2 -3,3 -7,2 0" \
+    --initial-effective-lrate 0.015 --final-effective-lrate 0.0015 \
     --cmd "$decode_cmd" \
     --pnorm-input-dim $pnormi \
     --pnorm-output-dim $pnormo \
     --expand $expand \
     --tree-mapping $virtualdir/tree-mapping \
-    data/train_clean_100 data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
+    data/train_clean_100_hires data/lang $multidir/tree $virtualdir/ $dir  || exit 1;
 fi
 
 

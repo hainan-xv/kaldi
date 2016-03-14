@@ -131,6 +131,111 @@ void GenRandStats(int32 dim, int32 num_stats, int32 N, int32 P,
 }
 
 
+EventMap *BuildTreeRandom(Questions &qopts,
+                    const std::vector<std::vector<int32> > &phone_sets,
+                    const std::vector<int32> &phone2num_pdf_classes,
+                    const std::vector<bool> &share_roots,
+                    const std::vector<bool> &do_split,
+                    const BuildTreeStatsType &stats,
+                    BaseFloat thresh,
+                    int32 max_leaves,
+                    BaseFloat cluster_thresh,  // typically == thresh.  If negative, use smallest split.
+                    int32 P,
+                    BaseFloat rand_prob) {
+  KALDI_ASSERT(thresh > 0 || max_leaves > 0);
+  KALDI_ASSERT(stats.size() != 0);
+  KALDI_ASSERT(!phone_sets.empty()
+         && phone_sets.size() == share_roots.size()
+         && do_split.size() == phone_sets.size());
+
+  // the inputs will be further checked in GetStubMap.
+  int32 num_leaves = 0;  // allocator for leaves.
+
+  EventMap *tree_stub = GetStubMap(P,
+                                   phone_sets,
+                                   phone2num_pdf_classes,
+                                   share_roots,
+                                   &num_leaves);
+  KALDI_LOG <<  "BuildTree: before building trees, map has "<< num_leaves << " leaves.";
+
+
+  BaseFloat impr;
+  BaseFloat smallest_split = 1.0e+10;
+
+
+  std::vector<int32> nonsplit_phones;
+  for (size_t i = 0; i < phone_sets.size(); i++)
+    if (!do_split[i])
+      nonsplit_phones.insert(nonsplit_phones.end(), phone_sets[i].begin(), phone_sets[i].end());
+
+  std::sort(nonsplit_phones.begin(), nonsplit_phones.end());
+
+  KALDI_ASSERT(IsSortedAndUniq(nonsplit_phones));
+  BuildTreeStatsType filtered_stats;
+  FilterStatsByKey(stats, P, nonsplit_phones, false,  // retain only those not
+                   // in "nonsplit_phones"
+                   &filtered_stats);
+
+  EventMap *tree_split = SplitDecisionTreeRandom(*tree_stub,
+                                           filtered_stats,
+                                           qopts, thresh, max_leaves, rand_prob,
+                                           &num_leaves, &impr, &smallest_split);
+
+  if (cluster_thresh < 0.0) {
+    KALDI_LOG <<  "Setting clustering threshold to smallest split " << smallest_split;
+    cluster_thresh = smallest_split;
+  }
+
+  BaseFloat normalizer = SumNormalizer(stats),
+      impr_normalized = impr / normalizer,
+      normalizer_filt = SumNormalizer(filtered_stats),
+      impr_normalized_filt = impr / normalizer_filt;
+
+  KALDI_VLOG(1) <<  "After decision tree split, num-leaves = " << num_leaves
+                << ", like-impr = " << impr_normalized << " per frame over "
+                << normalizer << " frames.";
+
+  KALDI_VLOG(1) <<  "Including just phones that were split, improvement is "
+                << impr_normalized_filt << " per frame over "
+                << normalizer_filt << " frames.";
+
+
+  if (cluster_thresh != 0.0) {   // Cluster the tree.
+    BaseFloat objf_before_cluster = ObjfGivenMap(stats, *tree_split);
+
+    // Now do the clustering.
+    int32 num_removed = 0;
+    EventMap *tree_clustered = ClusterEventMapRestrictedByMap(*tree_split,
+                                                              stats,
+                                                              cluster_thresh,
+                                                              *tree_stub,
+                                                              &num_removed);
+    KALDI_LOG <<  "BuildTree: removed "<< num_removed << " leaves.";
+
+    int32 num_leaves = 0;
+    EventMap *tree_renumbered = RenumberEventMap(*tree_clustered, &num_leaves);
+
+    BaseFloat objf_after_cluster = ObjfGivenMap(stats, *tree_renumbered);
+
+    KALDI_VLOG(1) << "Objf change due to clustering "
+                  << ((objf_after_cluster-objf_before_cluster) / normalizer)
+                  << " per frame.";
+    KALDI_VLOG(1) << "Normalizing over only split phones, this is: "
+                  << ((objf_after_cluster-objf_before_cluster) / normalizer_filt)
+                  << " per frame.";
+    KALDI_VLOG(1) <<  "Num-leaves is now "<< num_leaves;
+
+    delete tree_clustered;
+    delete tree_split;
+    delete tree_stub;
+    return tree_renumbered;
+  } else {
+    delete tree_stub;
+    return tree_split;
+  }
+}
+
+
 
 EventMap *BuildTree(Questions &qopts,
                     const std::vector<std::vector<int32> > &phone_sets,
