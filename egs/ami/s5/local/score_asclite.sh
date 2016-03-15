@@ -11,6 +11,7 @@ min_lmwt=9
 max_lmwt=15
 asclite=true
 overlap_spk=4
+model=
 # end configuration section.
 
 [ -f ./path.sh ] && . ./path.sh
@@ -30,7 +31,9 @@ data=$1
 lang=$2 # Note: may be graph directory not lang directory, but has the necessary stuff copied.
 dir=$3
 
-model=$dir/../final.mdl # assume model one level up from decoding dir.
+if [ "$model" == "" ]; then
+  model=$dir/../final.mdl # assume model one level up from decoding dir.
+fi
 
 hubscr=$KALDI_ROOT/tools/sctk/bin/hubscr.pl 
 [ ! -f $hubscr ] && echo "Cannot find scoring program at $hubscr" && exit 1;

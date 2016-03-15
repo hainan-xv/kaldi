@@ -29,6 +29,7 @@ phone_map=
 train_tree=true
 numtrees=1
 lambda=0
+prob=0.5
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
@@ -122,6 +123,7 @@ if [ $stage -le -3 ] && $train_tree; then
   echo "$0: Building the tree"
   $cmd $dir/log/build_tree.log \
     build-tree-random $context_opts --verbose=1 --max-leaves=$numleaves \
+    --rand-prob=$prob \
     --num-trees=$numtrees \
     --thresh=0 \
     --cluster-thresh=$cluster_thresh $dir/treeacc $lang/phones/roots.int \
