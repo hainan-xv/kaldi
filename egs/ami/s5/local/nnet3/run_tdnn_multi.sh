@@ -83,7 +83,6 @@ if [ $stage -le 9 ]; then
     graph_dir=${virtualdir}/graph_ami_fsh.o3g.kn.pr1-7
     # use already-built graphs.
 (      steps/nnet3/decode_multi.sh --nj $num_jobs --cmd "$decode_cmd" \
-          --stage 2 \
           --num-outputs $num_outputs \
           --online-ivector-dir exp/$mic/nnet3/ivectors_${decode_set} \
          $graph_dir data/$mic/${decode_set}_hires \

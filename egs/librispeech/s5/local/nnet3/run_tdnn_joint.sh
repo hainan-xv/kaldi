@@ -71,12 +71,14 @@ if [ $stage -le 9 ]; then
   for test in test_clean test_other dev_clean dev_other; do
     graph_dir=$virtualdir/graph_tgsmall
     # use already-built graphs.
-    steps/nnet3/decode.sh --nj 20 --cmd "$decode_cmd" \
-      $graph_dir data/$test $dir/decode_tgsmall_$test
+(    steps/nnet3/decode.sh --nj 20 --cmd "$decode_cmd" \
+      --online-ivector-dir exp/nnet3/ivectors_$test \
+      $graph_dir data/${test}_hires $dir/decode_tgsmall_$test
 
     steps/lmrescore_const_arpa.sh \
       --cmd "$decode_cmd" data/lang_test_{tgsmall,tglarge} \
-      data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1;
+      data/$test $dir/decode_{tgsmall,tglarge}_$test || exit 1; )&
   done
+  wait
 fi
 
