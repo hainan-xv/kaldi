@@ -29,7 +29,7 @@ phone_map=
 train_tree=true
 numtrees=1
 lambda=0
-prob=0.5
+prob=0.9
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging

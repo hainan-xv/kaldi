@@ -155,6 +155,10 @@ for l in range(1, num_hidden_layers + 1):
     print('component name=sparse-combine type=SparseLinearComponent '
            'matrix={0}'.format(sparse_mat), file=f)
 
+    print('component name=sparse-renorm type=NormalizeComponent dim={0}'.format(
+          num_virtual_leaves), file=f) #TODO(this just got added)
+
+
     # printing out the next two, and their component-nodes, for l > 1 is not
     # really necessary as they will already exist, but it doesn't hurt and makes
     # the structure clearer.
@@ -200,16 +204,29 @@ for l in range(1, num_hidden_layers + 1):
 
     print('component-node name=sparse-combine component=sparse-combine input=final-affine', file=f)
 
+    print('component-node name=sparse-renorm component=sparse-renorm input=sparse-combine', file=f)
+
     if use_presoftmax_prior_scale:
-        print('component-node name=final-fixed-scale component=final-fixed-scale input=sparse-combine',
+        print('component-node name=final-fixed-scale component=final-fixed-scale input=sparse-renorm',
           file=f)
         print('component-node name=final-log-softmax component=final-log-softmax '
           'input=final-fixed-scale', file=f)
     else:
         print('component-node name=per-element-offset component=per-element-offset '
-           'input=sparse-combine', file=f)
+           'input=sparse-renorm', file=f)
         print('component-node name=final-log-softmax component=final-log-softmax '
           'input=sparse-combine', file=f)
+
+#    if use_presoftmax_prior_scale:
+#        print('component-node name=final-fixed-scale component=final-fixed-scale input=sparse-combine',
+#          file=f)
+#        print('component-node name=final-log-softmax component=final-log-softmax '
+#          'input=final-fixed-scale', file=f)
+#    else:
+#        print('component-node name=per-element-offset component=per-element-offset '
+#           'input=sparse-combine', file=f)
+#        print('component-node name=final-log-softmax component=final-log-softmax '
+#          'input=sparse-combine', file=f)
 
     print('output-node name=output input=final-log-softmax', file=f)
 

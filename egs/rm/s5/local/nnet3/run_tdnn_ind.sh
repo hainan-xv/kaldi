@@ -53,8 +53,8 @@ if [ $stage -le 8 ]; then
   lr2=0.0015
 
 #    --use-gpu false \
+#    --get-egs-stage 8 \
   steps/nnet3/train_tdnn_ind.sh --stage $train_stage \
-    --get-egs-stage 8 \
     --online-ivector-dir exp/nnet3/ivectors_train \
     --num-outputs $num_outputs \
     --num-epochs 16 --num-jobs-initial 4 --num-jobs-final 4 \

@@ -46,6 +46,9 @@ where "nvcc" is installed.
 EOF
 fi
 
+mkdir -p $dir/
+ln -s ../multi_tdnn_4200/egs $dir/egs
+
 if [ $stage -le 8 ]; then
   if [[ $(hostname -f) == *.clsp.jhu.edu ]] && [ ! -d $dir/egs/storage ]; then
     utils/create_split_dir.pl \
@@ -55,6 +58,7 @@ if [ $stage -le 8 ]; then
 #    --cleanup false \
 
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
+    --get-egs-stage 80 \
     --last-factor $last_factor \
     --extra-layer $extra_layer \
     --num-outputs $num_outputs \

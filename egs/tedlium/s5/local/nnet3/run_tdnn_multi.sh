@@ -28,15 +28,15 @@ virtualdir=$2
 num_outputs=$3
 train_stage=$4
 
-dir=${dir}_${pnormo}_${pnormi}
+dir=${dir}_${pnormo}_${pnormi}_newdesign
 
-if [ "$extra_layer" == "true" ]; then
+false && (if [ "$extra_layer" == "true" ]; then
   dir=${dir}_extra
 fi
 
 if [ "$last_factor" != "1" ]; then
   dir=${dir}_enlarge$last_factor
-fi
+fi )
 
 echo dir is $dir
 

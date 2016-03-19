@@ -10,6 +10,7 @@ dnn_stage=-100
 stage=8
 extra=false
 num_trees=2
+prob=0.8
 
 echo "$0 $@"
 
@@ -47,7 +48,7 @@ if [ "$gmm" == "true" ]; then
 fi
 
 #nnet3dir=${dir}/../tdnn_${num_leaves}
-nnet3dir=exp/Random_$num_trees/${method}_tdnn_${num_leaves}
+nnet3dir=exp/Random_$num_trees/${method}_tdnn_${num_leaves}_$prob
 #dnn_stage=81
 
 #num_trees=$[$num_trees_L+${num_trees_T}+${num_trees_R}]

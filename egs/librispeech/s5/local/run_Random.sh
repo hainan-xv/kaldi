@@ -11,6 +11,7 @@ stage=0
 extra=false
 factor=1
 num_trees=2
+prob=0.8
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -24,13 +25,14 @@ num_gauss=$2
 data=data/train_clean_100
 lang=data/lang
 alidir=exp/tri4b_ali_clean_100
-dir=exp/Random_$num_trees/tri_${num_leaves}_${num_gauss}
+dir=exp/Random_$num_trees/tri_${num_leaves}_${num_gauss}_$prob
 
 mkdir -p $dir
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
   steps/train_sat_random.sh --cmd "$train_cmd" \
+      --prob $prob \
       --numtrees $num_trees \
       --num-iters 2 \
       $num_leaves $num_gauss $data $lang $alidir $dir
@@ -46,7 +48,7 @@ if [ "$gmm" == "true" ]; then
 
 fi
 
-nnet3dir=${dir}/../${method}_tdnn_${num_leaves}
+nnet3dir=${dir}/../${method}_tdnn_${num_leaves}_$prob
 
 #dnn_stage=81
 ./local/nnet3/run_tdnn_$method.sh --last-factor $factor --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

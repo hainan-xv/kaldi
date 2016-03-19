@@ -12,21 +12,19 @@ sp=false
 extra_layer=false
 realign=false
 stage=8
+prob=0.8
 
 echo "$0 $@"
+
+num_trees=2
 
 . ./utils/parse_options.sh || exit 1;
 
 #set -e
 
-num_trees_L=$1
-num_trees_T=$2
-num_trees_R=$3
-lambda=$4
-num_leaves=$5
-num_gauss=$6
+num_leaves=$1
+num_gauss=$2
 
-num_trees=$[$num_trees_L+$num_trees_T+$num_trees_L]
 
 final_lm=`cat data/local/lm/final_lm`
 LM=$final_lm.pr1-7
@@ -34,7 +32,7 @@ LM=$final_lm.pr1-7
 data=data/$mic/train
 lang=data/lang
 alidir=exp/$mic/tri4a_ali
-dir=exp/$mic/LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/tri_${num_leaves}_${num_gauss}
+dir=exp/$mic/LRT_${num_trees}/tri_${num_leaves}_${num_gauss}
 
 nj=30
 if [ "$realign" == "true" ]; then
@@ -55,12 +53,10 @@ fi
 
 if [ "$gmm" == "true" ]; then
   echo training GMM systems
-  steps/train_sat_LRT.sh --cmd "$train_cmd" \
+  steps/train_sat_random.sh --cmd "$train_cmd" \
       --num-iters 2 \
-      --numtrees_L $num_trees_L \
-      --numtrees_T $num_trees_T \
-      --numtrees_R $num_trees_R \
-      --lambda $lambda \
+      --numtrees $num_trees \
+      --prob $prob \
       $num_leaves $num_gauss $data $lang $alidir $dir
 
   for i in `seq 0 $[$num_trees-1]`; do
@@ -77,7 +73,7 @@ if [ "$gmm" == "true" ]; then
   $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
 fi
 
-false && for i in `seq 0 $[num_trees-1]`; do 
+true && for i in `seq 0 $[num_trees-1]`; do 
   echo Re-aligning $i-th tree with sp
   nj=10
   alidir=exp/sdm1/tri3a_sdm1_train_sp_ali

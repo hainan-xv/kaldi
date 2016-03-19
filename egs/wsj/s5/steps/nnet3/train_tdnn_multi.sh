@@ -215,10 +215,10 @@ if [ $stage -le -5 ]; then
     layer_args="--extra-layer 1"
   fi
 
+#    $layer_args \
+#    --last-factor $last_factor \
   # create the config files for nnet initialization
   python steps/nnet3/make_tdnn_multi_configs.py  \
-    $layer_args \
-    --last-factor $last_factor \
     --splice-indexes "$splice_indexes"  \
     --feat-dim $feat_dim \
     --ivector-dim $ivector_dim  \
