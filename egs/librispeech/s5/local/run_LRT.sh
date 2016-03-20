@@ -12,6 +12,7 @@ extra=false
 factor=1
 pnormi=2400
 pnormo=400
+objective=linear
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -55,7 +56,10 @@ if [ "$gmm" == "true" ]; then
 
 fi
 
-nnet3dir=${dir}/../${method}_tdnn_${num_leaves}_${pnormi}_${pnormo}
-
+if [ "$objective" == "linear" ]; then
+  nnet3dir=${dir}/../${method}_tdnn_${num_leaves}_${pnormi}_${pnormo}
+else
+  nnet3dir=${dir}/../${method}_tdnn_${num_leaves}_${pnormi}_${pnormo}_$objective
+fi
 #dnn_stage=81
-./local/nnet3/run_tdnn_$method.sh --pnormi $pnormi --pnormo $pnormo --last-factor $factor --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+./local/nnet3/run_tdnn_$method.sh --objective $objective --pnormi $pnormi --pnormo $pnormo --last-factor $factor --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

@@ -47,6 +47,7 @@ namespace nnet3 {
 
 
 class AmNnetSimple {
+  friend class AmNnetMulti;
  public:
   AmNnetSimple() { }
 

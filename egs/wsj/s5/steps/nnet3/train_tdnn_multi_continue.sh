@@ -82,6 +82,7 @@ frames_per_eg=8 # to be passed on to get_egs.sh
 num_outputs=2
 extra_layer=false
 last_factor=1
+baseline_dir=
 
 trap 'for pid in $(jobs -pr); do kill -KILL $pid; done' INT QUIT TERM
 
@@ -211,15 +212,10 @@ if [ $stage -le -5 ]; then
 
   echo dim_opts $dim_opts
 
-  layer_args=
-  if [ "$extra_layer" == "true" ]; then
-    layer_args="--extra-layer 1"
-  fi
-
 #    $layer_args \
 #    --last-factor $last_factor \
   # create the config files for nnet initialization
-  python steps/nnet3/make_tdnn_multi_configs.py  \
+  python steps/nnet3/make_tdnn_multi_continute_configs.py  \
     --objective $objective \
     --splice-indexes "$splice_indexes"  \
     --feat-dim $feat_dim \
@@ -233,8 +229,16 @@ if [ $stage -le -5 ]; then
   # matrix.  This first config just does any initial splicing that we do;
   # we do this as it's a convenient way to get the stats for the 'lda-like'
   # transform.
-  $cmd $dir/log/nnet_init.log \
-    nnet3-init --srand=-2 $dir/configs/init.config $dir/init.raw || exit 1;
+  ($cmd $dir/log/nnet_init.log \
+    nnet3-init --srand=-2 $dir/configs/init.config $dir/init.raw || exit 1);
+  nnet3-am-copy --binary=false $baseline_dir/final.mdl $dir/0.mdl.txt # TODO(hxu) maybe make it nnet3-am-copy
+  l=`grep -n TransitionModel $dir/0.mdl.txt | tail -n 1 | awk -F ':' '{print$1}'`
+  echo l is $l
+  total_line=`wc -l $dir/0.mdl.txt | awk '{print$1}'`
+  tail -n $[$total_line-$l] $dir/0.mdl.txt | sed "s=renorm5=renorm0=g" > $dir/0.mdl.dnn.txt
+
+
+
 fi
 
 # sourcing the "vars" below sets
@@ -304,7 +308,7 @@ num_archives_expanded=$[$num_archives*$frames_per_eg]
   echo "$0: --final-num-jobs cannot exceed #archives $num_archives_expanded." && exit 1;
 
 
-if [ $stage -le -3 ]; then
+false && if [ $stage -le -3 ]; then
   echo "$0: getting preconditioning matrix for input features."
   num_lda_jobs=$num_archives
   [ $num_lda_jobs -gt $max_lda_jobs ] && num_lda_jobs=$max_lda_jobs
@@ -334,7 +338,7 @@ if [ $stage -le -3 ]; then
 fi
 
 
-if [ $stage -le -2 ]; then
+false && if [ $stage -le -2 ]; then
   echo "$0: preparing initial vector for FixedScaleComponent before softmax"
   echo "  ... using priors^$presoftmax_prior_scale_power and rescaling to average 1"
 

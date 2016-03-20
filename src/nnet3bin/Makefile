@@ -21,6 +21,7 @@ BINFILES = nnet3-init nnet3-info nnet3-get-egs nnet3-copy-egs nnet3-subset-egs \
    nnet3-am-adjust-priors-multi \
    nnet3-am-copy-multi \
    nnet3-am-info-multi \
+   nnet3-am-expand \
    nnet3-get-egs-dense-targets nnet3-compute
 
 OBJFILES =

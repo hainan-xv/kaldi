@@ -18,6 +18,7 @@ pnormi=2400
 pnormo=400
 extra_layer=false
 last_factor=1
+objective=linear
 
 . cmd.sh
 . ./path.sh
@@ -58,6 +59,7 @@ if [ $stage -le 8 ]; then
 #    --cleanup false \
 
   steps/nnet3/train_tdnn_multi.sh --stage $train_stage \
+    --objective $objective \
     --get-egs-stage 80 \
     --last-factor $last_factor \
     --extra-layer $extra_layer \

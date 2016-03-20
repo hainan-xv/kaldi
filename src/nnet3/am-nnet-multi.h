@@ -23,9 +23,12 @@
 #include "base/kaldi-common.h"
 #include "matrix/matrix-lib.h"
 #include "nnet3/nnet-nnet.h"
+#include "nnet3/am-nnet-simple.h"
 
 namespace kaldi {
 namespace nnet3 {
+
+using std::vector;
 
 /*
 
@@ -55,6 +58,8 @@ class AmNnetMulti {
     priors_vec_(other.priors_vec_),
     left_context_(other.left_context_),
     right_context_(other.right_context_) { }
+
+  AmNnetMulti(const AmNnetSimple &am, const vector<int32> &leaves_vec);
   
   explicit AmNnetMulti(const Nnet &nnet, int32 num_outputs):
     nnet_(nnet), num_outputs_(num_outputs) {

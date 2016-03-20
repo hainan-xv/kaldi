@@ -25,6 +25,14 @@ namespace nnet3 {
 
 using std::ostringstream;
 
+AmNnetMulti::AmNnetMulti(const AmNnetSimple &am,
+                         const vector<int32> &leaves_vec):
+       nnet_(am.GetNnet()), left_context_(am.left_context_),
+       right_context_(am.right_context_), num_outputs_(leaves_vec.size()) {
+
+}
+
+
 int32 AmNnetMulti::NumPdfs(int i) const {
   ostringstream os;
   os << i;

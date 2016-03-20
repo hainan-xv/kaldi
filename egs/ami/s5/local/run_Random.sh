@@ -32,7 +32,7 @@ LM=$final_lm.pr1-7
 data=data/$mic/train
 lang=data/lang
 alidir=exp/$mic/tri4a_ali
-dir=exp/$mic/LRT_${num_trees}/tri_${num_leaves}_${num_gauss}
+dir=exp/$mic/Random_${num_trees}/tri_${num_leaves}_${num_gauss}
 
 nj=30
 if [ "$realign" == "true" ]; then
@@ -73,7 +73,7 @@ if [ "$gmm" == "true" ]; then
   $highmem_cmd $dir/virtual/graph_$LM/mkgraph.log utils/mkgraph.sh ${lang}_${LM} $dir/virtual $dir/virtual/graph_$LM
 fi
 
-true && for i in `seq 0 $[num_trees-1]`; do 
+false && for i in `seq 0 $[num_trees-1]`; do 
   echo Re-aligning $i-th tree with sp
   nj=10
   alidir=exp/sdm1/tri3a_sdm1_train_sp_ali
