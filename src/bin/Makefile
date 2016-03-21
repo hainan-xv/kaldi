@@ -24,7 +24,7 @@ BINFILES = align-equal align-equal-compiled acc-tree-stats \
         build-pfile-from-ali get-post-on-ali tree-info am-info \
         vector-sum matrix-sum-rows est-pca sum-lda-accs sum-mllt-accs \
         transform-vec align-text matrix-dim init-model-multi convert-treemap-to-matrix \
-        build-tree-expand
+        build-tree-expand single-to-multi
 
 
 OBJFILES =
