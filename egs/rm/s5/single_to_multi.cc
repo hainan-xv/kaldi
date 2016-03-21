@@ -7,6 +7,21 @@
 #include <stdlib.h>
 using namespace std;
 
+vector<vector<double> > Get2dVectors(string filename, int n) {
+  vector<vector<double> > ans;
+  for (int i = 0; i < n; i++) {
+    vector<double> v;
+    ifstream ifile((filename + char(n + i)).c_str());
+    double p;
+    while (ifile >> p) {
+      v.push_back(p);
+    }
+    ans.push_back(v);
+  }
+  return ans;
+}
+  
+
 int NumFields(string s) {
   stringstream ss(s);
   int ans = 0;
@@ -45,7 +60,9 @@ string ReplaceString(string subject, const string& search,
 }
 
 int main(int argc, char** argv) {
-  cout << "#" << argv[0] << " input_txt_file num_outputs leaves_string";
+  if (argc != 5) {
+    cout << "#" << argv[0] << " input_txt_file num_outputs leaves_string scale-file-prefix prior-file-prefix";
+  }
   ifstream ifile(argv[1]);
   int num_outputs = 0;
   stringstream ss(argv[2]);
@@ -54,8 +71,9 @@ int main(int argc, char** argv) {
   getline(ifile, line);
   assert(line == "<TransitionModel> ");
 
-  vector<vector<double> > fixed_scale_vec;
   vector<int> num_leaves = GetLeaves(argv[3]);
+  vector<vector<double> > fixed_scale_vec = Get2dVectors(argv[3], num_outputs);
+  vector<vector<double> > priors_vec = Get2dVectors(argv[4], num_outputs);
 
   do {
     getline(ifile, line);
@@ -65,6 +83,9 @@ int main(int argc, char** argv) {
   cout << "#finish reading transition model" << endl;
     
   while (getline(ifile, line)) {
+    if (line.find("output") != string::npos) {
+      break;
+    }
     if (line.find("output") != string::npos) {
       for (int i = 0; i < num_outputs; i++) {
 //        string line_new = ReplaceString(line, "final", "final" + ('0' + i));
@@ -88,6 +109,9 @@ int main(int argc, char** argv) {
   cout << "#finish reading topology file" << endl;
 
   while (getline(ifile, line)) {
+    if (line.find("Prior") != string::npos) {
+      break;
+    }
     if (line.find("final") == string::npos) {
       cout << line << endl;
     }
@@ -118,10 +142,13 @@ int main(int argc, char** argv) {
       assert(IsPrefix("<ComponentName> final-log-softmax <LogSoftmaxComponent>", line));
       getline(ifile, line);
       assert(IsPrefix("<DerivAvg>", line));
+      getline(ifile, line);
+      assert(IsPrefix("<Count> 0 </LogSoftmaxComponent>", line));
 
       for (int i = 0; i < num_outputs; i++) {
         // this line should read like "<ComponentName> final-affine <NaturalGradientAffineComponent> <LearningRate> 0.009239559 <LinearParams>  ["
         string line_new = ReplaceString(component_line, "final", string("final") + char('0' + i));
+        cout << line_new << endl;
         for (int k = 0; k < num_leaves[i]; k++) {
           for (int j = 0; j < input_dim; j++) {
             cout << ((double(rand()) / RAND_MAX) - 0.5) * 0.0001 << " "; // might need to change this
@@ -130,29 +157,46 @@ int main(int argc, char** argv) {
             cout << " ] ";
           }
           cout << endl;
-          cout << "<BiasParams> [ ";
-          for (int j = 0; j < input_dim; j++) {
-            cout << ((double(rand()) / RAND_MAX) - 0.5) * 0.0001 << " "; // might need to change this
-          }
-          cout << " ] " << endl;
-          cout << rand_line << endl; // this also ends the </NaturalGradientAffineComponent>
-          // end of natural gradient component
-          cout << "<ComponentName> final" << i << "-fixed-scale <FixedScaleComponent> <Scales> [ " << endl;
-/*
-          for (int j = 0; j < fixed_scale_vec[i].size(); j++) {
-            cout << fixed_scale_vec[i][j] << " ";
-          }
-// */
-          cout << " ] " << endl;
-          cout << "</FixedScaleComponent>" << endl;
-          cout << "<ComponentName> final" << i << "-log-softmax <LogSoftmaxComponent> <Dim> " << num_leaves[i] << " ValueAvg> [ ]" << endl;
-          cout << "<DerivAvg>  [ ] ";
-
         }
+        cout << "<BiasParams> [ ";
+        for (int j = 0; j < input_dim; j++) {
+          cout << ((double(rand()) / RAND_MAX) - 0.5) * 0.0001 << " "; // might need to change this
+        }
+        cout << " ] " << endl;
+        cout << rand_line << endl; // this also ends the </NaturalGradientAffineComponent>
+        // end of natural gradient component
+        cout << "<ComponentName> final" << i << "-fixed-scale <FixedScaleComponent> <Scales> [ " << endl;
+/*
+        for (int j = 0; j < fixed_scale_vec[i].size(); j++) {
+          cout << fixed_scale_vec[i][j] << " ";
+        }
+// */
+        cout << " ] " << endl;
+        cout << "</FixedScaleComponent>" << endl;
+        cout << "<ComponentName> final" << i << "-log-softmax <LogSoftmaxComponent> <Dim> " << num_leaves[i] << " <ValueAvg> [ ]" << endl;
+        cout << "<DerivAvg>  [ ] " << endl;
+        cout << "<Count> 0 </LogSoftmaxComponent>" << endl;
+
       }
-
-
     }
-
+  }
+  cout << "# now the priors_vec" << endl;
+  assert(IsPrefix("</Nnet3> <LeftContext>", line));
+  {
+    stringstream ss(line);
+    string s;
+    for (int i = 0; i < 6; i++) {
+      string tmp;
+      ss >> tmp;
+      s += tmp + " ";
+    }
+  }
+  cout << num_outputs << " ";
+  for (int i = 0; i < num_outputs; i++) {
+    cout << " [ ";
+    for (int j = 0; j < priors_vec[i].size(); j++) {
+      cout << priors_vec[i][j] << " ";
+    }
+    cout << " ] ";
   }
 }
