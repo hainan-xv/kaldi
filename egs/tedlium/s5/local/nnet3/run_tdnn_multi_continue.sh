@@ -9,7 +9,7 @@
 # At this script level we don't support not running on GPU, as it would be painfully slow.
 # If you want to run without GPU you'd have to call train_tdnn.sh with --gpu false,
 # --num-threads 16 and --minibatch-size 128.
-
+fixed=false
 stage=-100
 train_stage=-100
 #dir=exp/nnet3/nnet_tdnn_multi_$4
@@ -17,6 +17,7 @@ dir=
 pnormi=3000
 pnormo=300
 extra_layer=false
+extra=
 last_factor=1
 
 . cmd.sh
@@ -60,6 +61,8 @@ if [ $stage -le 8 ]; then
   lr2=0.00015
 
   steps/nnet3/train_tdnn_multi_1.sh --stage $train_stage \
+    --extra $extra \
+    --fixed $fixed \
     --get-egs-stage 80 \
     --jump 80 \
     --baseline-dir exp/nnet3/nnet_tdnn_3000_300 \

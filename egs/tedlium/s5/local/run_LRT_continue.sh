@@ -9,6 +9,7 @@ gmm_decode=false
 dnn_stage=-100
 stage=0
 extra=false
+fixed=false
 echo "$0 $@"
 
 . ./utils/parse_options.sh || exit 1;
@@ -55,6 +56,13 @@ fi
 #nnet3dir=${dir}/../tdnn_${num_leaves}
 nnet3dir=exp/C_LRT_${num_trees_L}_${num_trees_T}_${num_trees_R}_$lambda/${method}_tdnn_${num_leaves}
 #dnn_stage=81
+if [ "$fixed" == "true" ]; then
+  nnet3dir=${nnet3dir}_fixed
+fi
+
+if [ "$extra" == "true" ]; then
+  nnet3dir=${nnet3dir}_extra
+fi
 
 num_trees=$[$num_trees_L+${num_trees_T}+${num_trees_R}]
 #f=$(echo "sqrt ( $num_trees )" | bc -l)
@@ -62,4 +70,4 @@ num_trees=$[$num_trees_L+${num_trees_T}+${num_trees_R}]
 #i=$[10*$o]
 #echo $o and $i
 #./local/nnet3/run_tdnn_$method.sh --last-factor $num_trees --pnormi 4000 --pnormo 400 --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
-./local/nnet3/run_tdnn_${method}_continue.sh --extra-layer $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage
+./local/nnet3/run_tdnn_${method}_continue.sh --fixed $fixed --extra $extra --stage $stage --dir $nnet3dir $dir $dir/virtual $num_trees $dnn_stage

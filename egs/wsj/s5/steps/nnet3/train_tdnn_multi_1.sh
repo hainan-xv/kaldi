@@ -11,6 +11,8 @@
 
 
 # Begin configuration section.
+extra=false
+fixed=true
 baseline_dir=
 jump=80
 cmd=run.pl
@@ -392,10 +394,19 @@ if [ $stage -le -1 ]; then
   l=`grep TransitionModel -n $dir/0.mdl.txt | tail -n 1 | awk -F ':' '{print$1}'`
   head -n $l $dir/0.mdl.txt > $dir/0.new.mdl
 
+  suffix=
+  extra_opt=
+  if [ "$extra" == "true" ]; then
+    suffix="-extra"
+    extra_opt=
+  fi
   echo "./single-to-multi $dir/0.mdl.reference.txt $num_outputs $target_string $dir/scale.vec $dir/prior.vec | grep -v "^#" >> $dir/0.new.mdl"
-  ./single-to-multi $dir/0.mdl.reference.txt $num_outputs $target_string $dir/scale.vec $dir/prior.vec | grep -v "^#" >> $dir/0.new.mdl
+  single-to-multi$suffix $dir/0.mdl.reference.txt $num_outputs $target_string $dir/scale.vec $dir/prior.vec | grep -v "^#" >> $dir/0.new.mdl
 
-
+  if [ "$fixed" == "true" ]; then
+    mv $dir/0.new.mdl $dir/0.new.mdl.nonfixed
+    cat $dir/0.new.mdl.nonfixed | affine-to-fixed - > $dir/0.new.mdl
+  fi
 
   mv $dir/0.mdl $dir/old.0.mdl
   nnet3-am-copy-multi $dir/0.new.mdl $dir/0.mdl
