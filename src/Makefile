@@ -6,16 +6,16 @@ SHELL := /bin/bash
 
 
 SUBDIRS = base matrix util feat tree thread gmm transform \
-          fstext hmm lm decoder lat kws cudamatrix nnet \
+          fstext hmm lm decoder lat kws cudamatrix nnet rnnlm \
           bin fstbin gmmbin fgmmbin featbin \
           nnetbin latbin sgmm2 sgmm2bin nnet2 nnet3 chain nnet3bin nnet2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin chainbin
+          ivector ivectorbin online2 online2bin lmbin chainbin rnnlmbin
 
 MEMTESTDIRS = base matrix util feat tree thread gmm transform \
-          fstext hmm lm decoder lat nnet kws chain \
+          fstext hmm lm decoder lat nnet kws chain rnnlm \
           bin fstbin gmmbin fgmmbin featbin \
           nnetbin latbin sgmm2 nnet2 nnet3 nnet2bin nnet3bin sgmm2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin
+          ivector ivectorbin online2 online2bin lmbin rnnlmbin
 
 CUDAMEMTESTDIR = cudamatrix
 

@@ -1436,6 +1436,12 @@ static void GenerateRandomComponentConfig(std::string *component_type,
          << " self-repair-scale=0.0";
       break;
     }
+    case 31: {
+      *component_type = "NormalizeOneComponent";
+      // set self-repair scale to zero so the derivative tests will pass.
+      os << "dim=" << RandInt(100, 200);
+      break;
+    }
     default:
       KALDI_ERR << "Error generating random component";
   }
