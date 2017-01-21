@@ -75,7 +75,7 @@ void LmNnetComputeProb::Compute(const NnetExample &eg) {
   NnetComputer computer(config_.compute_config, *computation,
                         nnet_.Nnet(), (deriv_nnet_ != NULL? deriv_nnet_->GetNnet(): NULL));
   // give the inputs to the computer object.
-  SparseMatrix<BaseFloat> old_in;
+  const SparseMatrix<BaseFloat> *old_in;
   CuMatrix<BaseFloat> new_in;
   LmNnetSamplingTrainer::ProcessEgInputs(eg, *nnet_.I(), &old_in, &new_in);
 
@@ -88,7 +88,7 @@ void LmNnetComputeProb::Compute(const NnetExample &eg) {
 
     CuMatrix<BaseFloat> first_deriv(computer.GetOutput("input"));
     CuMatrix<BaseFloat> place_holder;
-    nnet_.I()->Backprop(old_in, place_holder,
+    nnet_.I()->Backprop(*old_in, place_holder,
                      first_deriv, deriv_nnet_->input_projection_, NULL);
   }
 }

@@ -38,7 +38,7 @@ norm_based_clipping=true
 clipping_threshold=30
 label_delay=0  # 5
 splice_indexes=0
-use_gpu=no
+use_gpu=yes
 num_samples=-1
 
 type=rnn  # or lstm

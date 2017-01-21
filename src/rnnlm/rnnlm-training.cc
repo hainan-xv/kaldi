@@ -33,9 +33,6 @@ LmNnetSamplingTrainer::LmNnetSamplingTrainer(
                           compiler_(*nnet->GetNnet(), config_.optimize_config),
                           num_minibatches_processed_(0) {
 
-// TODO(hxu)
-//  int s = nnet_->O()->OutputDim();
-//  unigram_.resize(s, 1.0/ s);
   KALDI_ASSERT(unigram_.size() == nnet_->O()->OutputDim());
 
   if (config.zero_component_stats)
@@ -67,27 +64,24 @@ LmNnetSamplingTrainer::LmNnetSamplingTrainer(
   } 
 }
 
-void LmNnetSamplingTrainer::ProcessEgInputs(NnetExample eg,
+void LmNnetSamplingTrainer::ProcessEgInputs(const NnetExample& eg,
                                             const LmInputComponent& a,
-                                            SparseMatrix<BaseFloat> *old_input,
+                                            const SparseMatrix<BaseFloat> **old_input,
                                             CuMatrix<BaseFloat> *new_input) {
   for (size_t i = 0; i < eg.io.size(); i++) {
-    NnetIo &io = eg.io[i];
+    const NnetIo &io = eg.io[i];
 
     if (io.name == "input") {
+      // TODO(hxu)
       if (old_input != NULL && new_input != NULL) {
         new_input->Resize(io.features.NumRows(),
                           a.OutputDim(),
                           kUndefined);
 
-        *old_input = io.features.GetSparseMatrix();
-        a.Propagate(*old_input, new_input);
+        *old_input = &io.features.GetSparseMatrix();
+        a.Propagate(io.features.GetSparseMatrix(), new_input);
       } else {
         KALDI_ASSERT(false);
-        Matrix<BaseFloat> new_input;
-        new_input.Resize(io.features.NumRows(),
-                          a.OutputDim(),
-                          kUndefined);
       }
     }
   }
@@ -105,12 +99,13 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
 
   const NnetComputation *computation = compiler_.Compile(request);
 
-  NnetComputer computer(config_.compute_config, *computation,
-                        *nnet_->GetNnet(),
+  const SparseMatrix<BaseFloat> *old_input;
+
+  NnetComputer computer(config_.compute_config, *computation, *nnet_->GetNnet(),
                         (delta_nnet_ == NULL ? nnet_->GetNnet() :
                                delta_nnet_->GetNnet()));
 
-  ProcessEgInputs(eg, *nnet_->I(), &old_input_, &new_input_);
+  ProcessEgInputs(eg, *nnet_->input_projection_, &old_input, &new_input_);
 
   // give the inputs to the computer object.
   computer.AcceptInput("input", &new_input_);
@@ -122,9 +117,9 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
   computer.Run();
 
   {
-    CuMatrix<BaseFloat> first_deriv(computer.GetOutput("input"));
+    const CuMatrixBase<BaseFloat> &first_deriv = computer.GetOutput("input");
     CuMatrix<BaseFloat> place_holder;
-    nnet_->I()->Backprop(old_input_, place_holder,
+    nnet_->I()->Backprop(*old_input, place_holder,
                      first_deriv, delta_nnet_->input_projection_, NULL);
   }
 
@@ -275,21 +270,19 @@ void LmNnetSamplingTrainer::ProcessOutputs(const NnetExample &eg,
                                        supply_deriv, computer,
                                        &tot_weight, &tot_objf,
                                        *nnet_->O(),
-                                       &new_output_, delta_nnet_);
-      } else if (dynamic_cast<const LinearSoftmaxNormalizedComponent*>(nnet_->O())
-                   != NULL) {
+                                       &old_output_, delta_nnet_);
+      } else if (dynamic_cast<const LinearSoftmaxNormalizedComponent*>(nnet_->O()) != NULL) {
         ComputeObjectiveFunctionNormalized(io.features, obj_type, io.name,
                                            supply_deriv, computer,
                                            &tot_weight, &tot_objf,
                                            *nnet_->O(),
-                                           &new_output_, delta_nnet_);
-      } else if (dynamic_cast<const LinearSigmoidNormalizedComponent*>(nnet_->O())
-                   != NULL) {
+                                           &old_output_, delta_nnet_);
+      } else if (dynamic_cast<const LinearSigmoidNormalizedComponent*>(nnet_->O()) != NULL) {
         ComputeObjectiveFunctionNormalized(io.features, obj_type, io.name,
                                            supply_deriv, computer,
                                            &tot_weight, &tot_objf,
                                            *nnet_->O(),
-                                           &new_output_, delta_nnet_);
+                                           &old_output_, delta_nnet_);
       } else {
         KALDI_ASSERT(false);
       }
@@ -398,10 +391,9 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
                               BaseFloat *tot_weight,
                               BaseFloat *tot_objf,
                               const LmOutputComponent &output_projection,
-                              CuMatrix<BaseFloat> *new_output,
+                              const CuMatrixBase<BaseFloat> **old_output,
                               LmNnet *nnet) {
-//  computer->GetOutputDestructive(output_name, new_output);
-  *new_output = computer->GetOutput(output_name);
+  *old_output = &computer->GetOutput(output_name);
   int k = supervision.NumRows();
 
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
@@ -416,21 +408,20 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
     indexes.push_back(non_zero_index);
   }
 
-//  CuMatrix<BaseFloat> out(new_output->NumRows(), samples.size(), kSetZero);
   vector<BaseFloat> out(indexes.size());
 
   {
     const LinearSoftmaxNormalizedComponent* output_project_norm =
       dynamic_cast<const LinearSoftmaxNormalizedComponent*>(&output_projection);
     if (output_project_norm != NULL) {
-      output_project_norm->Propagate(*new_output, indexes, &out);
+      output_project_norm->Propagate(**old_output, indexes, &out);
     }
   }
   {
     const LinearSigmoidNormalizedComponent* output_project_norm =
       dynamic_cast<const LinearSigmoidNormalizedComponent*>(&output_projection);
     if (output_project_norm != NULL) {
-      output_project_norm->Propagate(*new_output, indexes, &out);
+      output_project_norm->Propagate(**old_output, indexes, &out);
     }
   }
 
@@ -452,55 +443,35 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
     // the derivative after the affine layer (before the nonlin)
 
     // the derivative of the 'nnet3' part
-    CuMatrix<BaseFloat> input_deriv(new_output->NumRows(),
-        new_output->NumCols(),
+    CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
+        (*old_output)->NumCols(),
         kSetZero);
 
     CuMatrix<BaseFloat> place_holder;
 
-  {
-    const LinearSoftmaxNormalizedComponent* output_project_norm =
-      dynamic_cast<const LinearSoftmaxNormalizedComponent*>(&output_projection);
-    if (output_project_norm != NULL) {
-      output_project_norm->Backprop(indexes, *new_output, place_holder,
-          output_deriv, nnet->output_projection_,
-          &input_deriv);
+    {
+      const LinearSoftmaxNormalizedComponent* output_project_norm =
+        dynamic_cast<const LinearSoftmaxNormalizedComponent*>(&output_projection);
+      if (output_project_norm != NULL) {
+        output_project_norm->Backprop(indexes, **old_output, place_holder,
+            output_deriv, nnet->output_projection_,
+            &input_deriv);
+      }
     }
-  }
-  {
-    const LinearSigmoidNormalizedComponent* output_project_norm =
-      dynamic_cast<const LinearSigmoidNormalizedComponent*>(&output_projection);
-    if (output_project_norm != NULL) {
-      output_project_norm->Backprop(indexes, *new_output, place_holder,
-          output_deriv, nnet->output_projection_,
-          &input_deriv);
+    {
+      const LinearSigmoidNormalizedComponent* output_project_norm =
+        dynamic_cast<const LinearSigmoidNormalizedComponent*>(&output_projection);
+      if (output_project_norm != NULL) {
+        output_project_norm->Backprop(indexes, **old_output, place_holder,
+            output_deriv, nnet->output_projection_,
+            &input_deriv);
+      }
     }
-  }
-
-    //    CuMatrix<BaseFloat> cu_input_deriv(input_deriv);
 
     computer->AcceptInput(output_name, &input_deriv);
   }
 }
 
-//  if (supply_deriv && nnet != NULL) {
-//    t3.AddMat(1.0, t2); // this is the correct derivative
-//    // -exp(y) / selection-prob(i) for non-correct labels
-//    // 1 - exp(y) for correct labels  (selection-prob of a correct label is 1)
-//
-//    out.ApplyLog();
-//    CuMatrix<BaseFloat> input_deriv(new_output->NumRows(),
-//                                    new_output->NumCols(),
-//                                    kSetZero);
-//
-//    output_projection.Backprop(samples, *new_output, out,
-//                               t3, nnet->output_projection_,
-//                               &input_deriv);
-//
-//    computer->AcceptOutputDeriv(output_name, &input_deriv);
-//  }
-//}
-//
 void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                               int num_samples,
                               const vector<BaseFloat> &unigram,
@@ -512,10 +483,9 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                               BaseFloat *tot_weight,
                               BaseFloat *tot_objf,
                               const LmOutputComponent &output_projection,
-                              CuMatrix<BaseFloat> *new_output,
+                              const CuMatrixBase<BaseFloat> **old_output,
                               LmNnet *nnet) {
-//  *new_output = computer->GetOutput(output_name);
-  computer->GetOutputDestructive(output_name, new_output);
+  *old_output = &computer->GetOutput(output_name);
   int k = supervision.NumRows();
 
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
@@ -560,9 +530,9 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     }
   }
 
-  CuMatrix<BaseFloat> out(new_output->NumRows(), samples.size(), kSetZero);
+  CuMatrix<BaseFloat> out((*old_output)->NumRows(), samples.size(), kSetZero);
 
-  output_projection.Propagate(*new_output, samples, &out);
+  output_projection.Propagate(**old_output, samples, &out);
 
   *tot_weight = post.Sum();
   *tot_objf = 0;
@@ -624,11 +594,11 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     // 1 - exp(y) for correct labels  (selection-prob of a correct label is 1)
 
     out.ApplyLog();
-    CuMatrix<BaseFloat> input_deriv(new_output->NumRows(),
-                                    new_output->NumCols(),
+    CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
+                                    (*old_output)->NumCols(),
                                     kSetZero);
 
-    output_projection.Backprop(samples, *new_output, out,
+    output_projection.Backprop(samples, **old_output, out,
                                t3, nnet->output_projection_,
                                &input_deriv);
 

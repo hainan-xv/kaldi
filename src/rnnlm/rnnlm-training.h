@@ -177,7 +177,7 @@ class LmNnetSamplingTrainer {
                               BaseFloat *tot_weight,
                               BaseFloat *tot_objf,
                               const LmOutputComponent &output_projection,
-                              CuMatrix<BaseFloat> *new_output,
+                              const CuMatrixBase<BaseFloat> **old_output,
                               LmNnet *delta_nnet = NULL);
 
  static void ComputeObjectiveFunctionExact(
@@ -202,7 +202,7 @@ class LmNnetSamplingTrainer {
                               BaseFloat *tot_weight,
                               BaseFloat *tot_objf,
                               const LmOutputComponent &output_projection,
-                              CuMatrix<BaseFloat> *new_output,
+                              const CuMatrixBase<BaseFloat> **new_output,
                               LmNnet *delta_nnet = NULL);
 
   LmNnetSamplingTrainer(const LmNnetTrainerOptions &config,
@@ -215,9 +215,9 @@ class LmNnetSamplingTrainer {
   // Prints out the final stats, and return true if there was a nonzero count.
   bool PrintTotalStats() const;
   void PrintMaxChangeStats() const;
-  static void ProcessEgInputs(NnetExample eg, const LmInputComponent& a,
-                              SparseMatrix<BaseFloat> *old_input = NULL,
-                              CuMatrix<BaseFloat> *new_input = NULL);
+  static void ProcessEgInputs(const NnetExample &eg, const LmInputComponent& a,
+                              const SparseMatrix<BaseFloat> **old_input,
+                              CuMatrix<BaseFloat> *new_input);
 
   ~LmNnetSamplingTrainer();
  private:
@@ -227,9 +227,9 @@ class LmNnetSamplingTrainer {
                       NnetComputer *computer);
 
   const LmNnetTrainerOptions config_;
-  CuMatrix<BaseFloat> new_input_;
-  SparseMatrix<BaseFloat> old_input_;
-  CuMatrix<BaseFloat> new_output_;
+  CuMatrix<BaseFloat> new_input_;      // the input to pass to nnet3
+//  SparseMatrix<BaseFloat> old_input_;  // the input read from egs, not necessary...
+  const CuMatrixBase<BaseFloat> *old_output_;     // the output to compute objf
 
   vector<BaseFloat> unigram_;
   // this pointer is not owned
