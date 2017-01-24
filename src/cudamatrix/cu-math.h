@@ -241,6 +241,17 @@ void CpuBackpropLstmNonlinearity(const MatrixBase<Real> &input,
                                  MatrixBase<double> *deriv_sum_out,
                                  MatrixBase<Real> *self_repair_sum_out);
 
+template<typename Real>
+void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
+                           const SparseMatrix<Real> &sp,
+                           CuMatrixBase<Real> *output);
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(const CuMatrixBase<Real> &out_deriv,
+                                const SparseMatrix<Real> &sp,
+                                CuMatrixBase<Real> *params);
+
+
 } // namespace cu
 } // namespace kaldi
 

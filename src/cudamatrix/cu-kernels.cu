@@ -3163,6 +3163,42 @@ static void _diff_lstm_nonlinearity(const int cell_dim, const int num_rows,
   }
 }
 
+template<typename Real>
+__global__
+static void _affine_on_sparse(const Real* params, const int params_stride,
+                              const MatrixIndexT_cuda* reorder,
+                              MatrixDim output_dim, Real* output) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;  // col index
+  int j = blockIdx.y * blockDim.y + threadIdx.y;  // row index
+  if (i < output_dim.cols && j < output_dim.rows) {
+    int index = reorder[j], output_index = j * output_dim.stride + i;
+    if (index >= 0) {
+      int params_index = i * params_stride + index;
+      Real val = params[params_index];
+      output[output_index] += val;
+    }
+  }
+}
+
+template<typename Real>
+__global__
+static void _update_simple_affine_on_sparse(const Real* out_deriv,
+                                            const MatrixIndexT_cuda* indices,
+                                            MatrixDim out_deriv_dim,
+                                            const int params_stride,
+                                            Real* params) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;  // col index
+  int j = blockIdx.y * blockDim.y + threadIdx.y;  // row index
+  if (i < out_deriv_dim.cols && j < out_deriv_dim.rows) {
+    int index = indices[j], out_deriv_index = j * out_deriv_dim.stride + i;
+    if (index >= 0) {
+      int params_index = i * params_stride + index;
+      Real val = out_deriv[out_deriv_index];
+      params[params_index] += val;
+    }
+  }
+}
+
 /***********************************************************************
  * ANSI-C wrappers of CUDA kernels
  */
@@ -4644,3 +4680,36 @@ void cudaF_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
       value_sum_out_stride, deriv_sum_out, deriv_sum_out_stride,
       self_repair_sum_out, self_repair_sum_out_stride);
 }
+void cudaD_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, double* output) {
+  _affine_on_sparse<<<Gr, Bl>>>(params, params_stride, reorder, output_dim,
+                                output);
+}
+void cudaF_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, float* output) {
+  _affine_on_sparse<<<Gr, Bl>>>(params, params_stride, reorder, output_dim,
+                                output);
+}
+void cudaD_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          const double* out_deriv,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          double* params) {
+  _update_simple_affine_on_sparse<<<Gr, Bl>>>(out_deriv, indices, out_deriv_dim,
+                                              params_stride, params);
+}
+void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          const float* out_deriv,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          float* params) {
+  _update_simple_affine_on_sparse<<<Gr, Bl>>>(out_deriv, indices, out_deriv_dim,
+                                              params_stride, params);
+}
+
