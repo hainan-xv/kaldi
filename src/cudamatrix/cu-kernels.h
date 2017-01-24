@@ -1331,6 +1331,38 @@ inline void cuda_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
                                self_repair_sum_out_stride);
 }
 
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, double* output) {
+  cudaD_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, float* output) {
+  cudaF_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                const double* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                double* params) {
+  cudaD_update_simple_affine_on_sparse(Gr, Bl, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                const float* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                float* params) {
+  //cudaF_update_simple_affine_on_sparse(Gr, Bl, out_deriv, indices,
+    //                                   out_deriv_dim, params_stride, params);
+}
 } // namespace kaldi
 
 #endif // HAVE_CUDA

@@ -1043,45 +1043,12 @@ void LmLinearComponent::InitFromConfig(ConfigLine *cfl) {
 
 void LmLinearComponent::Propagate(const SparseMatrix<BaseFloat> &sp,
                                   CuMatrixBase<BaseFloat> *out) const {
-
-  std::vector<MatrixIndexT> vis;
-
-  CuMatrix<BaseFloat> cpu_out_transpose(out->NumCols(), out->NumRows());
-
-  for (size_t i = 0; i < sp.NumRows(); i++) {
-    const SparseVector<BaseFloat> &sv = sp.Row(i);
-    int non_zero_index = -1;
-    sv.Max(&non_zero_index);
-    vis.push_back(non_zero_index);
-  }
-
-  cpu_out_transpose.AddCols(linear_params_, CuArray<int>(vis));
-  out->CopyFromMat(cpu_out_transpose, kTrans);
+  cu::ComputeAffineOnSparse(linear_params_, sp, out);
 }
 
 void LmLinearComponent::UpdateSimple(const SparseMatrix<BaseFloat> &in_value,
                                    const CuMatrixBase<BaseFloat> &out_deriv) {
-  std::vector<MatrixIndexT> vis;
-  const SparseMatrix<BaseFloat> &sp = in_value;
-
-  for (size_t i = 0; i < sp.NumRows(); i++) {
-    const SparseVector<BaseFloat> &sv = sp.Row(i);
-    int non_zero_index = -1;
-    ApproxEqual(sv.Max(&non_zero_index), 1.0);
-    vis.push_back(non_zero_index);
-  }
-  KALDI_ASSERT(vis.size() == sp.NumRows());
-
-  // TODO(hxu)
-  for (int i = 0; i < vis.size(); i++) {
-    MatrixIndexT j = vis[i];
-    // i.e. in_value (i, j) = 1
-
-    for (int k = 0; k < out_deriv.NumCols(); k++) {
-      linear_params_(k, j) += learning_rate_ * out_deriv(i, k);
-//      KALDI_LOG << k << ", " << j << " added " << out_deriv(k, i);
-    }
-  }
+  cu::UpdateSimpleAffineOnSparse(out_deriv, in_value, &linear_params_);
 }
 
 void LmLinearComponent::UpdateSimple(const CuMatrixBase<BaseFloat> &in_value,

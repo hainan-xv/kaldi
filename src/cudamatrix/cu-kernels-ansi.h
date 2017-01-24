@@ -696,6 +696,27 @@ void cudaF_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
                                   float* self_repair_sum_out,
                                   const int self_repair_sum_out_stride);
 
+void cudaD_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, double* output);
+void cudaF_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, float* output);
+void cudaD_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          const double* out_deriv,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          double* params);
+void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          const float* out_deriv,
+                                          const int out_deriv_stride,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          float* params);
 
 
 } // extern "C"
