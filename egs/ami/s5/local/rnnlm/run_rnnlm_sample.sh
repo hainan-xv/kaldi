@@ -267,7 +267,7 @@ if [ $stage -le $num_iters ]; then
       learning_rate=$final_learning_rate
     fi
 
-    [ $n -ge $stage ] && (
+    false && [ $n -ge $stage ] && (
       $decode_cmd $outdir/log/compute_prob_train.rnnlm.norm.$n.log \
         rnnlm-compute-prob --normalize-probs=true $outdir/$n.mdl ark:$outdir/train.subset.egs &
       $decode_cmd $outdir/log/compute_prob_valid.rnnlm.norm.$n.log \

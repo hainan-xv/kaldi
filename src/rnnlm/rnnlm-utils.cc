@@ -87,11 +87,9 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
     tot_weight += std::min(BaseFloat(1.0), u[i].second);
     ans[i] = i;
   }
-//  PrintVec(ans);
 
   for (int k = n; k < u.size(); k++) {
     tot_weight += std::min(BaseFloat(1.0), u[k].second);
-//    cout << "  tot-weight = " << tot_weight << endl;
     BaseFloat pi_k1_k1 = u[k].second / tot_weight * n;
 
     if (pi_k1_k1 > 1) {
@@ -100,7 +98,6 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
     } else {
       BaseFloat p = RandUniform();
       if (p > pi_k1_k1) {
-  //      cout << "  not replace" << endl;
         continue;
       }
     }
@@ -116,28 +113,21 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
         BaseFloat pi_k1_i = u[ans[i]].second / tot_weight * n;
 
         if (u[ans[i]].second >= 5.0) {
-          // TODO(hxU) very strict test which actually isn't really neccesary
-          // true cuz of numerical issues...
-          // KALDI_ASSERT(pi_k_i >= 1 && pi_k1_i >= 1);
           pi_k_i = pi_k1_i = 1;
         }
-
-//        cout << "piki, pik1i are " << pi_k_i << " " << pi_k1_i << endl;
 
         if (pi_k_i >= 1 && pi_k1_i >= 1) {
           // case A
           R[i] = 0;
-//          cout << "A: R[" << i << "] is " << R[i] << endl;
           Lk++;
         } else if (pi_k_i >= 1 && pi_k1_i < 1) {
           // case B
           R[i] = (1 - pi_k1_i) / pi_k1_k1;
-//          cout << "B: R[" << i << "] is " << R[i] << endl;
           Tk += R[i];
           Lk++;
         } else if (pi_k_i < 1 && pi_k1_i < 1) { // case C we will handle in another loop
         } else {
-          assert(false);
+          KALDI_ASSERT(false);
         }
       }
 
@@ -150,40 +140,65 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
         if (pi_k_i < 1 && pi_k1_i < 1) {
           // case C
           R[i] = (1 - Tk) / (n - Lk);
-//          cout << "C: R[" << i << "] is " << R[i] << endl;
         }
         sum += R[i];
       }
-      assert(ApproxEqual(sum, 1.0));
-    }
-    BaseFloat p = RandUniform();
-
-  //    cout << "  rand is " << p; 
-
-    bool replaced = false;
-    for (int i = 0; i < n; i++) {
-      p -= R[i];
-      if (p <= 0) {
-        // i is the choice
-  //        cout << "  chosen " << i << endl;
-        ans[i] = k;
-        replaced = true;
-//        PrintVec(ans);
-        break;
-      }
+      KALDI_ASSERT(ApproxEqual(sum, 1.0));
     }
 
-//    assert(replaced);
-    if (!replaced) {
-//      assert(p < 0.0000001);
-      KALDI_LOG << "p should be close to 0; it is " << p;
-      for (int i = 1; ; i++) {
-        if (u[ans[n - i]].second < 1) {
-          ans[n - 1] = k;
+    vector<BaseFloat> cdf(R);
+    for (int i = 1; i < cdf.size(); i++) {
+      cdf[i] += cdf[i - 1];
+    }
+
+    BaseFloat p = RandUniform() * cdf[cdf.size() - 1];
+    // binary search
+
+    int index = -1;
+    {
+      int i1 = 0;           // >= i1
+      int i2 = cdf.size();  // <  i2
+      int mid = -1;
+      while (true) {
+        KALDI_ASSERT(i1 < i2);
+        mid = (i1 + i2) / 2;
+        if (cdf[mid] >= p && cdf[mid - 1] < p) {
+          // found it
+          // no need to worry mid - 1 < 0 since there are at least one word
+          // with prob = 1 -> R[0] == 0.0 and mid would never be 0
+          index = mid;
           break;
+        } else if (cdf[mid] > p) {
+          i2 = mid;
+        } else {
+          i1 = mid + 1;
         }
       }
     }
+
+    KALDI_ASSERT(R[index] != 0);
+    ans[index] = k;
+
+//    bool replaced = false;
+//    for (int i = 0; i < n; i++) {
+//      p -= R[i];
+//      if (p <= 0) {
+//        ans[i] = k;
+//        KALDI_ASSERT(abs(i - index) < 2);
+//        replaced = true;
+//        break;
+//      }
+//    }
+//
+//    if (!replaced) {
+//      KALDI_LOG << "p should be close to 0; it is " << p;
+//      for (int i = 1; ; i++) {
+//        if (u[ans[n - i]].second < 1) {
+//          ans[n - 1] = k;
+//          break;
+//        }
+//      }
+//    }
   }
 
   //  change to the correct indexes

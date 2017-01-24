@@ -1346,22 +1346,24 @@ inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
                          output);
 }
 inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                double alpha,
                                                 const double* out_deriv,
                                                 const MatrixIndexT_cuda* indices,
                                                 MatrixDim out_deriv_dim,
                                                 const int params_stride,
                                                 double* params) {
-  cudaD_update_simple_affine_on_sparse(Gr, Bl, out_deriv, indices,
+  cudaD_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
                                        out_deriv_dim, params_stride, params);
 }
 inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                float alpha,
                                                 const float* out_deriv,
                                                 const MatrixIndexT_cuda* indices,
                                                 MatrixDim out_deriv_dim,
                                                 const int params_stride,
                                                 float* params) {
-  //cudaF_update_simple_affine_on_sparse(Gr, Bl, out_deriv, indices,
-    //                                   out_deriv_dim, params_stride, params);
+  cudaF_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
 }
 } // namespace kaldi
 

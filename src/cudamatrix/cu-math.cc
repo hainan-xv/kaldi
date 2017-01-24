@@ -856,7 +856,8 @@ void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
 }
 
 template<typename Real>
-void UpdateSimpleAffineOnSparse(const CuMatrixBase<Real> &out_deriv,
+void UpdateSimpleAffineOnSparse(Real alpha,
+                                const CuMatrixBase<Real> &out_deriv,
                                 const SparseMatrix<Real> &sp,
                                 CuMatrixBase<Real> *params) {
   KALDI_ASSERT(out_deriv.NumRows() == sp.NumRows());
@@ -880,7 +881,7 @@ void UpdateSimpleAffineOnSparse(const CuMatrixBase<Real> &out_deriv,
     GetBlockSizesForSimpleMatrixOperation(out_deriv.NumRows(),
                                           out_deriv.NumCols(),
                                           &dimGrid, &dimBlock);
-    cuda_update_simple_affine_on_sparse(dimGrid, dimBlock, out_deriv.Data(),
+    cuda_update_simple_affine_on_sparse(dimGrid, dimBlock, alpha, out_deriv.Data(),
                                         indices.Data(), out_deriv.Dim(),
                                         params->Stride(), params->Data());
     CU_SAFE_CALL(cudaGetLastError());
@@ -900,7 +901,7 @@ void UpdateSimpleAffineOnSparse(const CuMatrixBase<Real> &out_deriv,
     }
     out_deriv.Mat().AddToRows(1.0, arr);
     delete arr;
-    params->Mat().AddMat(1.0, cpu_params_transpose, kTrans);
+    params->Mat().AddMat(alpha, cpu_params_transpose, kTrans);
   }
 }
 
@@ -915,12 +916,12 @@ void ComputeAffineOnSparse(const CuMatrixBase<double> &params,
                            CuMatrixBase<double> *output);
  
 template
-void UpdateSimpleAffineOnSparse(const CuMatrixBase<float> &out_deriv,
+void UpdateSimpleAffineOnSparse(float alpha, const CuMatrixBase<float> &out_deriv,
                                 const SparseMatrix<float> &sp,
                                 CuMatrixBase<float> *params);
 
 template<typename Real>
-void UpdateSimpleAffineOnSparse(const CuMatrixBase<double> &out_deriv,
+void UpdateSimpleAffineOnSparse(double alpha, const CuMatrixBase<double> &out_deriv,
                                 const SparseMatrix<double> &sp,
                                 CuMatrixBase<double> *params);
  

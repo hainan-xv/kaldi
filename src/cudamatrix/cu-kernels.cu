@@ -3182,7 +3182,7 @@ static void _affine_on_sparse(const Real* params, const int params_stride,
 
 template<typename Real>
 __global__
-static void _update_simple_affine_on_sparse(const Real* out_deriv,
+static void _update_simple_affine_on_sparse(Real alpha, const Real* out_deriv,
                                             const MatrixIndexT_cuda* indices,
                                             MatrixDim out_deriv_dim,
                                             const int params_stride,
@@ -3194,7 +3194,7 @@ static void _update_simple_affine_on_sparse(const Real* out_deriv,
     if (index >= 0) {
       int params_index = i * params_stride + index;
       Real val = out_deriv[out_deriv_index];
-      params[params_index] += val;
+      params[params_index] += alpha * val;
     }
   }
 }
@@ -4695,21 +4695,23 @@ void cudaF_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
                                 output);
 }
 void cudaD_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          double alpha,
                                           const double* out_deriv,
                                           const MatrixIndexT_cuda* indices,
                                           MatrixDim out_deriv_dim,
                                           const int params_stride,
                                           double* params) {
-  _update_simple_affine_on_sparse<<<Gr, Bl>>>(out_deriv, indices, out_deriv_dim,
+  _update_simple_affine_on_sparse<<<Gr, Bl>>>(alpha, out_deriv, indices, out_deriv_dim,
                                               params_stride, params);
 }
 void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          float alpha,
                                           const float* out_deriv,
                                           const MatrixIndexT_cuda* indices,
                                           MatrixDim out_deriv_dim,
                                           const int params_stride,
                                           float* params) {
-  _update_simple_affine_on_sparse<<<Gr, Bl>>>(out_deriv, indices, out_deriv_dim,
+  _update_simple_affine_on_sparse<<<Gr, Bl>>>(alpha, out_deriv, indices, out_deriv_dim,
                                               params_stride, params);
 }
 

@@ -1043,12 +1043,14 @@ void LmLinearComponent::InitFromConfig(ConfigLine *cfl) {
 
 void LmLinearComponent::Propagate(const SparseMatrix<BaseFloat> &sp,
                                   CuMatrixBase<BaseFloat> *out) const {
+  // out->AddMatMat(1.0, sp, kNoTrans, linear_params_, kTrans, 1.0);
   cu::ComputeAffineOnSparse(linear_params_, sp, out);
 }
 
 void LmLinearComponent::UpdateSimple(const SparseMatrix<BaseFloat> &in_value,
                                    const CuMatrixBase<BaseFloat> &out_deriv) {
-  cu::UpdateSimpleAffineOnSparse(out_deriv, in_value, &linear_params_);
+  // linear_params_.AddMatMat(learning_rate, out_deriv, kTrans, in_value, kNoTrans, 1.0);
+  cu::UpdateSimpleAffineOnSparse(learning_rate_, out_deriv, in_value, &linear_params_);
 }
 
 void LmLinearComponent::UpdateSimple(const CuMatrixBase<BaseFloat> &in_value,

@@ -247,7 +247,8 @@ void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
                            CuMatrixBase<Real> *output);
 
 template<typename Real>
-void UpdateSimpleAffineOnSparse(const CuMatrixBase<Real> &out_deriv,
+void UpdateSimpleAffineOnSparse(Real alpha, 
+                                const CuMatrixBase<Real> &out_deriv,
                                 const SparseMatrix<Real> &sp,
                                 CuMatrixBase<Real> *params);
 
