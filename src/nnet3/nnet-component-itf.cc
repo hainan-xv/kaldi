@@ -101,6 +101,8 @@ Component* Component::NewComponentOfType(const std::string &component_type) {
     ans = new SumReduceComponent();
   } else if (component_type == "AffineComponent") {
     ans = new AffineComponent();
+  } else if (component_type == "LinearComponent") {
+    ans = new LinearComponent();
   } else if (component_type == "NaturalGradientAffineComponent") {
     ans = new NaturalGradientAffineComponent();
   } else if (component_type == "PerElementScaleComponent") {

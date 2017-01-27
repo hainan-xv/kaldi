@@ -154,15 +154,17 @@ if [ $stage -le -2 ]; then
   cat > $outdir/config <<EOF
 
   input-node name=input dim=$num_words_in
-  component name=first_affine type=AffineComponent input-dim=$[$num_words_in+$hidden_dim] output-dim=$hidden_dim
+  component name=first_affine type=AffineComponent input-dim=$[$num_words_in] output-dim=$hidden_dim
+  component name=recur_affine type=AffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
   component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
-  component name=final_affine type=AffineComponent input-dim=$hidden_dim output-dim=$num_words_in
-  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_in
+  component name=final_affine type=AffineComponent input-dim=$hidden_dim output-dim=$num_words_out
+  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_out
 
 #Component nodes
-  component-node name=first_affine component=first_affine  input=Append(input, IfDefined(Offset(first_renorm, -1)))
-  component-node name=first_nonlin component=first_nonlin  input=first_affine
+  component-node name=first_affine component=first_affine  input=input
+  component-node name=recur_affine component=recur_affine  input=IfDefined(Offset(first_renorm, -1))
+  component-node name=first_nonlin component=first_nonlin  input=Sum(first_affine, recur_affine)
   component-node name=first_renorm component=first_renorm  input=first_nonlin
   component-node name=final_affine component=final_affine  input=first_renorm
   component-node name=final_log_softmax component=final_log_softmax input=final_affine

@@ -5,6 +5,7 @@
 #include <iomanip>
 #include "rnnlm/nnet-parse.h"
 #include "rnnlm/rnnlm-component.h"
+#include "rnnlm/rnnlm-utils.h"
 
 namespace kaldi {
 namespace rnnlm {
@@ -623,16 +624,20 @@ void LinearSigmoidNormalizedComponent::Read(std::istream &is, bool binary) {
   ReadUpdatableCommon(is, binary);  // read opening tag and learning rate.
   ExpectToken(is, binary, "<LinearParams>");
   linear_params_.Read(is, binary);
+  ExpectToken(is, binary, "<ActualParams>");
+  actual_params_.Read(is, binary);
   ExpectToken(is, binary, "<IsGradient>");
   ReadBasicType(is, binary, &is_gradient_);
   ExpectToken(is, binary, "</LinearSigmoidNormalizedComponent>");
-  Normalize();
+//  Normalize();
 }
 
 void LinearSigmoidNormalizedComponent::Write(std::ostream &os, bool binary) const {
   WriteUpdatableCommon(os, binary);  // Write opening tag and learning rate
   WriteToken(os, binary, "<LinearParams>");
   linear_params_.Write(os, binary);
+  WriteToken(os, binary, "<ActualParams>");
+  actual_params_.Write(os, binary);
   WriteToken(os, binary, "<IsGradient>");
   WriteBasicType(os, binary, is_gradient_);
   WriteToken(os, binary, "</LinearSigmoidNormalizedComponent>");
@@ -782,6 +787,7 @@ void LinearSoftmaxNormalizedComponent::Init(std::string matrix_filename) {
 void LinearSoftmaxNormalizedComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
   std::string matrix_filename;
+  std::string unigram_filename;
   int32 input_dim = -1, output_dim = -1;
   InitLearningRatesFromConfig(cfl);
   if (cfl->GetValue("matrix", &matrix_filename)) {
@@ -792,18 +798,47 @@ void LinearSoftmaxNormalizedComponent::InitFromConfig(ConfigLine *cfl) {
     if (cfl->GetValue("output-dim", &output_dim))
       KALDI_ASSERT(output_dim == OutputDim() &&
                    "output-dim mismatch vs. matrix.");
+
   } else {
     ok = ok && cfl->GetValue("input-dim", &input_dim);
     ok = ok && cfl->GetValue("output-dim", &output_dim);
+
     BaseFloat param_stddev = 1.0 / std::sqrt(input_dim);
     cfl->GetValue("param-stddev", &param_stddev);
     Init(input_dim, output_dim, param_stddev);
+
+    if (cfl->GetValue("unigram", &unigram_filename)) {
+      std::vector<BaseFloat> u;
+      ReadUnigram(unigram_filename, &u);
+      InitFromUnigram(u);
+      PerturbParams(param_stddev);
+      Normalize();
+    }
   }
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
               << cfl->UnusedValues();
   if (!ok)
     KALDI_ERR << "Bad initializer " << cfl->WholeLine();
+}
+
+void LinearSoftmaxNormalizedComponent::InitFromUnigram(const std::vector<BaseFloat> &unigram) {
+  KALDI_ASSERT(unigram.size() == linear_params_.NumRows());
+//  for (int i = 0; i < unigram.size(); i++) {
+//    unigram[i] = log(unigram[i]);
+//  }
+  Matrix<BaseFloat> a(unigram.size(), 1, kSetZero);
+  for (int i = 0; i < unigram.size(); i++) {
+    a(i, 0) = unigram[i];
+  }
+  a.ApplyLog();
+  a.Add(-a(0, 0));
+  Matrix<BaseFloat> b(1, linear_params_.NumCols(), kSetZero);
+  b.Set(1.0);
+  Matrix<BaseFloat> linear(linear_params_.NumRows(), linear_params_.NumCols(), kSetZero);
+  linear.AddMatMat(1, a, kNoTrans, b, kNoTrans, 0);
+  linear_params_.CopyFromMat(linear);
+
 }
 
 void LinearSoftmaxNormalizedComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
@@ -903,6 +938,8 @@ void LinearSoftmaxNormalizedComponent::Read(std::istream &is, bool binary) {
   ReadUpdatableCommon(is, binary);  // read opening tag and learning rate.
   ExpectToken(is, binary, "<LinearParams>");
   linear_params_.Read(is, binary);
+  ExpectToken(is, binary, "<ActualParams>");
+  actual_params_.Read(is, binary);
   ExpectToken(is, binary, "<IsGradient>");
   ReadBasicType(is, binary, &is_gradient_);
   ExpectToken(is, binary, "</LinearSoftmaxNormalizedComponent>");
@@ -913,6 +950,8 @@ void LinearSoftmaxNormalizedComponent::Write(std::ostream &os, bool binary) cons
   WriteUpdatableCommon(os, binary);  // Write opening tag and learning rate
   WriteToken(os, binary, "<LinearParams>");
   linear_params_.Write(os, binary);
+  WriteToken(os, binary, "<ActualParams>");
+  actual_params_.Write(os, binary);
   WriteToken(os, binary, "<IsGradient>");
   WriteBasicType(os, binary, is_gradient_);
   WriteToken(os, binary, "</LinearSoftmaxNormalizedComponent>");
@@ -1068,7 +1107,7 @@ void LmLinearComponent::Propagate(const SparseMatrix<BaseFloat> &sp,
 void LmLinearComponent::UpdateSimple(const SparseMatrix<BaseFloat> &in_value,
                                    const CuMatrixBase<BaseFloat> &out_deriv) {
   // linear_params_.AddMatMat(learning_rate, out_deriv, kTrans, in_value, kNoTrans, 1.0);
-  cu::UpdateSimpleAffineOnSparse(learning_rate_ / 1000, out_deriv, in_value, &linear_params_);
+  cu::UpdateSimpleAffineOnSparse(learning_rate_, out_deriv, in_value, &linear_params_);
 
 //std::vector<MatrixIndexT> vis;
 //const SparseMatrix<BaseFloat> &sp = in_value;
