@@ -49,7 +49,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=sampling-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$minibatch_size-$hidden_dim-$num_archives-$num_samples
+outdir=sampling-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$minibatch_size-$hidden_dim-$num_archives-$num_samples-$use_gpu
 #outdir=sample
 srcdir=data/local/dict
 
@@ -246,7 +246,7 @@ if [ $stage -le $num_iters ]; then
         --max-param-change=$max_param_change "rnnlm-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl $unigram
 
-        if [ $n -gt 0 ]; then
+        false && if [ $n -gt 0 ]; then
           $cmd $outdir/log/progress.$n.log \
             rnnlm-show-progress --use-gpu=no $outdir/$[$n-1].mdl $outdir/$n.mdl \
             "ark:nnet3-merge-egs ark:$outdir/train_diagnostic.egs ark:-|" '&&' \

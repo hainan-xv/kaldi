@@ -147,8 +147,11 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
     }
 
     vector<BaseFloat> cdf(R);
-    for (int i = 1; i < cdf.size(); i++) {
-      cdf[i] += cdf[i - 1];
+    BaseFloat *cdf_ptr = &(cdf[0]);
+    double cdf_sum = 0.0;
+    for (int32 i = 0, size = cdf.size(); i < size; i++) {
+      cdf_sum += cdf_ptr[i];
+      cdf_ptr[i] = static_cast<BaseFloat>(cdf_sum);
     }
 
     BaseFloat p = RandUniform() * cdf[cdf.size() - 1];

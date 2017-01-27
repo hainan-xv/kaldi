@@ -823,7 +823,6 @@ void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
     sv.Max(&non_zero_index);
     vis.push_back(non_zero_index);
   }
-  KALDI_ASSERT(vis.size() == sp.NumRows());
   if (CuDevice::Instantiate().Enabled()) {
     Timer tim;
 
@@ -845,13 +844,17 @@ void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
       const SparseVector<Real> &sv = sp.Row(i);
       MatrixIndexT non_zero_index = -1;
       sv.Max(&non_zero_index);
+      KALDI_ASSERT(non_zero_index != -1);
       arr[i] = non_zero_index;
     }
 
     Matrix<Real> cpu_out_transpose(output->Mat().NumCols(),
                                    output->Mat().NumRows());
+    cpu_out_transpose.CopyFromMat(*output, kTrans);
+
     cpu_out_transpose.AddCols(params.Mat(), arr);
-    delete arr;
+    output->CopyFromMat(cpu_out_transpose, kTrans);
+    delete []arr;
   }
 }
 

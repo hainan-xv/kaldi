@@ -45,11 +45,12 @@ struct LmNnetTrainerOptions {
   BaseFloat max_param_change;
   NnetOptimizeOptions optimize_config;
   NnetComputeOptions compute_config;
+  CachingOptimizingCompilerOptions compiler_config;
 
   int32 input_dim;
+  int32 output_dim;
   int32 nnet_input_dim;
   int32 nnet_output_dim;
-  int32 output_dim;
 
   int32 sample_size;
 
@@ -61,7 +62,12 @@ struct LmNnetTrainerOptions {
       momentum(0.0),
       binary_write_cache(true),
       max_param_change(2.0),
-      sample_size(256) { }
+      sample_size(256),
+      input_dim(-1),
+      output_dim(-1),
+      nnet_input_dim(-1),
+      nnet_output_dim(-2)
+  { }
   void Register(OptionsItf *opts) {
 
     opts->Register("sample-size", &sample_size, "sample size");
@@ -99,6 +105,8 @@ struct LmNnetTrainerOptions {
     ParseOptions optimization_opts("optimization", opts);
     optimize_config.Register(&optimization_opts);
 
+    ParseOptions compiler_opts("compiler", opts);
+    compiler_config.Register(&compiler_opts);
 
     // register the compute options with the prefix "computation".
     ParseOptions compute_opts("computation", opts);

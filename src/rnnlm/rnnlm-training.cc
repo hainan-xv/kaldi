@@ -76,7 +76,7 @@ void LmNnetSamplingTrainer::ProcessEgInputs(const NnetExample& eg,
       if (old_input != NULL && new_input != NULL) {
         new_input->Resize(io.features.NumRows(),
                           a.OutputDim(),
-                          kUndefined);
+                          kSetZero);
 
         *old_input = &io.features.GetSparseMatrix();
         a.Propagate(io.features.GetSparseMatrix(), new_input);
