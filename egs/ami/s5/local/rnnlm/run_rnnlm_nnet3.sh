@@ -18,7 +18,7 @@ num_iters=40
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  
-num_archives=2
+num_archives=4
 
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
 minibatch_size=1:128
@@ -48,8 +48,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=debug-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$minibatch_size-$hidden_dim-$num_archives-$id-sample
-outdir=nnet_norm_${type}_${hidden_dim}_2
+outdir=rnnlm_nnet3_${hidden_dim}
 srcdir=data/local/dict
 
 set -e
@@ -193,7 +192,7 @@ if [ $stage -le -2 ]; then
 
   input-node name=input dim=$num_words_in
 #  component name=first_affine type=LinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
-  component name=first_affine type=NaturalGradientAffineComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+  component name=first_affine type=NaturalGradientLinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
   component name=recur_affine type=NaturalGradientAffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim max-change=5
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
 #  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0

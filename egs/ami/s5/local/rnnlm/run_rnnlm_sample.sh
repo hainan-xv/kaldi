@@ -18,7 +18,7 @@ num_iters=40
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  
-num_archives=2
+num_archives=4
 
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
 minibatch_size=1:128
@@ -49,7 +49,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=sampling-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$hidden_dim-$num_archives-$num_samples-$use_gpu
+outdir=rnnlm_sampling_${hidden_dim}
 #outdir=sample
 srcdir=data/local/dict
 
@@ -153,7 +153,7 @@ if [ $stage -le -2 ]; then
 
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
-  LmLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
+  LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
   AffineSampleLogSoftmaxComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
 
   input-node name=input dim=$hidden_dim

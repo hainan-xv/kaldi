@@ -18,7 +18,7 @@ num_iters=200
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  
-num_archives=2
+num_archives=4
 
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
 minibatch_size=1:128
@@ -38,7 +38,7 @@ norm_based_clipping=true
 clipping_threshold=30
 label_delay=0  # 5
 splice_indexes=0
-use_gpu=no
+use_gpu=yes
 
 type=rnn  # or lstm
 
@@ -49,7 +49,7 @@ id=
 . parse_options.sh || exit 1;
 
 outdir=debug-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$hidden_dim-$num_archives-$id-norm
-outdir=norm_${type}_${hidden_dim}_$type
+outdir=rnnlm_norm_${type}_${hidden_dim}
 srcdir=data/local/dict
 
 set -e
@@ -154,7 +154,7 @@ if [ $stage -le -2 ]; then
 
   if [ "$type" == "rnn" ]; then
     cat > $outdir/config <<EOF
-    LmLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
+    LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
     LinearSoftmaxNormalizedComponent input-dim=$hidden_dim output-dim=$num_words_out unigram=$unigram param-stddev=1 max-change=10
 
     input-node name=input dim=$hidden_dim

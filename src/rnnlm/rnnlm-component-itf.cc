@@ -57,6 +57,8 @@ LmComponent* LmComponent::NewComponentOfType(const std::string &component_type) 
 //  } else
   if (component_type == "LmLinearComponent") {
     ans = new LmLinearComponent();
+  } else if (component_type == "LmNaturalGradientLinearComponent") {
+    ans = new LmNaturalGradientLinearComponent();
   } else if (component_type == "AffineSampleLogSoftmaxComponent") {
     ans = new AffineSampleLogSoftmaxComponent();
   } else if (component_type == "LinearSoftmaxNormalizedComponent") {
