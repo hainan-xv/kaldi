@@ -18,10 +18,10 @@ num_iters=40
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  
-num_archives=8
+num_archives=2
 
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
-minibatch_size=64
+minibatch_size=1:128
 
 hidden_dim=200
 initial_learning_rate=0.01
@@ -49,7 +49,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=sampling-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$minibatch_size-$hidden_dim-$num_archives-$num_samples-$use_gpu
+outdir=sampling-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$hidden_dim-$num_archives-$num_samples-$use_gpu
 #outdir=sample
 srcdir=data/local/dict
 

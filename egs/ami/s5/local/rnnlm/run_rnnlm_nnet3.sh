@@ -18,14 +18,14 @@ num_iters=40
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  
-num_archives=8
+num_archives=2
 
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
-minibatch_size=128
+minibatch_size=1:128
 
 hidden_dim=200
-initial_learning_rate=0.001
-final_learning_rate=0.0001
+initial_learning_rate=0.0001
+final_learning_rate=0.00001
 learning_rate_decline_factor=1.01
 
 # LSTM parameters
@@ -49,7 +49,7 @@ id=
 . parse_options.sh || exit 1;
 
 outdir=debug-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$minibatch_size-$hidden_dim-$num_archives-$id-sample
-outdir=nnet_norm_${type}_$hidden_dim
+outdir=nnet_norm_${type}_${hidden_dim}_2
 srcdir=data/local/dict
 
 set -e
@@ -148,25 +148,64 @@ echo dev oos ratio is $oos_ratio
 echo dev oos penalty is $ppl_oos_penalty
 
 if [ $stage -le -2 ]; then
-  echo Create nnet configs
 
-  if [ "$type" == "rnn" ]; then
+#  echo Create nnet configs
+#  if [ "$type" == "dnn" ]; then
+#  cat > $outdir/config <<EOF
+#
+#  input-node name=input dim=$num_words_in
+#  component name=first_affine type=AffineComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+#  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
+##  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+#  component name=final_affine type=AffineComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=5
+#  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_out
+##Component nodes
+#  component-node name=first_affine component=first_affine  input=input
+#  component-node name=first_nonlin component=first_nonlin  input=first_affine
+##  component-node name=first_renorm component=first_renorm  input=first_nonlin
+#  component-node name=final_affine component=final_affine  input=first_nonlin
+#  component-node name=final_log_softmax component=final_log_softmax input=final_affine
+#  output-node    name=output input=final_log_softmax objective=linear
+#EOF
+#  fi
+#
+#  if [ "$type" == "rnn" ]; then
+#  cat > $outdir/config <<EOF
+#
+#  input-node name=input dim=$num_words_in
+#  component name=first_affine type=AffineComponent input-dim=$[$num_words_in+$hidden_dim] output-dim=$hidden_dim max-change=5
+#  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
+#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+#  component name=final_affine type=AffineComponent input-dim=$hidden_dim output-dim=$num_words_in max-change=5
+#  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_in
+##Component nodes
+#  component-node name=first_affine component=first_affine  input=Append(input, IfDefined(Offset(first_renorm, -1)))
+#  component-node name=first_nonlin component=first_nonlin  input=first_affine
+#  component-node name=first_renorm component=first_renorm  input=first_nonlin
+#  component-node name=final_affine component=final_affine  input=first_nonlin
+#  component-node name=final_log_softmax component=final_log_softmax input=final_affine
+#  output-node    name=output input=final_log_softmax objective=linear
+#EOF
+#  fi
+
+  if [ "$type" == "rnn_new" ]; then
   cat > $outdir/config <<EOF
 
   input-node name=input dim=$num_words_in
-  component name=first_affine type=AffineComponent input-dim=$[$num_words_in] output-dim=$hidden_dim
-  component name=recur_affine type=AffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim
+#  component name=first_affine type=LinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+  component name=first_affine type=NaturalGradientAffineComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+  component name=recur_affine type=NaturalGradientAffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim max-change=5
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
-  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
-  component name=final_affine type=AffineComponent input-dim=$hidden_dim output-dim=$num_words_out
+#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+  component name=final_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=5
   component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_out
 
 #Component nodes
   component-node name=first_affine component=first_affine  input=input
-  component-node name=recur_affine component=recur_affine  input=IfDefined(Offset(first_renorm, -1))
+  component-node name=recur_affine component=recur_affine  input=IfDefined(Offset(first_nonlin, -1))
   component-node name=first_nonlin component=first_nonlin  input=Sum(first_affine, recur_affine)
-  component-node name=first_renorm component=first_renorm  input=first_nonlin
-  component-node name=final_affine component=final_affine  input=first_renorm
+#  component-node name=first_renorm component=first_renorm  input=first_nonlin
+  component-node name=final_affine component=final_affine  input=first_nonlin
   component-node name=final_log_softmax component=final_log_softmax input=final_affine
   output-node    name=output input=final_log_softmax objective=linear
 
@@ -216,7 +255,7 @@ if [ $stage -le $num_iters ]; then
         --max-param-change=$max_param_change "nnet3-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl 
 
-        false && (
+        (
         if [ $n -gt 0 ]; then
           $cmd $outdir/log/progress.$n.log \
             nnet3-show-progress --use-gpu=no $outdir/$[$n-1].mdl $outdir/$n.mdl \
@@ -239,11 +278,11 @@ if [ $stage -le $num_iters ]; then
       learning_rate=$final_learning_rate
     fi
 
-    false && [ $n -ge $stage ] && (
+    [ $n -ge $stage ] && (
       $decode_cmd $outdir/log/compute_prob_train.rnnlm.$n.log \
-        rnnlm-compute-prob $outdir/$n.mdl ark:$outdir/train.subset.egs &
+        nnet3-compute-prob $outdir/$n.mdl ark:$outdir/train.subset.egs &
       $decode_cmd $outdir/log/compute_prob_valid.rnnlm.$n.log \
-        rnnlm-compute-prob $outdir/$n.mdl ark:$outdir/dev.subset.egs 
+        nnet3-compute-prob $outdir/$n.mdl ark:$outdir/dev.subset.egs 
 
       wait
       ppl=`grep Overall $outdir/log/compute_prob_train.rnnlm.$n.log | grep like | awk '{print exp(-$8)}'`
@@ -254,6 +293,7 @@ if [ $stage -le $num_iters ]; then
       ppl2=`echo $ppl $ppl_oos_penalty | awk '{print $1 * $2}'`
       echo DEV PPL on model $n.mdl is $ppl w/o OOS penalty, $ppl2 w OOS penalty
     ) &
+
   done
   cp $outdir/$num_iters.mdl $outdir/rnnlm
 fi
