@@ -29,22 +29,21 @@ LmNaturalGradientLinearComponent::LmNaturalGradientLinearComponent(
 }
 
 void LmNaturalGradientLinearComponent::Update(
-    const std::string &debug_info,
-    const CuSparseMatrix<BaseFloat> &in_value,
+    const SparseMatrix<BaseFloat> &in_value,
     const CuMatrixBase<BaseFloat> &out_deriv) {
   CuMatrix<BaseFloat> in_value_temp;
 
-  in_value_temp.Resize(in_value.NumRows(),
-                       in_value.NumCols() + 1, kUndefined);
+//  in_value_temp.Resize(in_value.NumRows(),
+//                       in_value.NumCols() + 1, kUndefined);
+////  in_value_temp.Range(0, in_value.NumRows(),
+////                      0, in_value.NumCols()).CopyFromMat(in_value);
+////  CuMatrixBase<BaseFloat> &m = in_value_temp.Range(0, in_value.NumRows(), 0, in_value.NumCols());
+//  CuSubMatrix<BaseFloat> m(in_value_temp.Data(), in_value.NumRows(), in_value.NumCols(), in_value_temp.Stride());
+//  in_value.CopyToMat(&m);
+//
+//  // Add the 1.0 at the end of each row "in_value_temp"
 //  in_value_temp.Range(0, in_value.NumRows(),
-//                      0, in_value.NumCols()).CopyFromMat(in_value);
-//  CuMatrixBase<BaseFloat> &m = in_value_temp.Range(0, in_value.NumRows(), 0, in_value.NumCols());
-  CuSubMatrix<BaseFloat> m(in_value_temp.Data(), in_value.NumRows(), in_value.NumCols(), in_value_temp.Stride());
-  in_value.CopyToMat(&m);
-
-  // Add the 1.0 at the end of each row "in_value_temp"
-  in_value_temp.Range(0, in_value.NumRows(),
-                      in_value.NumCols(), 1).Set(1.0);
+//                      in_value.NumCols(), 1).Set(1.0);
 
   CuMatrix<BaseFloat> out_deriv_temp(out_deriv);
 
@@ -55,10 +54,10 @@ void LmNaturalGradientLinearComponent::Update(
 
   // These "scale" values get will get multiplied into the learning rate (faster
   // than having the matrices scaled inside the preconditioning code).
-  BaseFloat in_scale, out_scale;
+  BaseFloat in_scale = 1.0, out_scale;
 
-  preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
-                                            &in_scale);
+//  preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
+//                                            &in_scale);
   preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
                                              &out_scale);
 
@@ -67,25 +66,26 @@ void LmNaturalGradientLinearComponent::Update(
   // their outputs).
   BaseFloat scale = in_scale * out_scale;
 
-  CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
-                                              0, in_value_temp.NumRows(),
-                                              0, in_value_temp.NumCols() - 1);
+//  CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
+//                                              0, in_value_temp.NumRows(),
+//                                              0, in_value_temp.NumCols() - 1);
   // this "precon_ones" is what happens to the vector of 1's representing
   // offsets, after multiplication by the preconditioner.
-  CuVector<BaseFloat> precon_ones(in_value_temp.NumRows());
+//  CuVector<BaseFloat> precon_ones(in_value_temp.NumRows());
 
-  precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
+//  precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
 
   BaseFloat local_lrate = scale * learning_rate_;
   update_count_ += 1.0;
 //  bias_params_.AddMatVec(local_lrate, out_deriv_temp, kTrans,
 //                         precon_ones, 1.0);
-  linear_params_.AddMatMat(local_lrate, out_deriv_temp, kTrans,
-                           in_value_precon_part, kNoTrans, 1.0);
+
+//  linear_params_.AddMatMat(local_lrate, out_deriv_temp, kTrans,
+//                           in_value_precon_part, kNoTrans, 1.0);
+  cu::UpdateSimpleAffineOnSparse(local_lrate, out_deriv_temp, in_value, &linear_params_);
 }
 
 void LmNaturalGradientLinearComponent::Update(
-    const std::string &debug_info,
     const CuMatrixBase<BaseFloat> &in_value,
     const CuMatrixBase<BaseFloat> &out_deriv) {
   CuMatrix<BaseFloat> in_value_temp;

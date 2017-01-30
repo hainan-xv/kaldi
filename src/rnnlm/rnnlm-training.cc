@@ -401,12 +401,13 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
 
   std::vector<int> indexes;
 
-  for (int i = 0; i < k; i++) {
-    const SparseVector<BaseFloat> &sv = post.Row(i);                              
-    int non_zero_index = -1;                                                    
-    sv.Max(&non_zero_index); 
-    indexes.push_back(non_zero_index);
-  }
+  SparseMatrixToVector(post, &indexes);
+//  for (int i = 0; i < k; i++) {
+//    const SparseVector<BaseFloat> &sv = post.Row(i);                              
+//    int non_zero_index = -1;                                                    
+//    sv.Max(&non_zero_index); 
+//    indexes.push_back(non_zero_index);
+//  }
 
   vector<BaseFloat> out(indexes.size());
 
@@ -496,12 +497,16 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   std::vector<int> outputs;
   std::set<int> outputs_set;
 
-  for (int i = 0; i < k; i++) {
-    const SparseVector<BaseFloat> &sv = post.Row(i);                              
-    int non_zero_index = -1;                                                    
-    sv.Max(&non_zero_index); 
-    outputs.push_back(non_zero_index);
-    outputs_set.insert(non_zero_index);
+  SparseMatrixToVector(post, &outputs);
+//  for (int i = 0; i < k; i++) {
+//    const SparseVector<BaseFloat> &sv = post.Row(i);                              
+//    int non_zero_index = -1;                                                    
+//    sv.Max(&non_zero_index); 
+//    outputs.push_back(non_zero_index);
+//    outputs_set.insert(non_zero_index);
+//  }
+  for (int i = 0; i < outputs.size(); i++) {
+    outputs_set.insert(outputs[i]);
   }
 
   if (num_samples == -1) {
@@ -512,7 +517,7 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
 
   vector<BaseFloat> selected_probs(num_samples);
   vector<int> samples(num_samples);
-  if (num_samples > k) {
+  if (num_samples != unigram.size()) {
     NormalizeVec(num_samples, outputs_set, &selection_probs);
     vector<std::pair<int, BaseFloat> > u(selection_probs.size());
     for (int i = 0; i < u.size(); i++) {
@@ -539,10 +544,12 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   
   vector<int> correct_indexes(out.NumRows(), -1);
   for (int j = 0; j < outputs.size(); j++) {
-    if (num_samples == -1) {
+    if (num_samples == unigram.size()) {
       correct_indexes[j] = outputs[j];
       KALDI_ASSERT(samples[correct_indexes[j]] == outputs[j]);
     } else {
+
+      // need to speed up this search TODO(hxu)
       for (int i = 0; i < samples.size(); i++) {
         if (samples[i] == outputs[j]) {
           correct_indexes[j] = i;

@@ -169,7 +169,7 @@ EOF
 
   if [ "$type" == "rnn2" ]; then
   cat > $outdir/config <<EOF
-  LmLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
+  LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
   LinearSoftmaxNormalizedComponent input-dim=$hidden_dim output-dim=$num_words_out unigram=$unigram param-stddev=1 max-change=1
 
   input-node name=input dim=$hidden_dim

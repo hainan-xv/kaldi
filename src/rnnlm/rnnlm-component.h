@@ -206,11 +206,9 @@ class LmNaturalGradientLinearComponent: public LmLinearComponent {
   void SetNaturalGradientConfigs();
 
   virtual void Update(
-      const std::string &debug_info,
-      const CuSparseMatrix<BaseFloat> &in_value,
+      const SparseMatrix<BaseFloat> &in_value,
       const CuMatrixBase<BaseFloat> &out_deriv);
   virtual void Update(
-      const std::string &debug_info,
       const CuMatrixBase<BaseFloat> &in_value,
       const CuMatrixBase<BaseFloat> &out_deriv);
 };

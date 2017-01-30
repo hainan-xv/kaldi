@@ -3,6 +3,30 @@
 namespace kaldi {
 namespace rnnlm {
 
+void VectorToSparseMatrix(const vector<BaseFloat> &v,
+                          int dim,
+                          SparseMatrix<BaseFloat> *sp) {
+  std::vector<std::vector<std::pair<MatrixIndexT, BaseFloat> > > pairs;
+  for (int i = 0; i < v.size(); i++) {
+    std::vector<std::pair<MatrixIndexT, BaseFloat> > this_row;
+    this_row.push_back(std::make_pair(v[i], 1.0));
+    pairs.push_back(this_row);
+  }
+  *sp = SparseMatrix<BaseFloat>(dim, pairs);
+}
+
+void SparseMatrixToVector(const SparseMatrix<BaseFloat> &sp,
+                          vector<int32> *v) {
+  int k = sp.NumRows();
+  v->resize(k);
+  for (int i = 0; i < k; i++) {
+    const SparseVector<BaseFloat> &sv = sp.Row(i);                              
+    int non_zero_index = -1;                                                    
+    sv.Max(&non_zero_index); 
+    (*v)[i] = non_zero_index;
+  }
+}
+
 bool LargerThan(const std::pair<int, BaseFloat> &t1,
                 const std::pair<int, BaseFloat> &t2) {
   return t1.second > t2.second;

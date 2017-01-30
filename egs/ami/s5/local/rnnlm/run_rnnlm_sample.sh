@@ -49,7 +49,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_sampling_${hidden_dim}
+outdir=rnnlm_sampling_${hidden_dim}_2
 #outdir=sample
 srcdir=data/local/dict
 
@@ -242,23 +242,23 @@ if [ $stage -le $num_iters ]; then
           this_cmd=$cuda_cmd
         fi
 
-        $this_cmd $outdir/log/train.rnnlm.$n.log rnnlm-train --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
+        $this_cmd $outdir/log/train_rnnlm.$n.log rnnlm-train --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
         --max-param-change=$max_param_change "rnnlm-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl $unigram
 
-        false && if [ $n -gt 0 ]; then
+        if [ $n -gt 0 ]; then
           $cmd $outdir/log/progress.$n.log \
             rnnlm-show-progress --use-gpu=no $outdir/$[$n-1].mdl $outdir/$n.mdl \
             "ark:nnet3-merge-egs ark:$outdir/train_diagnostic.egs ark:-|" '&&' \
             rnnlm-info $outdir/$n.mdl &
         fi
 
-      t=`grep "^# Accounting" $outdir/log/train.rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
+      t=`grep "^# Accounting" $outdir/log/train_rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
       w=`wc -w $outdir/splitted-text/train.$this_archive.txt | awk '{print $1}'`
       speed=`echo $w $t | awk '{print $1/$2}'`
       echo Processing speed: $speed words per second \($w words in $t seconds\)
 
-      grep parse $outdir/log/train.rnnlm.$n.log | awk -F '-' '{print "Training PPL is " exp($NF)}'
+      grep parse $outdir/log/train_rnnlm.$n.log | awk -F '-' '{print "Training PPL is " exp($NF)}'
 
     )
 
@@ -267,16 +267,16 @@ if [ $stage -le $num_iters ]; then
       learning_rate=$final_learning_rate
     fi
 
-    false && [ $n -ge $stage ] && (
+    [ $n -ge $stage ] && (
       $decode_cmd $outdir/log/compute_prob_train.rnnlm.norm.$n.log \
-        rnnlm-compute-prob --normalize-probs=true $outdir/$n.mdl ark:$outdir/train.subset.egs &
+        rnnlm-compute-prob --normalize-probs=true $outdir/$n.mdl "ark:nnet3-merge-egs --minibatch-size=$minibatch_size ark:$outdir/train.subset.egs ark:- |" &
       $decode_cmd $outdir/log/compute_prob_valid.rnnlm.norm.$n.log \
-        rnnlm-compute-prob --normalize-probs=true $outdir/$n.mdl ark:$outdir/dev.subset.egs &
+        rnnlm-compute-prob --normalize-probs=true $outdir/$n.mdl "ark:nnet3-merge-egs --minibatch-size=$minibatch_size ark:$outdir/dev.subset.egs ark:- |" &
 
       $decode_cmd $outdir/log/compute_prob_train.rnnlm.unnorm.$n.log \
-        rnnlm-compute-prob --normalize-probs=false $outdir/$n.mdl ark:$outdir/train.subset.egs &
+        rnnlm-compute-prob --normalize-probs=false $outdir/$n.mdl "ark:nnet3-merge-egs --minibatch-size=$minibatch_size ark:$outdir/train.subset.egs ark:- |" &
       $decode_cmd $outdir/log/compute_prob_valid.rnnlm.unnorm.$n.log \
-        rnnlm-compute-prob --normalize-probs=false $outdir/$n.mdl ark:$outdir/dev.subset.egs 
+        rnnlm-compute-prob --normalize-probs=false $outdir/$n.mdl "ark:nnet3-merge-egs --minibatch-size=$minibatch_size ark:$outdir/dev.subset.egs ark:- |" 
 
       wait
       ppl=`grep Overall $outdir/log/compute_prob_train.rnnlm.norm.$n.log | grep like | awk '{print exp(-$8)}'`
@@ -295,6 +295,7 @@ if [ $stage -le $num_iters ]; then
       ppl2=`echo $ppl $ppl_oos_penalty | awk '{print $1 * $2}'`
       echo UNNORMALIZED DEV PPL on model $n.mdl is $ppl w/o OOS penalty, $ppl2 w OOS penalty
     ) &
+wait
   done
   cp $outdir/$num_iters.mdl $outdir/rnnlm
 fi
