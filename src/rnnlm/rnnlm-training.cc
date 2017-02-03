@@ -32,7 +32,6 @@ LmNnetSamplingTrainer::LmNnetSamplingTrainer(
                           nnet_(nnet),
                           compiler_(*nnet->GetNnet(), config_.optimize_config),
                           num_minibatches_processed_(0) {
-
   KALDI_ASSERT(unigram_.size() == nnet_->O()->OutputDim());
 
   if (config.zero_component_stats)
@@ -72,17 +71,13 @@ void LmNnetSamplingTrainer::ProcessEgInputs(const NnetExample& eg,
     const NnetIo &io = eg.io[i];
 
     if (io.name == "input") {
-      // TODO(hxu)
-      if (old_input != NULL && new_input != NULL) {
-        new_input->Resize(io.features.NumRows(),
-                          a.OutputDim(),
-                          kSetZero);
+      KALDI_ASSERT(old_input != NULL && new_input != NULL);
+      new_input->Resize(io.features.NumRows(),
+                        a.OutputDim(),
+                        kSetZero);
 
-        *old_input = &io.features.GetSparseMatrix();
-        a.Propagate(io.features.GetSparseMatrix(), new_input);
-      } else {
-        KALDI_ASSERT(false);
-      }
+      *old_input = &io.features.GetSparseMatrix();
+      a.Propagate(io.features.GetSparseMatrix(), new_input);
     }
   }
 }
@@ -116,12 +111,10 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
   this->ProcessOutputs(eg, &computer);
   computer.Run();
 
-  {
-    const CuMatrixBase<BaseFloat> &first_deriv = computer.GetOutput("input");
-    CuMatrix<BaseFloat> place_holder;
-    nnet_->I()->Backprop(*old_input, place_holder,
-                     first_deriv, delta_nnet_->input_projection_, NULL);
-  }
+  const CuMatrixBase<BaseFloat> &first_deriv = computer.GetOutput("input");
+  CuMatrix<BaseFloat> place_holder;
+  nnet_->I()->Backprop(*old_input, place_holder,
+                       first_deriv, delta_nnet_->input_projection_, NULL);
 
   UpdateParamsWithMaxChange();
 }
@@ -188,6 +181,14 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
                     << "max-change=" << max_change_per
                     << ", scaling by " << scale_f_in;
     }
+
+    if (scale_f_in < min_scale) {
+      min_scale = scale_f_in;
+      component_name_with_min_scale = "rnnlm-input";
+      max_change_with_min_scale = max_change_per;
+    }
+    param_delta_squared += std::pow(scale_f_in, 
+                                    static_cast<BaseFloat>(2.0)) * dot_prod;
   }
 
   {
@@ -195,16 +196,23 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
     KALDI_ASSERT(max_change_per >= 0);
     BaseFloat dot_prod = nnet_->output_projection_->DotProduct(*nnet_->output_projection_);
 
-    if (max_change_per != 0.0 &&
-        std::sqrt(dot_prod) > max_change_per) {
+    if (max_change_per != 0.0 && std::sqrt(dot_prod) > max_change_per) {
       scale_f_out = max_change_per / std::sqrt(dot_prod);
       num_max_change_per_component_applied_2_[1]++;
       num_max_change_per_component_applied_per_minibatch++;
-      KALDI_VLOG(2) << "Parameters in Input Projection, "
+      KALDI_VLOG(2) << "Parameters in Output Projection, "
                     << " change too big: " << std::sqrt(dot_prod) << " > "
                     << "max-change=" << max_change_per
                     << ", scaling by " << scale_f_out;
     }
+
+    if (scale_f_out < min_scale) {
+      min_scale = scale_f_out;
+      component_name_with_min_scale = "rnnlm-input";
+      max_change_with_min_scale = max_change_per;
+    }
+    param_delta_squared += std::pow(scale_f_out, 
+                                    static_cast<BaseFloat>(2.0)) * dot_prod;
   }
 
 
@@ -245,16 +253,15 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
   // and updates parameters
   scale_factors.Scale(scale);
   AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale, nnet_->nnet_);
-  nnet_->input_projection_->Add(1.0, *delta_nnet_->I());
-  nnet_->output_projection_->Add(1.0, *delta_nnet_->O());
+  nnet_->input_projection_->Add(1.0, *delta_nnet_->input_projection_);
+  nnet_->output_projection_->Add(1.0, *delta_nnet_->output_projection_);
 //  ScaleNnet(config_.momentum, delta_nnet_);
   delta_nnet_->Scale(config_.momentum);
 }
 
 void LmNnetSamplingTrainer::ProcessOutputs(const NnetExample &eg,
                                            NnetComputer *computer) {
-  std::vector<NnetIo>::const_iterator iter = eg.io.begin(),
-      end = eg.io.end();
+  std::vector<NnetIo>::const_iterator iter = eg.io.begin(), end = eg.io.end();
   for (; iter != end; ++iter) {
     const NnetIo &io = *iter;
     int32 node_index = nnet_->GetNnet()->GetNodeIndex(io.name);
@@ -402,12 +409,6 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
   std::vector<int> indexes;
 
   SparseMatrixToVector(post, &indexes);
-//  for (int i = 0; i < k; i++) {
-//    const SparseVector<BaseFloat> &sv = post.Row(i);                              
-//    int non_zero_index = -1;                                                    
-//    sv.Max(&non_zero_index); 
-//    indexes.push_back(non_zero_index);
-//  }
 
   vector<BaseFloat> out(indexes.size());
 
@@ -488,36 +489,29 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                               LmNnet *nnet) {
   *old_output = &computer->GetOutput(output_name);
   int k = supervision.NumRows();
+  if (num_samples == -1) {
+    num_samples = unigram.size();
+  }
+
+  KALDI_ASSERT(num_samples > k && num_samples <= unigram.size());
 
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
   const SparseMatrix<BaseFloat> &post = supervision.GetSparseMatrix();
 
   vector<BaseFloat> selection_probs = unigram;
 
-  std::vector<int> outputs;
+  std::vector<int> outputs;  // outputs[i] is the correct work for row i
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
-//  for (int i = 0; i < k; i++) {
-//    const SparseVector<BaseFloat> &sv = post.Row(i);                              
-//    int non_zero_index = -1;                                                    
-//    sv.Max(&non_zero_index); 
-//    outputs.push_back(non_zero_index);
-//    outputs_set.insert(non_zero_index);
-//  }
-  for (int i = 0; i < outputs.size(); i++) {
-    outputs_set.insert(outputs[i]);
-  }
 
-  if (num_samples == -1) {
-    num_samples = unigram.size();
-  }
-
-  KALDI_ASSERT(num_samples > k);
-
-  vector<BaseFloat> selected_probs(num_samples);
   vector<int> samples(num_samples);
+  vector<BaseFloat> selected_probs(num_samples);
+
   if (num_samples != unigram.size()) {
+    for (int i = 0; i < outputs.size(); i++) {
+      outputs_set.insert(outputs[i]);
+    }
     NormalizeVec(num_samples, outputs_set, &selection_probs);
     vector<std::pair<int, BaseFloat> > u(selection_probs.size());
     for (int i = 0; i < u.size(); i++) {
@@ -526,87 +520,123 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     }
     SampleWithoutReplacement(u, num_samples, &samples);
     for (int i = 0; i < samples.size(); i++) {
+      // use min with 1.0 because we use prob=10 for "must sampled" words
+      // in the vector to avoid numerical issues
       selected_probs[i] = std::min(BaseFloat(1.0), selection_probs[samples[i]]);
     }
   } else {
     for (int i = 0; i < num_samples; i++) {
       samples[i] = i;
-      selected_probs[i] = 1.0;
     }
   }
 
   CuMatrix<BaseFloat> out((*old_output)->NumRows(), samples.size(), kSetZero);
-
   output_projection.Propagate(**old_output, samples, &out);
 
-  *tot_weight = post.Sum();
-  *tot_objf = 0;
-  
-  vector<int> correct_indexes(out.NumRows(), -1);
-  for (int j = 0; j < outputs.size(); j++) {
-    if (num_samples == unigram.size()) {
-      correct_indexes[j] = outputs[j];
-      KALDI_ASSERT(samples[correct_indexes[j]] == outputs[j]);
-    } else {
+  // implement y = log(1 + x), x >= 0
+  //           y = x, x < 0
+  {
+    CuMatrix<BaseFloat> out2(out);
+    out2.ApplyFloor(0.0);
+    out2.Add(1);
+    out2.ApplyLog();
+    // now out2 implements the function 
+    // y = 0, if x < 0
+    // y = log(1 + x), if x >= 0
 
-      // need to speed up this search TODO(hxu)
-      for (int i = 0; i < samples.size(); i++) {
-        if (samples[i] == outputs[j]) {
-          correct_indexes[j] = i;
-          break;
-        }
-      }
+    out.ApplyCeiling(0.0);
+    // now out is
+    // y = x, if x < 0
+    // y = 0, if x >= 0
+
+    out.AddMat(1.0, out2);
+  }
+
+  *tot_weight = post.Sum();
+  vector<int32> correct_indexes(out.NumRows(), -1);
+
+  if (num_samples == unigram.size()) {
+    for (int j = 0; j < outputs.size(); j++) {
+      correct_indexes[j] = outputs[j];
+    }
+  } else {
+    // TODO(hxu) not tested it yet
+    unordered_map<int32, int32> word2pos;
+    for (int i = 0; i < samples.size(); i++) {
+      word2pos[samples[i]] = i;
+    }
+    for (int i = 0; i < outputs.size(); i++) {
+      correct_indexes[i] = word2pos[outputs[i]];
     }
   }
 
-  for (int i = 0; i < correct_indexes.size(); i++) {
-    KALDI_ASSERT(correct_indexes[i] >= 0);
+  SparseMatrix<BaseFloat> supervision_cpu;
+  VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
+  CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
+  *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf; not finished yet
+  // now for each row the objf is y_i where i is the correct label
+  // we need to compute y_i - (\sum_j exp(y_j)) + 1
+  // or in the sampling case, y_i - (\sum_j exp(y_j)/prob(j))
+
+  CuMatrix<BaseFloat> out_exp(out);
+  out_exp.ApplyExp();
+  // out_exp is now exp(y_i)
+
+  // the adjusted output by multiplying by -1/prob(sampling)
+  CuMatrix<BaseFloat> out_div_probs(out.NumRows(), out.NumCols());
+
+  // first fill in the -1/probs
+  if (num_samples != unigram.size()) {
+    Vector<BaseFloat> v(out.NumCols(), kSetZero);
+    for (int i = 0; i < out.NumCols(); i++) {
+      v(i) = -1.0 / selected_probs[i];
+    }
+    out_div_probs.CopyRowsFromVec(CuVector<BaseFloat>(v));
+  } else {
+    out_div_probs.Set(-1.0);
   }
+  // now multiply by exp(y_i)
+  out_div_probs.MulElements(out_exp);
+  // now each element is -exp(y_i)/selection-prob
 
-  Matrix<BaseFloat> t(out.NumRows(), out.NumCols(), kSetZero);
-  CuMatrix<BaseFloat> t2(out.NumRows(), out.NumCols(), kSetZero);
-  CuMatrix<BaseFloat> t3(out.NumRows(), out.NumCols(), kSetZero);
-
-  for (int i = 0; i < out.NumRows(); i++) {
-    t(i, correct_indexes[i]) = 1.0;
-  }
-
-  t2.CopyFromMat(t);
-  // t and t2 are sparsematrix where the position of the correct label is 1
-  // so the following would compute the sum of correct y's
-  *tot_objf += TraceMatMat(t2, out, kTrans);
-
-  // take exp() and divided by probs
-  out.ApplyExp();
-  Vector<BaseFloat> v(out.NumCols(), kSetZero);
-  for (int i = 0; i < out.NumCols(); i++) {
-    v(i) = -1.0 / selected_probs[i];
-  }
-  t3.CopyRowsFromVec(CuVector<BaseFloat>(v));
-  t3.MulElements(out);
-  // now each element is -exp(y)/selection-prob
-
-//  CuMatrix<BaseFloat> ones(1, t3.NumCols());
-//  ones.Set(1.0);
-//  CuMatrix<BaseFloat> row_sum(1, t3.NumRows(), kSetZero);
-//  row_sum.AddMatMat(1.0, t3, kNoTrans, ones, kNoTrans, 0.0);
-
-  BaseFloat neg_term = t3.Sum() + t3.NumRows();  // +1 per row for -log x <= 1 - x
+  // need to add 1 per row
+  BaseFloat neg_term = out_div_probs.Sum() + out_div_probs.NumRows();
   *tot_objf += neg_term;
-//  KALDI_LOG << "the average normalization term in this minibatch is " << -neg_term / t3.NumRows();
 
   if (supply_deriv && nnet != NULL) {
-    t3.AddMat(1.0, t2); // this is the correct derivative
-    // -exp(y) / selection-prob(i) for non-correct labels
-    // 1 - exp(y) for correct labels  (selection-prob of a correct label is 1)
+    CuMatrix<BaseFloat> new_out_deriv(out_exp);
+    // new_out_deriv is now exp(y_i)
 
-    out.ApplyLog();
+    CuMatrix<BaseFloat> derivatives;
+    derivatives.Swap(&out_exp); // re-use the mem so that no need to malloc again
+    supervision_gpu.CopyToMat(&derivatives); // setting 1 for the correct labels
+    // derivative now has 1 for correct labels
+
+    derivatives.AddMat(1.0, out_div_probs); //  adding -exp(y)/probs for everyone
+    // now it's -exp(y) / selection-prob(i) for non-correct labels
+    // 1 - exp(y) for correct labels  (selection-prob of a correct label is 1)
+    // which is the correct derivative
+
+    {
+      // the derivative for function 
+      // y = log (x + 1), x >= 0; y = x, x < 0 is
+      // 1/(x+1), when x >= 0; 
+      // 1 when x < 0
+      // or 1/(max(1, 1+x)
+
+      // new_out_deriv is currently exp(y) where y is the modified output
+      // i.e. exp(x) when x < 0; x + 1 when x > 0
+      new_out_deriv.ApplyFloor(1);
+      new_out_deriv.InvertElements();
+      new_out_deriv.MulElements(derivatives);
+    }
+
     CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
                                     (*old_output)->NumCols(),
                                     kSetZero);
 
     output_projection.Backprop(samples, **old_output, out,
-                               t3, nnet->output_projection_,
+                               new_out_deriv, nnet->output_projection_,
                                &input_deriv);
 
     computer->AcceptInput(output_name, &input_deriv);

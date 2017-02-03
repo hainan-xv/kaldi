@@ -3,7 +3,7 @@
 namespace kaldi {
 namespace rnnlm {
 
-void VectorToSparseMatrix(const vector<BaseFloat> &v,
+void VectorToSparseMatrix(const vector<int32> &v,
                           int dim,
                           SparseMatrix<BaseFloat> *sp) {
   std::vector<std::vector<std::pair<MatrixIndexT, BaseFloat> > > pairs;

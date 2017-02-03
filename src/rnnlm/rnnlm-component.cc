@@ -552,7 +552,7 @@ void AffineSampleLogSoftmaxComponent::Propagate(const CuMatrixBase<BaseFloat> &i
   out->Add(-1.0 * kCutoff);
 // */
 
-//* Dan trick: if x<=0 then y = x; 
+/* Dan trick: if x<=0 then y = x; 
 //             if x >0 then y = log(1 + x)
   CuMatrix<BaseFloat> out2(*out);
   out2.ApplyFloor(0.0);
@@ -623,7 +623,7 @@ void AffineSampleLogSoftmaxComponent::Backprop(
   new_out_deriv.MulElements(output_deriv);
 // */
 
-//* The dan Trick
+/* The dan Trick
   CuMatrix<BaseFloat> new_out_deriv(out_value);
   new_out_deriv.ApplyExp();
   new_out_deriv.ApplyFloor(1);
@@ -631,7 +631,7 @@ void AffineSampleLogSoftmaxComponent::Backprop(
   new_out_deriv.MulElements(output_deriv);
 // */
 
-//  const CuMatrixBase<BaseFloat> &new_out_deriv = output_deriv;
+  const CuMatrixBase<BaseFloat> &new_out_deriv = output_deriv;
 
   CuMatrix<BaseFloat> new_linear(indexes.size(), linear_params_.NumCols());
   CuArray<int> idx(indexes);

@@ -67,9 +67,9 @@ int main(int argc, char *argv[]) {
 #endif
 
     std::string nnet_rxfilename = po.GetArg(1),
-        examples_rspecifier = po.GetArg(2),
-        nnet_wxfilename = po.GetArg(3),
-        unigram_file = po.GetArg(4);
+                examples_rspecifier = po.GetArg(2),
+                nnet_wxfilename = po.GetArg(3),
+                unigram_file = po.GetArg(4);
 
     LmNnet nnet;
     ReadKaldiObject(nnet_rxfilename, &nnet);

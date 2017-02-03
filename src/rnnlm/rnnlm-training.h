@@ -235,9 +235,8 @@ class LmNnetSamplingTrainer {
                       NnetComputer *computer);
 
   const LmNnetTrainerOptions config_;
-  CuMatrix<BaseFloat> new_input_;      // the input to pass to nnet3
-//  SparseMatrix<BaseFloat> old_input_;  // the input read from egs, not necessary...
-  const CuMatrixBase<BaseFloat> *old_output_;     // the output to compute objf
+  CuMatrix<BaseFloat> new_input_;                 // the input to pass to nnet3
+  const CuMatrixBase<BaseFloat> *old_output_;
 
   vector<BaseFloat> unigram_;
   // this pointer is not owned
