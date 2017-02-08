@@ -28,10 +28,17 @@ using nnet3::NnetExample;
 
 const int kOosId = 1;
 
+// convert a vector of integers v to a SparseMatrx m such that
+// v.size() == m.NumRows()
+// and m(i, j) == 1 iff v[i] == j
 void VectorToSparseMatrix(const vector<int32> &v,
                           int dim,
                           SparseMatrix<BaseFloat> *sp);
 
+// the reverse operation of VectorToSparseMatrix, i.e.
+// convert a SparseMatrx which we know each row has exactly one non-zero number
+// and convert that to a vector of integer
+// i.e. m(i, j) != 0 iff v[i] == j
 void SparseMatrixToVector(const SparseMatrix<BaseFloat> &sp,
                           vector<int32> *v);
 

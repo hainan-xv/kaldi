@@ -903,7 +903,7 @@ void UpdateSimpleAffineOnSparse(Real alpha,
       arr[i] = cpu_params_transpose.RowData(non_zero_index);
     }
     out_deriv.Mat().AddToRows(1.0, arr);
-    delete arr;
+    delete []arr;
     params->Mat().AddMat(alpha, cpu_params_transpose, kTrans);
   }
 }

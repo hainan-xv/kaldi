@@ -538,32 +538,6 @@ void AffineSampleLogSoftmaxComponent::Propagate(const CuMatrixBase<BaseFloat> &i
   out->RowRange(0, 1).AddCols(bias_params_, idx);
   out->CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, new_linear, kTrans, 1.0);
-
-  // map from (-inf, inf) to (-inf, 0)
-  // y = x - 1, when x <= 0
-  // y = x / (1 + x) - 1, otherwise
-
-/* The Hainan trick
-  CuMatrix<BaseFloat> out2(*out);
-  out2.ApplyFloor(0);
-  out2.Scale(1.0 / kCutoff);
-  out2.Add(1);
-  out->DivElements(out2);
-  out->Add(-1.0 * kCutoff);
-// */
-
-/* Dan trick: if x<=0 then y = x; 
-//             if x >0 then y = log(1 + x)
-  CuMatrix<BaseFloat> out2(*out);
-  out2.ApplyFloor(0.0);
-  out2.Add(1);
-  out2.ApplyLog();
-  out->ApplyCeiling(0.0);
-  out->AddMat(1.0, out2);
-// */
-
-
-//  out->ApplyCeiling(0);  // TODO(hxu), neg-relu
 }
 
 void AffineSampleLogSoftmaxComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
@@ -613,31 +587,12 @@ void AffineSampleLogSoftmaxComponent::Backprop(
                                const CuMatrixBase<BaseFloat> &output_deriv,
                                LmOutputComponent *to_update_0,
                                CuMatrixBase<BaseFloat> *input_deriv) const {
-
-/* The Hainan Trick
-  CuMatrix<BaseFloat> new_out_deriv(out_value);
-  new_out_deriv.ApplyFloor(-kCutoff);
-  new_out_deriv.Scale(1.0 / kCutoff);
-  new_out_deriv.MulElements(new_out_deriv);
-  new_out_deriv.InvertElements();
-  new_out_deriv.MulElements(output_deriv);
-// */
-
-/* The dan Trick
-  CuMatrix<BaseFloat> new_out_deriv(out_value);
-  new_out_deriv.ApplyExp();
-  new_out_deriv.ApplyFloor(1);
-  new_out_deriv.InvertElements();
-  new_out_deriv.MulElements(output_deriv);
-// */
-
   const CuMatrixBase<BaseFloat> &new_out_deriv = output_deriv;
 
   CuMatrix<BaseFloat> new_linear(indexes.size(), linear_params_.NumCols());
   CuArray<int> idx(indexes);
   new_linear.CopyRows(linear_params_, idx);
 
-//  input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, new_linear, kNoTrans, 1.0);
   input_deriv->AddMatMat(1.0, new_out_deriv, kNoTrans, new_linear, kNoTrans, 1.0);
 
   AffineSampleLogSoftmaxComponent* to_update

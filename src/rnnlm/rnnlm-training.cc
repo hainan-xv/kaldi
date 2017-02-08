@@ -23,6 +23,40 @@
 namespace kaldi {
 namespace rnnlm {
 
+void ComputeSamplingNonlinearity(const CuMatrixBase<BaseFloat> &in,
+                                 CuMatrixBase<BaseFloat> *out) {
+  KALDI_ASSERT(in.NumRows() == out->NumRows() && in.NumCols() == out->NumCols());
+  CuMatrix<BaseFloat> tmp(in);
+  tmp.ApplyFloor(0);
+  // now tmp retains the postive part of in
+
+  out->CopyFromMat(in);
+  out->ApplyCeiling(0);
+  out->ApplyExp();
+  // now out is 1 when positive, exp(x) when negative
+
+  out->AddMat(1.0, tmp);
+}
+
+void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
+                                  CuMatrixBase<BaseFloat> *out_value,
+                                  CuMatrixBase<BaseFloat> *in_deriv) {
+  // out_value is here because we need its value;
+  // then we will re-use it as a tmp variable since it's not needed later
+
+  // here we compute the derivative of the
+  // f = -\sum f(y_j)/p(y_j) where f is the ComputeSamplingNonlinearity function
+  // its derivative is the product of the following 2:
+  // 1. \partial f / \partial f(y_j) = -1/p(y_j)
+  // 2. \partial f(y_j) / \partial y_j, which is exp(y_j) for negative,
+  //                                             1 for positive
+
+  out_value->ApplyCeiling(1.0); // now out_value represents quantities in (2)
+  in_deriv->CopyRowsFromVec(probs_inv); // now in_deriv stores (1)
+  in_deriv->MulElements(*out_value); // multiply the 2
+//  KALDI_LOG << "sum is " << in_deriv->Sum();
+}
+
 LmNnetSamplingTrainer::LmNnetSamplingTrainer(
                           const LmNnetTrainerOptions &config,
                           const vector<BaseFloat> &unigram,
@@ -533,24 +567,8 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   CuMatrix<BaseFloat> out((*old_output)->NumRows(), samples.size(), kSetZero);
   output_projection.Propagate(**old_output, samples, &out);
 
-  // implement y = log(1 + x), x >= 0
-  //           y = x, x < 0
-  {
-    CuMatrix<BaseFloat> out2(out);
-    out2.ApplyFloor(0.0);
-    out2.Add(1);
-    out2.ApplyLog();
-    // now out2 implements the function 
-    // y = 0, if x < 0
-    // y = log(1 + x), if x >= 0
-
-    out.ApplyCeiling(0.0);
-    // now out is
-    // y = x, if x < 0
-    // y = 0, if x >= 0
-
-    out.AddMat(1.0, out2);
-  }
+  CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
+  ComputeSamplingNonlinearity(out, &f_out);
 
   *tot_weight = post.Sum();
   vector<int32> correct_indexes(out.NumRows(), -1);
@@ -573,17 +591,15 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   SparseMatrix<BaseFloat> supervision_cpu;
   VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
   CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
-  *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf; not finished yet
+  *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf
+  // (the objf regarding the positive reward for getting correct labels)
   // now for each row the objf is y_i where i is the correct label
-  // we need to compute y_i - (\sum_j exp(y_j)) + 1
-  // or in the sampling case, y_i - (\sum_j exp(y_j)/prob(j))
-
-  CuMatrix<BaseFloat> out_exp(out);
-  out_exp.ApplyExp();
-  // out_exp is now exp(y_i)
+  // we need to compute y_i - (\sum_j f(y_j)) + 1
+  // or in the sampling case, y_i - (\sum_j f(y_j)/prob(j))
 
   // the adjusted output by multiplying by -1/prob(sampling)
-  CuMatrix<BaseFloat> out_div_probs(out.NumRows(), out.NumCols());
+  CuMatrix<BaseFloat> f_out_div_probs(out.NumRows(), out.NumCols());
+  CuVector<BaseFloat> selection_probs_inv(out.NumCols());
 
   // first fill in the -1/probs
   if (num_samples != unigram.size()) {
@@ -591,52 +607,39 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     for (int i = 0; i < out.NumCols(); i++) {
       v(i) = -1.0 / selected_probs[i];
     }
-    out_div_probs.CopyRowsFromVec(CuVector<BaseFloat>(v));
+    selection_probs_inv.CopyFromVec(v);
+    f_out_div_probs.CopyRowsFromVec(selection_probs_inv);
   } else {
-    out_div_probs.Set(-1.0);
+    f_out_div_probs.Set(-1.0);
+    selection_probs_inv.Set(-1.0);
   }
-  // now multiply by exp(y_i)
-  out_div_probs.MulElements(out_exp);
-  // now each element is -exp(y_i)/selection-prob
+  // now both stores the probs only
+
+  // now multiply by f(y_i)
+  f_out_div_probs.MulElements(f_out);
+  // now each element is -f(y_i)/selection-prob
 
   // need to add 1 per row
-  BaseFloat neg_term = out_div_probs.Sum() + out_div_probs.NumRows();
+  BaseFloat neg_term = f_out_div_probs.Sum() + f_out_div_probs.NumRows();
   *tot_objf += neg_term;
 
   if (supply_deriv && nnet != NULL) {
-    CuMatrix<BaseFloat> new_out_deriv(out_exp);
-    // new_out_deriv is now exp(y_i)
+    CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), out.NumCols());
+    BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
 
     CuMatrix<BaseFloat> derivatives;
-    derivatives.Swap(&out_exp); // re-use the mem so that no need to malloc again
+    derivatives.Swap(&f_out); // re-use the mem so that no need to malloc again
     supervision_gpu.CopyToMat(&derivatives); // setting 1 for the correct labels
     // derivative now has 1 for correct labels
 
-    derivatives.AddMat(1.0, out_div_probs); //  adding -exp(y)/probs for everyone
-    // now it's -exp(y) / selection-prob(i) for non-correct labels
-    // 1 - exp(y) for correct labels  (selection-prob of a correct label is 1)
-    // which is the correct derivative
-
-    {
-      // the derivative for function 
-      // y = log (x + 1), x >= 0; y = x, x < 0 is
-      // 1/(x+1), when x >= 0; 
-      // 1 when x < 0
-      // or 1/(max(1, 1+x)
-
-      // new_out_deriv is currently exp(y) where y is the modified output
-      // i.e. exp(x) when x < 0; x + 1 when x > 0
-      new_out_deriv.ApplyFloor(1);
-      new_out_deriv.InvertElements();
-      new_out_deriv.MulElements(derivatives);
-    }
+    derivatives.AddMat(1.0, f_out_div_probs_deriv);
 
     CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
                                     (*old_output)->NumCols(),
                                     kSetZero);
 
     output_projection.Backprop(samples, **old_output, out,
-                               new_out_deriv, nnet->output_projection_,
+                               derivatives, nnet->output_projection_,
                                &input_deriv);
 
     computer->AcceptInput(output_name, &input_deriv);

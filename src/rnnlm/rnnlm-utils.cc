@@ -22,6 +22,7 @@ void SparseMatrixToVector(const SparseMatrix<BaseFloat> &sp,
   for (int i = 0; i < k; i++) {
     const SparseVector<BaseFloat> &sv = sp.Row(i);                              
     int non_zero_index = -1;                                                    
+    KALDI_ASSERT(sv.NumElements() == 1);
     sv.Max(&non_zero_index); 
     (*v)[i] = non_zero_index;
   }

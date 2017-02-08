@@ -33,6 +33,13 @@ namespace rnnlm {
 
 using namespace nnet3;
 
+void ComputeSamplingNonlinearity(const CuMatrixBase<BaseFloat> &in,
+                                 CuMatrixBase<BaseFloat> *out);
+
+void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
+                                  CuMatrixBase<BaseFloat> *out_value,
+                                  CuMatrixBase<BaseFloat> *in_deriv);
+
 struct LmNnetTrainerOptions {
   bool zero_component_stats;
   bool store_component_stats;
