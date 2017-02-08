@@ -1,7 +1,13 @@
 // rnnlm/rnnlm-utils-test.cc
 
-#include <math.h>
 #include "rnnlm/rnnlm-utils.h"
+#include "arpa-sampling.h"
+
+#include <math.h>
+#include <typeinfo>
+#include "base/kaldi-common.h"
+#include "util/common-utils.h"
+#include "fst/fstlib.h"
 
 namespace kaldi {
 namespace rnnlm {
@@ -168,12 +174,38 @@ void UnitTestSamplingTime(int iters) {
 }  // end namespace rnnlm
 }  // end namespace kaldi.
 
-int main() {
+int main(int argc, char **argv) {
   using namespace kaldi;
   using namespace rnnlm;
   int N = 10000;
   UnitTestSampleWithProbOne(N);
   UnitTestSamplingTime(N);
   UnitTestSamplingConvergence();
-}
 
+  const char *usage = "";
+  ParseOptions po(usage);
+  po.Read(argc, argv);
+  std::string arpa_file = po.GetArg(1), history_file = po.GetArg(2);
+  
+  ArpaParseOptions options;
+  fst::SymbolTable symbols;
+  // Use spaces on special symbols, so we rather fail than read them by mistake.
+  symbols.AddSymbol(" <eps>", kEps);
+  symbols.AddSymbol(" #0", kDisambig);
+  options.bos_symbol = symbols.AddSymbol("<s>", kBos);
+  options.eos_symbol = symbols.AddSymbol("</s>", kEos);
+  options.unk_symbol = symbols.AddSymbol("<unk>", kUnk);
+  options.oov_handling = ArpaParseOptions::kAddToSymbols;
+  ArpaSampling mdl(options, &symbols);
+  
+  bool binary;
+  Input k1(arpa_file, &binary);
+  mdl.Read(k1.Stream(), binary);
+  mdl.TestReadingModel();
+   
+  Input k2(history_file, &binary);
+  mdl.ReadHistories(k2.Stream(), binary);
+  
+  mdl.TestSampling();
+  return 0;
+}
