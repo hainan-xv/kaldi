@@ -154,7 +154,7 @@ if [ $stage -le -2 ]; then
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
-  AffineSampleLogSoftmaxComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
+  AffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
@@ -242,7 +242,7 @@ if [ $stage -le $num_iters ]; then
           this_cmd=$cuda_cmd
         fi
 
-        $this_cmd $outdir/log/train_rnnlm.$n.log rnnlm-train --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
+        $this_cmd $outdir/log/train_rnnlm.$n.log rnnlm-train --verbose=2 --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
         --max-param-change=$max_param_change "rnnlm-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl $unigram
 

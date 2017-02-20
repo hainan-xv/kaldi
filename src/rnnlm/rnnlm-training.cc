@@ -305,7 +305,7 @@ void LmNnetSamplingTrainer::ProcessOutputs(const NnetExample &eg,
       BaseFloat tot_weight, tot_objf;
       bool supply_deriv = true;
 
-      if (dynamic_cast<const AffineSampleLogSoftmaxComponent*>(nnet_->O()) != NULL) {
+      if (dynamic_cast<const AffineImportanceSamplingComponent*>(nnet_->O()) != NULL) {
         ComputeObjectiveFunctionSample(config_.sample_size, unigram_, io.features,
                                        obj_type, io.name,
                                        supply_deriv, computer,
@@ -667,8 +667,8 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionExact(
   CuSparseMatrix<BaseFloat> cu_post(post);
 
   {
-    const AffineSampleLogSoftmaxComponent* output_project =
-      dynamic_cast<const AffineSampleLogSoftmaxComponent*>(&output_projection);
+    const AffineImportanceSamplingComponent* output_project =
+      dynamic_cast<const AffineImportanceSamplingComponent*>(&output_projection);
     if (output_project != NULL) {
       output_project->Propagate(old_output, normalize, new_output);
     }

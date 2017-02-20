@@ -66,7 +66,7 @@ void UnitTestSamplingNonlinearity() {
     for (int t = 0; t < test_dim; t++) {
       CuMatrix<BaseFloat> delta_in(num_rows, num_cols);
       delta_in.SetRandn();
-      delta_in.Scale(0.0001);
+      delta_in.Scale(0.001);
 
       new_in.CopyFromMat(in1);
       new_in.AddMat(1.0, delta_in);
