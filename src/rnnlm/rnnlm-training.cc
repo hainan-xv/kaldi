@@ -193,6 +193,7 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
       }
       param_delta_squared += std::pow(scale_factors(i),
                                       static_cast<BaseFloat>(2.0)) * dot_prod;
+//      KALDI_LOG << "param_delta_squared here is " << param_delta_squared;
       i++;
     }
   }
@@ -203,7 +204,9 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
   {
     BaseFloat max_change_per = nnet_->input_projection_->MaxChange();
     KALDI_ASSERT(max_change_per >= 0);
-    BaseFloat dot_prod = nnet_->input_projection_->DotProduct(*nnet_->input_projection_);
+    BaseFloat dot_prod = delta_nnet_->input_projection_->DotProduct(*delta_nnet_->input_projection_);
+
+//    KALDI_LOG << "in dot prod is " << dot_prod;
 
     if (max_change_per != 0.0 &&
         std::sqrt(dot_prod) > max_change_per) {
@@ -223,12 +226,15 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
     }
     param_delta_squared += std::pow(scale_f_in, 
                                     static_cast<BaseFloat>(2.0)) * dot_prod;
+//    KALDI_LOG << "param_delta_squared in is " << param_delta_squared;
   }
 
   {
     BaseFloat max_change_per = nnet_->output_projection_->MaxChange();
     KALDI_ASSERT(max_change_per >= 0);
-    BaseFloat dot_prod = nnet_->output_projection_->DotProduct(*nnet_->output_projection_);
+    BaseFloat dot_prod = delta_nnet_->output_projection_->DotProduct(*delta_nnet_->output_projection_);
+
+//    KALDI_LOG << "out dot prod is " << dot_prod;
 
     if (max_change_per != 0.0 && std::sqrt(dot_prod) > max_change_per) {
       scale_f_out = max_change_per / std::sqrt(dot_prod);
@@ -247,11 +253,14 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
     }
     param_delta_squared += std::pow(scale_f_out, 
                                     static_cast<BaseFloat>(2.0)) * dot_prod;
+//    KALDI_LOG << "scale, dotprod is " << scale_f_out << " " << dot_prod;
+//    KALDI_LOG << "param_delta_squared out is " << param_delta_squared;
   }
 
 
   KALDI_ASSERT(i == scale_factors.Dim());
   BaseFloat param_delta = std::sqrt(param_delta_squared);
+//  KALDI_LOG << "param_delta is " << param_delta;
   // computes the scale for global max-change (with momentum)
   BaseFloat scale = (1.0 - config_.momentum);
   if (config_.max_param_change != 0.0) {
@@ -273,7 +282,7 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
     if (min_scale < 1.0)
       ostr << "Per-component max-change active on "
            << num_max_change_per_component_applied_per_minibatch
-           << " / " << num_updatable << " Updatable Components."
+           << " / " << num_updatable + 2 << " Updatable Components."
            << "(smallest factor=" << min_scale << " on "
            << component_name_with_min_scale
            << " with max-change=" << max_change_with_min_scale <<"). "; 
@@ -641,6 +650,8 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     output_projection.Backprop(samples, **old_output, out,
                                derivatives, nnet->output_projection_,
                                &input_deriv);
+
+//    BaseFloat t = TraceMatMat(nnet->output_projection_->params_, nnet->output_projection_->params_, kTrans);
 
     computer->AcceptInput(output_name, &input_deriv);
   }

@@ -115,14 +115,12 @@ class LmNnet {
       SetNnetAsGradient(nnet_);
     }
     LmInputComponent* p;
-    if ((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL) {
-      p->SetZero(is_gradient);
-    }
+    KALDI_ASSERT((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL);
+    p->SetZero(is_gradient);
 
     LmOutputComponent* p2;
-    if ((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL) {
-      p2->SetZero(is_gradient);
-    }
+    KALDI_ASSERT((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL);
+    p2->SetZero(is_gradient);
   }
 
   void SetLearningRate(BaseFloat learning_rate) {

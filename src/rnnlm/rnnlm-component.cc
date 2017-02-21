@@ -73,6 +73,7 @@ LmComponent* NaturalGradientAffineImportanceSamplingComponent::Copy() const {
 BaseFloat NaturalGradientAffineImportanceSamplingComponent::DotProduct(const LmComponent &other_in) const {
   const NaturalGradientAffineImportanceSamplingComponent *other =
       dynamic_cast<const NaturalGradientAffineImportanceSamplingComponent*>(&other_in);
+  KALDI_ASSERT(other != NULL);
   return TraceMatMat(params_, other->params_, kTrans);
 }
 
@@ -107,7 +108,7 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
     ok = ok && cfl->GetValue("output-dim", &output_dim);
 //    BaseFloat param_stddev = 1.0 / std::sqrt(input_dim),
 //        bias_stddev = 1.0;
-    BaseFloat param_stddev = 0.0, /// log(1.0 / output_dim),
+    BaseFloat param_stddev = 1.0, /// log(1.0 / output_dim),
         bias_stddev = log(1.0 / output_dim);
 
     cfl->GetValue("param-stddev", &param_stddev);
@@ -294,6 +295,11 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
     delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
 
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddRows(1.0, delta_bias_trans, idx2);  // TODO(hxu)
+
+    BaseFloat t = TraceMatMat(to_update->params_, to_update->params_, kTrans);
+
+//    KALDI_LOG << "tracematmat on to_update out is " << t;
+
   }
 }
 
@@ -758,6 +764,7 @@ LmComponent* AffineImportanceSamplingComponent::Copy() const {
 BaseFloat AffineImportanceSamplingComponent::DotProduct(const LmComponent &other_in) const {
   const AffineImportanceSamplingComponent *other =
       dynamic_cast<const AffineImportanceSamplingComponent*>(&other_in);
+  KALDI_ASSERT(other != NULL);
   return TraceMatMat(params_, other->params_, kTrans);
 }
 

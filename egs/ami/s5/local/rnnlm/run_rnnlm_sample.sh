@@ -23,9 +23,9 @@ num_archives=4
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
 minibatch_size=1:128
 
-hidden_dim=200
-initial_learning_rate=0.01
-final_learning_rate=0.0001
+hidden_dim=500
+initial_learning_rate=0.0001
+final_learning_rate=0.000001
 learning_rate_decline_factor=1.04
 
 # LSTM parameters
@@ -49,7 +49,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_sampling_${hidden_dim}_2
+outdir=rnnlm_sampling_${num_archives}_${hidden_dim}_${initial_learning_rate}_${final_learning_rate}_${learning_rate_decline_factor}
 #outdir=sample
 srcdir=data/local/dict
 
@@ -154,12 +154,12 @@ if [ $stage -le -2 ]; then
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
-  AffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
+  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
 #  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
-  component name=hidden_affine type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=10
+  component name=hidden_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=10
 
 #Component nodes
   component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)

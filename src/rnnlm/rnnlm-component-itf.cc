@@ -187,6 +187,12 @@ void LmOutputComponent::ReadUpdatableCommon(std::istream &is, bool binary) {
   } else {
     is_gradient_ = false;
   }
+  if (token == "<MaxChange>") {
+    ReadBasicType(is, binary, &max_change_);
+    ReadToken(is, binary, &token);
+  } else {
+    max_change_ = 0.0;
+  }
   if (token == "<LearningRate>") {
     ReadBasicType(is, binary, &learning_rate_);
   } else {
@@ -208,6 +214,10 @@ void LmOutputComponent::WriteUpdatableCommon(std::ostream &os,
   if (is_gradient_) {
     WriteToken(os, binary, "<IsGradient>");
     WriteBasicType(os, binary, is_gradient_);
+  }
+  if (max_change_ > 0.0) {
+    WriteToken(os, binary, "<MaxChange>");
+    WriteBasicType(os, binary, max_change_);
   }
   WriteToken(os, binary, "<LearningRate>");
   WriteBasicType(os, binary, learning_rate_);
