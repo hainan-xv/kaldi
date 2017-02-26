@@ -48,7 +48,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_nnet3_${hidden_dim}
+outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}
 srcdir=data/local/dict
 
 set -e
@@ -187,7 +187,7 @@ if [ $stage -le -2 ]; then
 #EOF
 #  fi
 
-  if [ "$type" == "rnn_new" ]; then
+  if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
 
   input-node name=input dim=$num_words_in

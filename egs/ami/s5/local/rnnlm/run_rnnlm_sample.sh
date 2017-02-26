@@ -148,13 +148,15 @@ ppl_oos_penalty=`echo $num_words_out $num_words_total $oos_ratio | awk '{print (
 echo dev oos ratio is $oos_ratio
 echo dev oos penalty is $ppl_oos_penalty
 
+unigram=$outdir/uni_counts.txt
+
 if [ $stage -le -2 ]; then
   echo Create nnet configs
 
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
-  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
+  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10 unigram=$unigram
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim

@@ -93,6 +93,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Init(std::string matrix_f
 void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
   std::string matrix_filename;
+  std::string unigram_filename;
   int32 input_dim = -1, output_dim = -1;
   InitLearningRatesFromConfig(cfl);
   if (cfl->GetValue("matrix", &matrix_filename)) {
@@ -108,7 +109,7 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
     ok = ok && cfl->GetValue("output-dim", &output_dim);
 //    BaseFloat param_stddev = 1.0 / std::sqrt(input_dim),
 //        bias_stddev = 1.0;
-    BaseFloat param_stddev = 1.0, /// log(1.0 / output_dim),
+    BaseFloat param_stddev = 0.01, /// log(1.0 / output_dim),
         bias_stddev = log(1.0 / output_dim);
 
     cfl->GetValue("param-stddev", &param_stddev);
@@ -120,6 +121,21 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
 
     // TODO(hxu)
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
+
+    if (cfl->GetValue("unigram", &unigram_filename)) {
+      std::vector<BaseFloat> u;
+      ReadUnigram(unigram_filename, &u);
+      KALDI_ASSERT(u.size() == params_.NumRows());
+      Matrix<BaseFloat> m(1, u.size(), kUndefined);
+      for (int i = 0; i < u.size(); i++) {
+        m(0, i) = log(u[i]);
+      }
+      CuMatrix<BaseFloat> g(m);
+      params_.ColRange(params_.NumCols() - 1, 1).Set(0.0);
+      params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, g, kTrans);
+    }
+
+
   }
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
@@ -296,7 +312,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddRows(1.0, delta_bias_trans, idx2);  // TODO(hxu)
 
-    BaseFloat t = TraceMatMat(to_update->params_, to_update->params_, kTrans);
+//    BaseFloat t = TraceMatMat(to_update->params_, to_update->params_, kTrans);
 
 //    KALDI_LOG << "tracematmat on to_update out is " << t;
 
@@ -1448,9 +1464,17 @@ void LinearSoftmaxNormalizedComponent::InitFromConfig(ConfigLine *cfl) {
       std::vector<BaseFloat> u;
       ReadUnigram(unigram_filename, &u);
       InitFromUnigram(u);
+
+//      linear_params_.RowRange(0, linear_params_.NumRows() / 3).Set(0);
+
       PerturbParams(param_stddev);
       Normalize();
     }
+  }
+  BaseFloat f = 1.0;
+  out_factor_ = 1.0;
+  if (cfl->GetValue("out-factor", &f)) {
+    out_factor_ = f;
   }
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
@@ -1487,7 +1511,7 @@ void LinearSoftmaxNormalizedComponent::Propagate(const CuMatrixBase<BaseFloat> &
 void LinearSoftmaxNormalizedComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
                                                 bool normalize,
                                                 CuMatrixBase<BaseFloat> *out) const {
-  out->AddMatMat(1.0, in, kNoTrans, actual_params_, kTrans, 1.0);
+  out->AddMatMat(1.0 * out_factor_, in, kNoTrans, actual_params_, kTrans, 1.0);
   KALDI_ASSERT(ApproxEqual(out->Sum(), out->NumRows()));
   out->ApplyLog();
 }
@@ -1524,10 +1548,10 @@ void LinearSoftmaxNormalizedComponent::Propagate(const CuMatrixBase<BaseFloat> &
     int w = indexes[i];
 //    KALDI_LOG << in.Row(i).Sum() << " should be close to 1";
     BaseFloat sum = 0.0;
-    if (!ApproxEqual(sum = in.Row(i).Sum(), 1.0)) {
+    if (!ApproxEqual(sum = in.Row(i).Sum() * out_factor_, 1.0)) {
       KALDI_LOG << sum << " should be close to 1";
     }
-    BaseFloat res = VecVec(in.Row(i), actual_params_.Row(w));
+    BaseFloat res = VecVec(in.Row(i), actual_params_.Row(w)) * out_factor_;
 //    KALDI_ASSERT(res >= 0 && res <= 1);
     (*out)[i] = res;
   }
@@ -1547,7 +1571,7 @@ void LinearSoftmaxNormalizedComponent::Backprop(
 
   for (int i = 0; i < k; i++) {
     int index = indexes[i];
-    input_deriv->Row(i).AddVec(output_deriv[i], actual_params_.Row(index));
+    input_deriv->Row(i).AddVec(output_deriv[i] / out_factor_, actual_params_.Row(index));
   }
 
   LinearSoftmaxNormalizedComponent* to_update
@@ -1563,7 +1587,7 @@ void LinearSoftmaxNormalizedComponent::Backprop(
   daT.SetZero();
   for (int i = 0; i < k; i++) {
     int index = indexes[i];
-    daT.ColRange(index, 1).AddVecToCols(output_deriv[i], in_value.Row(i), 1.0);
+    daT.ColRange(index, 1).AddVecToCols(output_deriv[i] / out_factor_, in_value.Row(i), 1.0);
   }
   dapT.DiffSoftmaxPerRow(aT, daT);
 //  KALDI_LOG << aT.Sum() << " and " << daT.Sum() << " and " <<dapT.Sum();
@@ -1579,6 +1603,8 @@ void LinearSoftmaxNormalizedComponent::Read(std::istream &is, bool binary) {
   actual_params_.Read(is, binary);
   ExpectToken(is, binary, "<IsGradient>");
   ReadBasicType(is, binary, &is_gradient_);
+  ExpectToken(is, binary, "<OutFactor>");
+  ReadBasicType(is, binary, &out_factor_);
   ExpectToken(is, binary, "</LinearSoftmaxNormalizedComponent>");
   Normalize();
 }
@@ -1591,6 +1617,8 @@ void LinearSoftmaxNormalizedComponent::Write(std::ostream &os, bool binary) cons
   actual_params_.Write(os, binary);
   WriteToken(os, binary, "<IsGradient>");
   WriteBasicType(os, binary, is_gradient_);
+  WriteToken(os, binary, "<OutFactor>");
+  WriteBasicType(os, binary, out_factor_);
   WriteToken(os, binary, "</LinearSoftmaxNormalizedComponent>");
 }
 

@@ -40,7 +40,7 @@ label_delay=0  # 5
 splice_indexes=0
 use_gpu=yes
 
-type=rnn  # or lstm
+type=crnn  # or lstm
 
 id=
 
@@ -48,8 +48,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=debug-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$hidden_dim-$num_archives-$id-norm
-outdir=rnnlm_norm_${type}_${hidden_dim}
+outdir=norm-rnnlm-$type-$initial_learning_rate-$final_learning_rate-$learning_rate_decline_factor-$hidden_dim-$num_archives-$id-norm
 srcdir=data/local/dict
 
 set -e
@@ -151,6 +150,25 @@ unigram=$outdir/uni_counts.txt
 
 if [ $stage -le -2 ]; then
   echo Create nnet configs
+
+  if [ "$type" == "crnn" ]; then
+    cat > $outdir/config <<EOF
+    LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
+    LinearSoftmaxNormalizedComponent input-dim=$[$hidden_dim+$hidden_dim] output-dim=$num_words_out unigram=$unigram param-stddev=1 max-change=10 out-factor=0.5
+
+    input-node name=input dim=$hidden_dim
+    component name=first_renorm1 type=SoftmaxComponent dim=$hidden_dim # target-rms=0.05
+    component name=hidden_affine1 type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=10
+    component name=first_renorm2 type=SoftmaxComponent dim=$hidden_dim # target-rms=0.05
+    component name=hidden_affine2 type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=10
+
+    component-node name=first_renorm1 component=first_renorm1  input=Sum(input, hidden_affine1)
+    component-node name=hidden_affine1 component=hidden_affine1  input=IfDefined(Offset(first_renorm1, -1))
+    component-node name=first_renorm2 component=first_renorm2  input=Sum(input, hidden_affine2)
+    component-node name=hidden_affine2 component=hidden_affine2  input=IfDefined(Offset(first_renorm2, -1))
+    output-node    name=output input=Append(first_renorm1, first_renorm2) objective=linear
+EOF
+  fi
 
   if [ "$type" == "rnn" ]; then
     cat > $outdir/config <<EOF

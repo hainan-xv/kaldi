@@ -424,6 +424,7 @@ class LinearSoftmaxNormalizedComponent: public LmOutputComponent {
 
   const LinearSoftmaxNormalizedComponent &operator =
      (const LinearSoftmaxNormalizedComponent &other); // Disallow.
+  BaseFloat out_factor_;
   CuMatrix<BaseFloat> linear_params_;
 //  CuVector<BaseFloat> normalizer_;
   CuMatrix<BaseFloat> actual_params_;
