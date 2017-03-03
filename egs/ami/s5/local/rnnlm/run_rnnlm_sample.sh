@@ -41,14 +41,14 @@ splice_indexes=0
 use_gpu=yes
 num_samples=-1
 
-type=rnn  # or lstm
+type=rnn-natural  # or lstm
 
 id=
 . cmd.sh
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_sampling_${num_archives}_${hidden_dim}_${initial_learning_rate}_${final_learning_rate}_${learning_rate_decline_factor}
+outdir=rnnlm_sampling_${num_archives}_${hidden_dim}_${initial_learning_rate}_${final_learning_rate}_${learning_rate_decline_factor}_$type
 srcdir=data/local/dict
 set -e
 
@@ -135,15 +135,34 @@ unigram=$outdir/uni_counts.txt
 if [ $stage -le -2 ]; then
   echo Create nnet configs
 
-  if [ "$type" == "rnn" ]; then
+  if [ "$type" == "rnn-natural" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=1
-  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1 unigram=$unigram
+#  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1 unigram=$unigram
+  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
 #  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
   component name=hidden_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=1
+
+#Component nodes
+  component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
+#  component-node name=first_renorm component=first_renorm  input=first_nonlin
+  component-node name=hidden_affine component=hidden_affine  input=IfDefined(Offset(first_nonlin, -1))
+  output-node    name=output input=first_nonlin objective=linear
+EOF
+  fi
+
+  if [ "$type" == "rnn" ]; then
+  cat > $outdir/config <<EOF
+  LmLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=1
+  AffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1
+
+  input-node name=input dim=$hidden_dim
+  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
+#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+  component name=hidden_affine type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=1
 
 #Component nodes
   component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
