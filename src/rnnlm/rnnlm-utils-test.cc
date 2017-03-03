@@ -107,6 +107,13 @@ void UnitTestSampleWithProbOne(int iters) {
 
   PrepareVector(n, ones_size, &must_sample_set, &selection_probs);
 
+//  KALDI_LOG << "Must sample: ";
+//  for (std::set<int>::iterator iter = must_sample_set.begin();
+//                               iter != must_sample_set.end();
+//                               iter++) {
+//    KALDI_LOG << *iter << " ";
+//  }
+
   // generate a random number k from ones_size + 1 to n
   int k = rand() % (n - ones_size) + ones_size + 1;
   NormalizeVec(k, must_sample_set, &selection_probs);

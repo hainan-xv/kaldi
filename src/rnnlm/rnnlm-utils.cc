@@ -3,6 +3,142 @@
 namespace kaldi {
 namespace rnnlm {
 
+void CheckValidGrouping(const vector<interval> &g, int k) {
+  KALDI_ASSERT(g.size() >= k);
+  // check sum
+  BaseFloat selection_sum = 0.0;
+  BaseFloat unigram_sum = 0.0;
+  for (int i = 0; i < g.size(); i++) {
+    selection_sum += std::min(BaseFloat(1.0), g[i].selection_prob);
+    unigram_sum += g[i].unigram_prob;
+
+    KALDI_ASSERT(g[i].L < g[i].R);
+    KALDI_ASSERT(g[i].selection_prob <= 1.0 || g[i].selection_prob > 5.0);
+  }
+  KALDI_ASSERT(ApproxEqual(selection_sum, k));
+  KALDI_ASSERT(ApproxEqual(unigram_sum, 1.0));
+  KALDI_ASSERT(g[0].L == 0);
+//  KALDI_ASSERT(g[g.size() - 1].R == 0);
+  for (int i = 1; i < g.size(); i++) {
+    KALDI_ASSERT(g[i].L == g[i - 1].R);
+  }
+} 
+
+// assume u is already sorted
+void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *out) {
+  BaseFloat sum = 0.0;
+  for (int i = 0; i < u.size(); i++) {
+    sum += std::min(u[i].second, BaseFloat(1.0));
+  }
+//  for (int i = 0; i < u.size(); i++) {
+//    u[i].second /= sum;
+//  }
+
+  KALDI_ASSERT(out->size() == 0);
+  BaseFloat weight_to_spare = k;
+
+  int size = u.size();
+
+  int begin = -1;
+  BaseFloat cumulative_unigram_weight = 0.0;
+  BaseFloat unigram_weight_left = 1.0;
+  BaseFloat selection_weight;
+
+  using std::min;
+  int i;
+  for (i = 0; i < size; i++) {
+    if (u[i].first == 97) {
+      int j  = 0;
+      j++;
+    }
+    if (begin == -1 && min(BaseFloat(10.0), u[i].second) / sum / unigram_weight_left * weight_to_spare >= 1) {
+      // first case, the single word is too big
+      weight_to_spare -= 1.0;
+      unigram_weight_left -= min(BaseFloat(1.0), u[i].second) / sum;
+      out->push_back(interval(i, i + 1, min(BaseFloat(1.0), u[i].second) / sum, 10.0));
+    } else if (begin == -1) {
+      // first time we encounter a word whose prob isn't too big
+      begin = i;
+      cumulative_unigram_weight = min(BaseFloat(1.0), u[i].second) / sum;
+    } else {
+      // in the middle of grouping words
+      // first test if including the new word would make it bigger than 1
+      selection_weight = (cumulative_unigram_weight + min(BaseFloat(1.0), u[i].second) / sum) / unigram_weight_left * weight_to_spare;
+
+      if (selection_weight > 1) {
+//        cout << "here, i = " << i << endl;
+        // too big, then group thing from begin to i - 1
+        selection_weight = cumulative_unigram_weight / unigram_weight_left * weight_to_spare;
+//        weight_to_spare -= selection_weight;
+//        unigram_weight_left -= cumulative_unigram_weight;
+        KALDI_ASSERT(selection_weight >= 0 && selection_weight <= 1);
+        out->push_back(interval(begin, i, cumulative_unigram_weight, selection_weight));
+
+        begin = i;
+        cumulative_unigram_weight = min(BaseFloat(1.0), u[i].second) / sum;
+      } else {
+        cumulative_unigram_weight += min(BaseFloat(1.0), u[i].second) / sum;
+      }
+    }
+  }
+  
+  if (begin != -1 && begin < size) {
+    selection_weight = (cumulative_unigram_weight) / unigram_weight_left * weight_to_spare;
+  //  selection_weight = (cumulative_unigram_weight + min(BaseFloat(1.0), u[i].second) / sum) / unigram_weight_left * weight_to_spare;
+    KALDI_ASSERT(selection_weight <= 1.0);
+    out->push_back(interval(begin, i, cumulative_unigram_weight, selection_weight));
+  }
+//  for (int i = 0; i < out->size(); i++) {
+//    const interval &j = (*out)[i];
+//    cout << j.L << ", " << j.R << ": " << j.unigram_prob << ", " << j.selection_prob << endl;
+//  }
+
+  CheckValidGrouping(*out, k);
+  
+}
+
+// return an int i in [L, R - 1], w/ probs porportional to their pdf's
+int SelectOne(const vector<BaseFloat> &cdf, int L, int R) {
+//  BaseFloat low = 0;
+//  if (L - 1 >= 0) {
+//    low = cdf[L];
+//  }
+//  BaseFloat p = RandUniform() * (cdf[R] - low) + low;
+  BaseFloat p = RandUniform() * (cdf[R] - cdf[L]) + cdf[L];
+
+  int index = -1;
+
+  // it actually happened in the test that they're equal
+  if (p <= cdf[L]) {
+    index = L;
+  }
+  else if (p >= cdf[R]) {
+    index = R - 1;
+  } else {
+    int i1 = L;           // >= i1
+    int i2 = R;  // <  i2
+    int mid = -1;
+    while (true) {
+      KALDI_ASSERT(i1 < i2);
+      mid = (i1 + i2) / 2;
+      if (cdf[mid + 1] >= p && cdf[mid] < p) {
+        index = mid;
+        break;
+      } else if (cdf[mid] >= p) {
+        i2 = mid;
+      } else {
+        i1 = mid + 1;
+      }
+    }
+  }
+
+//  cout << "select " << index << " in range " << L << "-" << R <<endl;
+//  KALDI_ASSERT(index >= L && index < R);
+  return index;
+  
+}
+
+
 void VectorToSparseMatrix(const vector<int32> &v,
                           int dim,
                           SparseMatrix<BaseFloat> *sp) {
@@ -98,6 +234,52 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 }
 
 void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
+                              vector<int> *out) {
+  sort(u.begin(), u.end(), LargerThan);
+  vector<BaseFloat> cdf(u.size() + 1);
+  cdf[0] = 0;
+  for (int i = 1; i <= cdf.size(); i++) {
+    cdf[i] = cdf[i - 1] + std::min(BaseFloat(1.0), u[i - 1].second);
+  }
+
+//    cout << "cdf: ";
+//    for (int i = 0; i < cdf.size(); i++) {
+//      cout << cdf[i] << " ";
+//    } cout << endl;
+
+//  KALDI_ASSERT(cdf[cdf.size() - 1], n)
+  vector<interval> g;
+  DoGrouping(u, n, &g);
+
+  vector<std::pair<int, BaseFloat> > group_u(g.size());
+  for (int i = 0; i < g.size(); i++) {
+    group_u[i].first = i;
+    group_u[i].second = g[i].selection_prob;
+  }
+  SampleWithoutReplacement_(group_u, n, out);
+
+//  std::cout << "selected groups are: ";
+//  for (int i = 0; i < out->size(); i++) {
+//    std::cout << (*out)[i] << " ";
+//  }
+//  std::cout << std::endl;
+
+  for (int i = 0; i < out->size(); i++) {
+    if (g[(*out)[i]].L + 1 < g[(*out)[i]].R) { // is a group of many
+      int index = SelectOne(cdf, g[(*out)[i]].L, g[(*out)[i]].R);
+      (*out)[i] = u[index].first;
+    } else {
+      (*out)[i] = u[g[(*out)[i]].L].first;
+    }
+  }
+//  cout << "selected words are: ";
+//  for (int i = 0; i < out->size(); i++) {
+//    cout << (*out)[i] << " ";
+//  }
+//  cout << endl;
+}
+
+void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
                               vector<int> *out) {
   sort(u.begin(), u.end(), LargerThan);
 
@@ -205,6 +387,7 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
     }
 
     KALDI_ASSERT(R[index] != 0);
+    KALDI_ASSERT(u[index].second < 1.0);
     ans[index] = k;
 
 //    bool replaced = false;
@@ -244,10 +427,10 @@ void NormalizeVec(int k, const set<int>& ones, vector<BaseFloat> *probs) {
   }
   KALDI_ASSERT(ApproxEqual(sum, 1.0));
   
-//  set the 1s to be 10 to avoid numerical issues
+//  set the 1s to be 10.0 to avoid numerical issues
   for (set<int>::const_iterator iter = ones.begin(); iter != ones.end(); iter++) {
     sum -= (*probs)[*iter];
-    (*probs)[*iter] = 10;  // mark the ones
+    (*probs)[*iter] = 10.0;  // mark the ones
   }
 
   // distribute the remaining probs

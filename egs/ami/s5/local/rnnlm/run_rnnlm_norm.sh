@@ -26,7 +26,7 @@ minibatch_size=1:128
 hidden_dim=200
 initial_learning_rate=0.2
 final_learning_rate=0.005
-learning_rate_decline_factor=1.02
+learning_rate_decline_factor=1.01
 
 # LSTM parameters
 num_lstm_layers=1
@@ -89,11 +89,6 @@ if [ $stage -le -4 ]; then
         {if(($1 in v) && (v[$1]!=1)){print(v[$1]);}else{printf("1\n");}}' | sort | uniq -c | awk '{print$2,$1}' | sort -k1 -n > $outdir/uni_counts.txt
 
   cat $outdir/uni_counts.txt | awk '{print NR-1, 1}' > $outdir/uniform.txt
-
-#  cat $outdir/out.words $outdir/train.txt | awk '{for(i=1;i<=NF;i++) print $i}' | grep -v "<s>" \
-#     | awk -v w=$outdir/wordlist.out \
-#      'BEGIN{while((getline<w)>0) {v[$1]=$2;}}
-#        {if(($1 in v) && (v[$1]!=1)){print(v[$1]);}else{printf("1\n");}}' | sort | uniq -c | awk '{print$2,$1}' | sort -k1 -n > $outdir/uni_counts.txt
 fi
 
 num_words_in=`wc -l $outdir/wordlist.in | awk '{print $1}'`
@@ -107,25 +102,15 @@ if [ $stage -le -3 ]; then
   $cmd $outdir/log/get-egs.dev.txt \
     rnnlm-get-egs $outdir/dev.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/dev.egs"
 
-  (
-    echo Do split
-    [ -d $outdir/splitted-text ] && rm $outdir/splitted-text -r
-    [ -d $outdir/egs ] && rm $outdir/egs -r
-    mkdir -p $outdir/splitted-text
-    mkdir -p $outdir/egs
-    split --number=l/$num_archives --numeric-suffixes=1 $outdir/train.txt $outdir/splitted-text/train.
-
-    for i in `seq 1 $num_archives`; do
-      j=$i
-      while [ ! -f $outdir/splitted-text/train.$i ]; do
-        i=0$i
-      done
-      [ "$i" != "$j" ] && mv $outdir/splitted-text/train.$i $outdir/splitted-text/train.$j.txt
-      rnnlm-get-egs $outdir/splitted-text/train.$j.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/egs/train.$j.egs"
-    done
-  )
-
   wait
+
+  mkdir -p $outdir/egs
+  egs_str=
+  for i in `seq 1 $num_archives`; do
+    egs_str="$egs_str ark:$outdir/egs/train.$i.egs"
+  done
+
+  nnet3-copy-egs ark:$outdir/train.egs $egs_str
 
   $cmd $outdir/log/create_train_subset_combine.log \
      nnet3-subset-egs --n=$num_train_frames_combine ark:$outdir/train.egs \
@@ -278,10 +263,10 @@ if [ $stage -le $num_iters ]; then
         fi
         )
 
-      t=`grep "^# Accounting" $outdir/log/train.rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
-      w=`wc -w $outdir/splitted-text/train.$this_archive.txt | awk '{print $1}'`
-      speed=`echo $w $t | awk '{print $1/$2}'`
-      echo Processing speed: $speed words per second \($w words in $t seconds\)
+#      t=`grep "^# Accounting" $outdir/log/train.rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
+#      w=`wc -w $outdir/splitted-text/train.$this_archive.txt | awk '{print $1}'`
+#      speed=`echo $w $t | awk '{print $1/$2}'`
+#      echo Processing speed: $speed words per second \($w words in $t seconds\)
 
       grep parse $outdir/log/train.rnnlm.$n.log | awk -F '-' '{print "Training PPL is " exp($NF)}'
 
