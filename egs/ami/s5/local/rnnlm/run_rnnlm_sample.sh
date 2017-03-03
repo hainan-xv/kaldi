@@ -138,9 +138,9 @@ if [ $stage -le -2 ]; then
   if [ "$type" == "rnn-natural" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=1
-#  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1 unigram=$unigram
   NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1
 
+#  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1 unigram=$unigram
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
 #  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0

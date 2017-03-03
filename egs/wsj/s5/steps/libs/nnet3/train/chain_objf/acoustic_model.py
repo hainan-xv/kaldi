@@ -230,7 +230,8 @@ def train_one_iteration(dir, iter, srand, egs_dir,
                         leaky_hmm_coefficient,
                         momentum, max_param_change, shuffle_buffer_size,
                         frame_subsampling_factor,
-                        run_opts, background_process_handler=None):
+                        run_opts, dropout_edit_string="",
+                        background_process_handler=None):
     """ Called from steps/nnet3/chain/train.py for one iteration for
     neural network training with LF-MMI objective
 
@@ -244,9 +245,10 @@ def train_one_iteration(dir, iter, srand, egs_dir,
     if os.path.exists('{0}/srand'.format(dir)):
         try:
             saved_srand = int(open('{0}/srand'.format(dir)).readline().strip())
-        except (IOError, ValueError) as e:
-            raise Exception("Exception while reading the random seed "
-                            "for training: {0}".format(e.str()))
+        except (IOError, ValueError):
+            logger.error("Exception while reading the random seed "
+                         "for training")
+            raise
         if srand != saved_srand:
             logger.warning("The random seed provided to this iteration "
                            "(srand={0}) is different from the one saved last "
@@ -309,6 +311,17 @@ def train_one_iteration(dir, iter, srand, egs_dir,
         cur_num_chunk_per_minibatch_str = common_train_lib.halve_minibatch_size_str(
             num_chunk_per_minibatch_str)
         cur_max_param_change = float(max_param_change) / math.sqrt(2)
+
+    raw_model_string = raw_model_string + dropout_edit_string
+
+    shrink_info_str = ''
+    if shrinkage_value != 1.0:
+        shrink_info_str = ' and shrink value is {0}'.format(shrinkage_value)
+
+    logger.info("On iteration {0}, learning rate is {1}"
+                "{shrink_info}.".format(
+                    iter, learning_rate,
+                    shrink_info=shrink_info_str))
 
     train_new_models(dir=dir, iter=iter, srand=srand, num_jobs=num_jobs,
                      num_archives_processed=num_archives_processed,
@@ -515,7 +528,9 @@ def compute_progress(dir, iter, run_opts, wait=False,
 def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch_str,
                    egs_dir, left_context, right_context,
                    leaky_hmm_coefficient, l2_regularize,
-                   xent_regularize, run_opts, background_process_handler=None):
+                   xent_regularize, run_opts,
+                   background_process_handler=None,
+                   sum_to_one_penalty=0.0):
     """ Function to do model combination
 
     In the nnet3 setup, the logic
@@ -528,20 +543,27 @@ def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch_st
 
     models_to_combine.add(num_iters)
 
-    for iter in models_to_combine:
+    # TODO: if it turns out the sum-to-one-penalty code is not useful,
+    # remove support for it.
+
+    for iter in sorted(models_to_combine):
         model_file = '{0}/{1}.mdl'.format(dir, iter)
         if os.path.exists(model_file):
-            raw_model_strings.append(
-                '"nnet3-am-copy --raw=true {0} -|"'.format(model_file))
+            # we used to copy them with nnet3-am-copy --raw=true, but now
+            # the raw-model-reading code discards the other stuff itself.
+            raw_model_strings.append(model_file)
         else:
             print("{0}: warning: model file {1} does not exist "
                   "(final combination)".format(sys.argv[0], model_file))
 
     common_lib.run_job(
         """{command} {combine_queue_opt} {dir}/log/combine.log \
-                nnet3-chain-combine --num-iters=40 \
+                nnet3-chain-combine --num-iters={opt_iters} \
                 --l2-regularize={l2} --leaky-hmm-coefficient={leaky} \
-                --enforce-sum-to-one=true --enforce-positive-weights=true \
+                --separate-weights-per-component={separate_weights} \
+                --enforce-sum-to-one={hard_enforce} \
+                --sum-to-one-penalty={penalty} \
+                --enforce-positive-weights=true \
                 --verbose=3 {dir}/den.fst {raw_models} \
                 "ark,bg:nnet3-chain-copy-egs --left-context={lc} \
                     --right-context={rc} ark:{egs_dir}/combine.cegs ark:- | \
@@ -551,9 +573,13 @@ def combine_models(dir, num_iters, models_to_combine, num_chunk_per_minibatch_st
                 {dir}/final.mdl""".format(
                     command=run_opts.command,
                     combine_queue_opt=run_opts.combine_queue_opt,
+                    opt_iters=(20 if sum_to_one_penalty <= 0 else 80),
+                    separate_weights=(sum_to_one_penalty > 0),
                     lc=left_context, rc=right_context,
                     l2=l2_regularize, leaky=leaky_hmm_coefficient,
                     dir=dir, raw_models=" ".join(raw_model_strings),
+                    hard_enforce=(sum_to_one_penalty <= 0),
+                    penalty=sum_to_one_penalty,
                     num_chunk_per_mb=num_chunk_per_minibatch_str,
                     num_iters=num_iters,
                     egs_dir=egs_dir))

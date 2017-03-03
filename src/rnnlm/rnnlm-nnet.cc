@@ -71,9 +71,11 @@ void LmNnet::ReadConfig(std::istream &config_is) {
 
   int i = 0; 
   input_projection_ = dynamic_cast<LmInputComponent*>(LmComponent::NewComponentOfType(type[i]));
+  KALDI_ASSERT(input_projection_ != NULL);
   input_projection_->InitFromConfig(&config_lines[i++]);
 
   output_projection_ = dynamic_cast<LmOutputComponent*>(LmComponent::NewComponentOfType(type[i]));
+  KALDI_ASSERT(output_projection_ != NULL);
   output_projection_->InitFromConfig(&config_lines[i++]);
 
   nnet_->ReadConfig(config_is);

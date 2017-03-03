@@ -26,7 +26,7 @@ logger = logging.getLogger('libs')
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 handler.setLevel(logging.INFO)
-formatter = logging.Formatter("%(asctime)s [%(filename)s:%(lineno)s - "
+formatter = logging.Formatter("%(asctime)s [%(pathname)s:%(lineno)s - "
                               "%(funcName)s - %(levelname)s ] %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -96,13 +96,15 @@ def get_args():
                         shrink-threshold at the non-linearities.  E.g. 0.99.
                         Only applicable when the neural net contains sigmoid or
                         tanh units.""")
-    parser.add_argument("--trainer.optimization.shrink-saturation-threshold", type=float,
+    parser.add_argument("--trainer.optimization.shrink-saturation-threshold",
+                        type=float,
                         dest='shrink_saturation_threshold', default=0.40,
-                        help="""Threshold that controls when we apply the 'shrinkage'
-                        (i.e. scaling by shrink-value).  If the saturation of the
-                        sigmoid and tanh nonlinearities in the neural net (as
-                        measured by steps/nnet3/get_saturation.pl) exceeds this
-                        threshold we scale the parameter matrices with the
+                        help="""Threshold that controls when we apply the
+                        'shrinkage' (i.e. scaling by shrink-value).  If the
+                        saturation of the sigmoid and tanh nonlinearities in
+                        the neural net (as measured by
+                        steps/nnet3/get_saturation.pl) exceeds this threshold
+                        we scale the parameter matrices with the
                         shrink-value.""")
     # RNN specific trainer options
     parser.add_argument("--trainer.rnn.num-chunk-per-minibatch", type=str,
@@ -219,6 +221,7 @@ def train(args, run_opts, background_process_handler):
     num_jobs = common_lib.get_number_of_jobs(args.ali_dir)
     feat_dim = common_lib.get_feat_dim(args.feat_dir)
     ivector_dim = common_lib.get_ivector_dim(args.online_ivector_dir)
+    ivector_id = common_lib.get_ivector_extractor_id(args.online_ivector_dir)
 
     # split the training data into parts for individual jobs
     # we will use the same number of jobs as that used for alignment
@@ -293,7 +296,8 @@ def train(args, run_opts, background_process_handler):
 
     [egs_left_context, egs_right_context,
      frames_per_eg_str, num_archives] = (
-        common_train_lib.verify_egs_dir(egs_dir, feat_dim, ivector_dim,
+        common_train_lib.verify_egs_dir(egs_dir, feat_dim, 
+                                        ivector_dim, ivector_id,
                                         left_context, right_context,
                                         left_context_initial, right_context_final))
     if args.chunk_width != frames_per_eg_str:
@@ -336,7 +340,7 @@ def train(args, run_opts, background_process_handler):
     # $num_epochs times, i.e. $num_iters*$avg_num_jobs) ==
     # $num_epochs*$num_archives, where
     # avg_num_jobs=(num_jobs_initial+num_jobs_final)/2.
-    num_archives_to_process = args.num_epochs * num_archives
+    num_archives_to_process = int(args.num_epochs * num_archives)
     num_archives_processed = 0
     num_iters = ((num_archives_to_process * 2)
                  / (args.num_jobs_initial + args.num_jobs_final))
@@ -384,11 +388,6 @@ def train(args, run_opts, background_process_handler):
                                         args.shrink_saturation_threshold)
                                    else 1
                                    )
-            logger.info("On iteration {0}, learning rate is {1} and "
-                        "shrink value is {2}.".format(
-                            iter, learning_rate(iter, current_num_jobs,
-                                                num_archives_processed),
-                            shrinkage_value))
 
             train_lib.common.train_one_iteration(
                 dir=args.dir,
@@ -400,6 +399,10 @@ def train(args, run_opts, background_process_handler):
                 num_archives=num_archives,
                 learning_rate=learning_rate(iter, current_num_jobs,
                                             num_archives_processed),
+                dropout_edit_string=common_train_lib.get_dropout_edit_string(
+                    args.dropout_schedule,
+                    float(num_archives_processed) / num_archives_to_process,
+                    iter),
                 shrinkage_value=shrinkage_value,
                 minibatch_size_str=args.num_chunk_per_minibatch,
                 num_hidden_layers=num_hidden_layers,
@@ -426,7 +429,7 @@ def train(args, run_opts, background_process_handler):
                 if iter % reporting_iter_interval == 0:
                     # lets do some reporting
                     [report, times, data] = (
-                        nnet3_log_parse.generate_accuracy_report(args.dir))
+                        nnet3_log_parse.generate_acc_logprob_report(args.dir))
                     message = report
                     subject = ("Update : Expt {dir} : "
                                "Iter {iter}".format(dir=args.dir, iter=iter))
@@ -441,8 +444,10 @@ def train(args, run_opts, background_process_handler):
             models_to_combine=models_to_combine, egs_dir=egs_dir,
             run_opts=run_opts,
             left_context=left_context, right_context=right_context,
+            minibatch_size_str=args.num_chunk_per_minibatch,
             background_process_handler=background_process_handler,
-            chunk_width=args.chunk_width)
+            chunk_width=args.chunk_width,
+            sum_to_one_penalty=args.combine_sum_to_one_penalty)
 
     if args.stage <= num_iters + 1:
         logger.info("Getting average posterior for purposes of "
@@ -475,7 +480,7 @@ def train(args, run_opts, background_process_handler):
             remove_egs=remove_egs)
 
     # do some reporting
-    [report, times, data] = nnet3_log_parse.generate_accuracy_report(args.dir)
+    [report, times, data] = nnet3_log_parse.generate_acc_logprob_report(args.dir)
     if args.email is not None:
         common_lib.send_mail(report, "Update : Expt {0} : "
                                      "complete".format(args.dir), args.email)

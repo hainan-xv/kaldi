@@ -105,6 +105,8 @@ void cudaF_div_elements(dim3 Gr, dim3 Bl, float *mat, const float *A,
                         MatrixDim dst_d, int src_stride);
 void cudaF_max(dim3 Gr, dim3 Bl, float *mat, const float *A, MatrixDim dst_d,
                int src_stride);
+void cudaF_min(dim3 Gr, dim3 Bl, float *mat, const float *other,
+               MatrixDim mat_d, int other_stride);
 void cudaF_mul_cols_vec(dim3 Gr, dim3 Bl, float *mat, const float *scale,
                         MatrixDim d);
 void cudaF_mul_rows_vec(dim3 Gr, dim3 Bl, float *mat, const float *scale,
@@ -373,6 +375,8 @@ void cudaD_div_elements(dim3 Gr, dim3 Bl, double *mat, const double *A,
                         MatrixDim dst_d, int src_stride);
 void cudaD_max(dim3 Gr, dim3 Bl, double *mat, const double *A, MatrixDim dst_d,
                int src_stride);
+void cudaD_min(dim3 Gr, dim3 Bl, double *mat, const double *other,
+               MatrixDim mat_d, int other_stride);
 void cudaD_mul_cols_vec(dim3 Gr, dim3 Bl, double *mat, const double *scale,
                         MatrixDim d);
 void cudaD_mul_rows_vec(dim3 Gr, dim3 Bl, double *mat, const double *scale,
@@ -696,6 +700,7 @@ void cudaF_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
                                   float* self_repair_sum_out,
                                   const int self_repair_sum_out_stride);
 
+
 void cudaD_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
                             const int params_stride,
                             const MatrixIndexT_cuda* reorder,
@@ -718,7 +723,21 @@ void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
                                           MatrixDim out_deriv_dim,
                                           const int params_stride,
                                           float* params);
+void cudaD_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
+                              MatrixDim d_out, const double *v_in);
+void cudaF_copy_cols_from_vec(dim3 Gr, dim3 Bl, float *mat_out, MatrixDim d_out,
+                              const float *v_in);
 
+void cudaF_diff_normalize_per_row(size_t Gr, size_t Bl, float *id,
+                                  int id_stride, const float *iv,
+                                  MatrixDim iv_dim, const float* od,
+                                  int od_stride, float target_rms,
+                                  bool add_log_stddev);
+void cudaD_diff_normalize_per_row(size_t Gr, size_t Bl, double *id,
+                                  int id_stride, const double *iv,
+                                  MatrixDim iv_dim, const double* od,
+                                  int od_stride, double target_rms,
+                                  bool add_log_stddev);
 
 } // extern "C"
 

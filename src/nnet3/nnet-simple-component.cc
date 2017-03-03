@@ -87,27 +87,34 @@ void PnormComponent::Write(std::ostream &os, bool binary) const {
 }
 
 
-void DropoutComponent::Init(int32 dim, BaseFloat dropout_proportion) {
+void DropoutComponent::Init(int32 dim, BaseFloat dropout_proportion,
+                            bool dropout_per_frame) {
   dropout_proportion_ = dropout_proportion;
+  dropout_per_frame_ = dropout_per_frame;
   dim_ = dim;
 }
 
 void DropoutComponent::InitFromConfig(ConfigLine *cfl) {
   int32 dim = 0;
   BaseFloat dropout_proportion = 0.0;
+  bool dropout_per_frame = false;
   bool ok = cfl->GetValue("dim", &dim) &&
     cfl->GetValue("dropout-proportion", &dropout_proportion);
+  cfl->GetValue("dropout-per-frame", &dropout_per_frame);
+    // for this stage, dropout is hard coded in
+    // normal mode if not declared in config
   if (!ok || cfl->HasUnusedValues() || dim <= 0 ||
       dropout_proportion < 0.0 || dropout_proportion > 1.0)
-    KALDI_ERR << "Invalid initializer for layer of type "
-              << Type() << ": \"" << cfl->WholeLine() << "\"";
-  Init(dim, dropout_proportion);
+       KALDI_ERR << "Invalid initializer for layer of type "
+                 << Type() << ": \"" << cfl->WholeLine() << "\"";
+  Init(dim, dropout_proportion, dropout_per_frame);
 }
 
 std::string DropoutComponent::Info() const {
   std::ostringstream stream;
   stream << Type() << ", dim=" << dim_
-         << ", dropout-proportion=" << dropout_proportion_;
+         << ", dropout-proportion=" << dropout_proportion_
+         << ", dropout-per-frame=" << (dropout_per_frame_ ? "true" : "false");
   return stream.str();
 }
 
@@ -119,16 +126,29 @@ void DropoutComponent::Propagate(const ComponentPrecomputedIndexes *indexes,
 
   BaseFloat dropout = dropout_proportion_;
   KALDI_ASSERT(dropout >= 0.0 && dropout <= 1.0);
+  if (!dropout_per_frame_) {
+    // This const_cast is only safe assuming you don't attempt
+    // to use multi-threaded code with the GPU.
+    const_cast<CuRand<BaseFloat>&>(random_generator_).RandUniform(out);
 
-  // This const_cast is only safe assuming you don't attempt
-  // to use multi-threaded code with the GPU.
-  const_cast<CuRand<BaseFloat>&>(random_generator_).RandUniform(out);
+    out->Add(-dropout);  // now, a proportion "dropout" will be <0.0
+    // apply the function (x>0?1:0).  Now, a proportion
+    // "dropout" will be zero and (1 - dropout) will be 1.0.
+    out->ApplyHeaviside();
 
-  out->Add(-dropout); // now, a proportion "dropout" will be <0.0
-  out->ApplyHeaviside(); // apply the function (x>0?1:0).  Now, a proportion "dropout" will
-                         // be zero and (1 - dropout) will be 1.0.
-
-  out->MulElements(in);
+    out->MulElements(in);
+  } else {
+    // randomize the dropout matrix by row,
+    // i.e. [[1,1,1,1],[0,0,0,0],[0,0,0,0],[1,1,1,1],[0,0,0,0]]
+    CuMatrix<BaseFloat> tmp(1, out->NumRows(), kUndefined);
+    // This const_cast is only safe assuming you don't attempt
+    // to use multi-threaded code with the GPU.
+    const_cast<CuRand<BaseFloat>&>(random_generator_).RandUniform(&tmp);
+    tmp.Add(-dropout);
+    tmp.ApplyHeaviside();
+    out->CopyColsFromVec(tmp.Row(0));
+    out->MulElements(in);
+  }
 }
 
 
@@ -150,11 +170,25 @@ void DropoutComponent::Backprop(const std::string &debug_info,
 
 
 void DropoutComponent::Read(std::istream &is, bool binary) {
-  ExpectOneOrTwoTokens(is, binary, "<DropoutComponent>", "<Dim>");
-  ReadBasicType(is, binary, &dim_);
-  ExpectToken(is, binary, "<DropoutProportion>");
-  ReadBasicType(is, binary, &dropout_proportion_);
-  ExpectToken(is, binary, "</DropoutComponent>");
+  std::string token;
+  ReadToken(is, binary, &token);
+  if (token == "<DropoutComponent>") {
+    ReadToken(is, binary, &token);
+  }
+  KALDI_ASSERT(token == "<Dim>");
+  ReadBasicType(is, binary, &dim_);  // read dimension.
+  ReadToken(is, binary, &token);
+  KALDI_ASSERT(token == "<DropoutProportion>");
+  ReadBasicType(is, binary, &dropout_proportion_);  // read dropout rate
+  ReadToken(is, binary, &token);
+  if (token == "<DropoutPerFrame>") {
+    ReadBasicType(is, binary, &dropout_per_frame_);  // read dropout mode
+    ReadToken(is, binary, &token);
+    KALDI_ASSERT(token == "</DropoutComponent>");
+  } else {
+    dropout_per_frame_ = false;
+    KALDI_ASSERT(token == "</DropoutComponent>");
+  }
 }
 
 void DropoutComponent::Write(std::ostream &os, bool binary) const {
@@ -163,6 +197,8 @@ void DropoutComponent::Write(std::ostream &os, bool binary) const {
   WriteBasicType(os, binary, dim_);
   WriteToken(os, binary, "<DropoutProportion>");
   WriteBasicType(os, binary, dropout_proportion_);
+  WriteToken(os, binary, "<DropoutPerFrame>");
+  WriteBasicType(os, binary, dropout_per_frame_);
   WriteToken(os, binary, "</DropoutComponent>");
 }
 
@@ -449,48 +485,10 @@ void NormalizeComponent::Backprop(const std::string &debug_info,
                                   const CuMatrixBase<BaseFloat> &out_deriv,
                                   Component *to_update,
                                   CuMatrixBase<BaseFloat> *in_deriv) const {
-  if (!in_deriv)  return;
-  const CuSubMatrix<BaseFloat> out_deriv_no_log(out_deriv,
-                                                0, out_deriv.NumRows(),
-                                                0, input_dim_);
-  CuVector<BaseFloat> dot_products(out_deriv.NumRows());
-  dot_products.AddDiagMatMat(1.0, out_deriv_no_log, kNoTrans,
-                             in_value, kTrans, 0.0);
-  CuVector<BaseFloat> in_norm(in_value.NumRows());
-  BaseFloat d_scaled = (in_value.NumCols() * target_rms_ * target_rms_);
-  in_norm.AddDiagMat2(1.0, in_value, kNoTrans, 0.0);
-
-  if (add_log_stddev_) {
-    CuVector<BaseFloat> log_stddev_deriv(in_norm), // log_stddev deriv as dF/dy .* (x^T x)^-1
-        out_deriv_for_stddev(out_deriv.NumRows(), kUndefined);
-    // f = log(sqrt(max(epsi, x^T x / D)))
-    // df/dx = epsi^2 * D < x^T x ? (1/(x^T x)) * x  : 0.
-    // we don't compute this exactly below for the case wehn x^2 x is very
-    // small, but we do make sure that the deriv isn't infinity when the input
-    // is zero.
-    log_stddev_deriv.ApplyFloor(input_dim_ * kSquaredNormFloor);
-    log_stddev_deriv.ApplyPow(-1.0);
-    out_deriv_for_stddev.CopyColFromMat(out_deriv, (out_deriv.NumCols() - 1));
-    log_stddev_deriv.MulElements(out_deriv_for_stddev);
-    if (in_deriv)
-      in_deriv->AddDiagVecMat(1.0, log_stddev_deriv, in_value, kNoTrans, 1.0);
-  }
-  in_norm.Scale(1.0 / d_scaled);
-  in_norm.ApplyFloor(kSquaredNormFloor);
-  in_norm.ApplyPow(-0.5);
-  if (in_deriv) {
-    if (in_deriv->Data() != out_deriv_no_log.Data())
-      in_deriv->AddDiagVecMat(1.0, in_norm, out_deriv_no_log, kNoTrans, 1.0);
-    else
-      in_deriv->MulRowsVec(in_norm);
-    in_norm.ReplaceValue(1.0 / sqrt(kSquaredNormFloor), 0.0);
-    in_norm.ApplyPow(3.0);
-    dot_products.MulElements(in_norm);
-
-    in_deriv->AddDiagVecMat(-1.0 / d_scaled,
-                            dot_products, in_value,
-                            kNoTrans, 1.0);
-  }
+  if (!in_deriv)
+    return;
+  cu::DiffNormalizePerRow(in_value, out_deriv, target_rms_, add_log_stddev_,
+                          in_deriv);
 }
 
 void NormalizeOneComponent::Init(int32 input_dim) {
