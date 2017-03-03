@@ -288,6 +288,8 @@ class LmComponent {
     KALDI_ASSERT(0);
   }
 
+  virtual void FreezeNaturalGradient(bool freeze) {}
+
 // private:
 //  KALDI_DISALLOW_COPY_AND_ASSIGN(LmComponent);
 

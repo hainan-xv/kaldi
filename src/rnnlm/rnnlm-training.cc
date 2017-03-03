@@ -128,9 +128,29 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
 
   const NnetComputation *computation = compiler_.Compile(request);
 
+  if (config_.adversarial_training_scale > 0.0 &&
+      num_minibatches_processed_ % config_.adversarial_training_interval == 0) {
+    // adversarial training is incompatible with momentum > 0
+    KALDI_ASSERT(config_.momentum == 0.0);
+    delta_nnet_->FreezeNaturalGradient(true);
+    bool is_adversarial_step = true;
+    TrainInternal(eg, *computation, is_adversarial_step);
+    delta_nnet_->FreezeNaturalGradient(false);
+  }
+
+  bool is_adversarial_step = false;
+  TrainInternal(eg, *computation, is_adversarial_step);
+
+  num_minibatches_processed_++;
+
+}
+
+void LmNnetSamplingTrainer::TrainInternal(const NnetExample &eg,
+                                          const NnetComputation& computation,
+                                          bool is_adversarial_step) {
   const SparseMatrix<BaseFloat> *old_input;
 
-  NnetComputer computer(config_.compute_config, *computation, *nnet_->GetNnet(),
+  NnetComputer computer(config_.compute_config, computation, *nnet_->GetNnet(),
                         (delta_nnet_ == NULL ? nnet_->GetNnet() :
                                delta_nnet_->GetNnet()));
 
@@ -142,7 +162,7 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
 
   // in ProcessOutputs() we first do the last Forward propagation
   // and before exiting, do the first step of back-propagation
-  this->ProcessOutputs(eg, &computer);
+  this->ProcessOutputs(is_adversarial_step, eg, &computer);
   computer.Run();
 
   const CuMatrixBase<BaseFloat> &first_deriv = computer.GetOutput("input");
@@ -150,10 +170,10 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
   nnet_->I()->Backprop(*old_input, place_holder,
                        first_deriv, delta_nnet_->input_projection_, NULL);
 
-  UpdateParamsWithMaxChange();
+  UpdateParamsWithMaxChange(is_adversarial_step);
 }
 
-void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
+void LmNnetSamplingTrainer::UpdateParamsWithMaxChange(bool is_adversarial_step) {
   KALDI_ASSERT(delta_nnet_ != NULL);
   // computes scaling factors for per-component max-change
   const int32 num_updatable = NumUpdatableComponents(delta_nnet_->Nnet());
@@ -294,15 +314,41 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange() {
   }
   // applies both of the max-change scalings all at once, component by component
   // and updates parameters
-  scale_factors.Scale(scale);
-  AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale, nnet_->nnet_);
-  nnet_->input_projection_->Add(1.0, *delta_nnet_->input_projection_);
-  nnet_->output_projection_->Add(1.0, *delta_nnet_->output_projection_);
-//  ScaleNnet(config_.momentum, delta_nnet_);
-  delta_nnet_->Scale(config_.momentum);
-}
 
-void LmNnetSamplingTrainer::ProcessOutputs(const NnetExample &eg,
+  if (config_.adversarial_training_scale > 0.0) {
+      KALDI_ASSERT(config_.momentum == 0.0);
+      BaseFloat scale_adversarial =
+          (is_adversarial_step ? -config_.adversarial_training_scale :
+          (1 + config_.adversarial_training_scale));
+
+      scale_factors.Scale(scale * scale_adversarial);
+
+      AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale * scale_adversarial,
+                        nnet_->nnet_);
+
+      nnet_->input_projection_->Add(scale_f_in * scale_adversarial,
+                                    *delta_nnet_->input_projection_);
+      nnet_->output_projection_->Add(scale_f_out * scale_adversarial,
+                                     *delta_nnet_->output_projection_);
+
+//      ScaleNnet(0.0, delta_nnet_);
+      delta_nnet_->Scale(0.0);
+    } else {
+//      scale_factors.Scale(scale);
+//      AddNnetComponents(*delta_nnet_, scale_factors, scale, nnet_);
+//      ScaleNnet(config_.momentum, delta_nnet_);
+      scale_factors.Scale(scale);
+      AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale, nnet_->nnet_);
+      nnet_->input_projection_->Add(scale_f_in, *delta_nnet_->input_projection_);
+      nnet_->output_projection_->Add(scale_f_out, *delta_nnet_->output_projection_);
+    //  ScaleNnet(config_.momentum, delta_nnet_);
+      delta_nnet_->Scale(config_.momentum);
+    }
+  }
+//}
+
+void LmNnetSamplingTrainer::ProcessOutputs(bool is_adversarial_step,
+                                           const NnetExample &eg,
                                            NnetComputer *computer) {
   std::vector<NnetIo>::const_iterator iter = eg.io.begin(), end = eg.io.end();
   for (; iter != end; ++iter) {
@@ -338,7 +384,7 @@ void LmNnetSamplingTrainer::ProcessOutputs(const NnetExample &eg,
       }
 
       objf_info_[io.name].UpdateStats(io.name, config_.print_interval,
-                                      num_minibatches_processed_++,
+                                      num_minibatches_processed_,
                                       tot_weight, tot_objf);
     }
   }
@@ -366,7 +412,7 @@ void LmObjectiveFunctionInfo::UpdateStats(
     BaseFloat this_minibatch_tot_aux_objf) {
   int32 phase = minibatch_counter / minibatches_per_phase;
   if (phase != current_phase) {
-    KALDI_ASSERT(phase == current_phase + 1); // or doesn't really make sense.
+    KALDI_ASSERT(phase >= current_phase + 1); // or doesn't really make sense.
     PrintStatsForThisPhase(output_name, minibatches_per_phase);
     current_phase = phase;
     tot_weight_this_phase = 0.0;

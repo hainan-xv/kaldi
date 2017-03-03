@@ -103,6 +103,12 @@ class LmNnet {
     
   }
 
+  void FreezeNaturalGradient(bool freeze) {
+    nnet3::FreezeNaturalGradient(freeze, nnet_);
+    input_projection_->FreezeNaturalGradient(freeze);
+    output_projection_->FreezeNaturalGradient(freeze);
+  }
+
   void ZeroStats() {
     nnet3::ZeroComponentStats(nnet_);
     input_projection_->ZeroStats();

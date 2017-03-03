@@ -134,6 +134,7 @@ class LmLinearComponent: public LmInputComponent {
 
 class LmNaturalGradientLinearComponent: public LmLinearComponent {
  public:
+  void FreezeNaturalGradient(bool freeze);
   virtual std::string Type() const { return "LmNaturalGradientLinearComponent"; }
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
@@ -515,6 +516,8 @@ class AffineImportanceSamplingComponent: public LmOutputComponent {
 
 class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceSamplingComponent {
  public:
+  void FreezeNaturalGradient(bool freeze);
+
   virtual int32 InputDim() const { return params_.NumCols() - 1; }
   virtual int32 OutputDim() const { return params_.NumRows(); }
 

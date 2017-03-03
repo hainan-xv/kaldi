@@ -40,6 +40,9 @@ label_delay=0  # 5
 splice_indexes=0
 use_gpu=yes
 
+wang_interval=1
+wang_scale=0.2
+
 type=rnn  # or lstm
 
 id=
@@ -48,7 +51,7 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}
+outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}_wang_update
 srcdir=data/local/dict
 
 set -e
@@ -237,6 +240,7 @@ if [ $stage -le $num_iters ]; then
 #        $cuda_cmd $outdir/log/train.rnnlm.$n.log nnet3-train --use-gpu=$use_gpu --binary=false \
 
         $cuda_cmd $outdir/log/train.rnnlm.$n.log nnet3-train --use-gpu=$use_gpu --binary=false \
+        --adversarial-training-interval=$wang_interval --adversarial-training-scale=$wang_scale \
         --max-param-change=$max_param_change "nnet3-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl 
 

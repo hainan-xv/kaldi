@@ -14,6 +14,11 @@ void NaturalGradientAffineImportanceSamplingComponent::Scale(BaseFloat scale) {
   params_.Scale(scale);
 }
 
+void NaturalGradientAffineImportanceSamplingComponent::FreezeNaturalGradient(bool freeze) {
+  preconditioner_in_.Freeze(freeze);
+  preconditioner_out_.Freeze(freeze);
+}
+
 void NaturalGradientAffineImportanceSamplingComponent::Resize(int32 input_dim, int32 output_dim) {
   KALDI_ASSERT(input_dim > 0 && output_dim > 0);
   params_.Resize(output_dim, input_dim + 1);
@@ -715,6 +720,11 @@ std::string LmNaturalGradientLinearComponent::Info() const {
 
 LmInputComponent* LmNaturalGradientLinearComponent::Copy() const {
   return new LmNaturalGradientLinearComponent(*this);
+}
+
+void LmNaturalGradientLinearComponent::FreezeNaturalGradient(bool freeze) {
+  preconditioner_in_.Freeze(freeze);
+  preconditioner_out_.Freeze(freeze);
 }
 
 void AffineImportanceSamplingComponent::Scale(BaseFloat scale) {
