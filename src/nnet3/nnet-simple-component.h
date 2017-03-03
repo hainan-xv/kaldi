@@ -179,6 +179,49 @@ class ElementwiseProductComponent: public Component {
   int32 output_dim_;
 };
 
+class NormalizeOneComponent: public Component {
+ public:
+ void Init(int32 input_dim);
+  explicit NormalizeOneComponent(int32 input_dim) {
+    Init(input_dim);
+  }
+  explicit NormalizeOneComponent(const NormalizeOneComponent &other);
+  // note: there is some special code in NonlinerComponent::Info() that
+  // specifically caters to this class.
+  virtual int32 Properties() const {
+    return (
+            kSimpleComponent|kBackpropNeedsInput|kPropagateInPlace|
+            kBackpropAdds);
+  }
+  NormalizeOneComponent() { }
+  virtual std::string Type() const { return "NormalizeOneComponent"; }
+  virtual void InitFromConfig(ConfigLine *cfl);
+  virtual Component* Copy() const { return new NormalizeOneComponent(*this); }
+  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
+                         const CuMatrixBase<BaseFloat> &in,
+                         CuMatrixBase<BaseFloat> *out) const;
+  virtual void Backprop(const std::string &debug_info,
+                        const ComponentPrecomputedIndexes *indexes,
+                        const CuMatrixBase<BaseFloat> &in_value,
+                        const CuMatrixBase<BaseFloat> &, // out_value
+                        const CuMatrixBase<BaseFloat> &out_deriv,
+                        Component *to_update,
+                        CuMatrixBase<BaseFloat> *in_deriv) const;
+
+  virtual void Read(std::istream &is, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
+  virtual int32 InputDim() const { return input_dim_; }
+  virtual int32 OutputDim() const {
+    return input_dim_;
+  }
+  virtual std::string Info() const;
+ private:
+  NormalizeOneComponent &operator = (const NormalizeOneComponent &other); // Disallow.
+  enum { kExpSquaredNormFloor = -66 };
+  static const BaseFloat kSquaredNormFloor;
+  int32 input_dim_;
+};
+
 class NormalizeComponent: public Component {
  public:
  void Init(int32 input_dim, BaseFloat target_rms, bool add_log_stddev);
@@ -379,6 +422,97 @@ class FixedScaleComponent;
 class PerElementScaleComponent;
 class PerElementOffsetComponent;
 
+// Linear means a linear function plus an offset.
+// Note: although this class can be instantiated, it also
+// functions as a base-class for more specialized versions of
+// LinearComponent.
+class LinearComponent: public UpdatableComponent {
+  friend class SoftmaxComponent; // Friend declaration relates to mixing up.
+ public:
+
+  virtual int32 InputDim() const { return linear_params_.NumCols(); }
+  virtual int32 OutputDim() const { return linear_params_.NumRows(); }
+
+  virtual std::string Info() const;
+  virtual void InitFromConfig(ConfigLine *cfl);
+
+  LinearComponent() { } // use Init to really initialize.
+  virtual std::string Type() const { return "LinearComponent"; }
+  virtual int32 Properties() const {
+    return kSimpleComponent|kUpdatableComponent|kLinearInParameters|
+        kBackpropNeedsInput|kBackpropAdds;
+  }
+
+
+  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
+                         const CuMatrixBase<BaseFloat> &in,
+                         CuMatrixBase<BaseFloat> *out) const;
+
+//  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
+//                         const SparseMatrix<BaseFloat> &in,
+//                         CuMatrixBase<BaseFloat> *out) const;
+
+  virtual void Backprop(const std::string &debug_info,
+                        const ComponentPrecomputedIndexes *indexes,
+                        const CuMatrixBase<BaseFloat> &in_value,
+                        const CuMatrixBase<BaseFloat> &, // out_value
+                        const CuMatrixBase<BaseFloat> &out_deriv,
+                        Component *to_update,
+                        CuMatrixBase<BaseFloat> *in_deriv) const;
+
+  virtual void Read(std::istream &is, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
+
+  virtual Component* Copy() const;
+
+
+  // Some functions from base-class UpdatableComponent.
+  virtual void Scale(BaseFloat scale);
+  virtual void Add(BaseFloat alpha, const Component &other);
+  virtual void PerturbParams(BaseFloat stddev);
+  virtual BaseFloat DotProduct(const UpdatableComponent &other) const;
+  virtual int32 NumParameters() const;
+  virtual void Vectorize(VectorBase<BaseFloat> *params) const;
+  virtual void UnVectorize(const VectorBase<BaseFloat> &params);
+
+  // Some functions that are specific to this class.
+
+  // This new function is used when mixing up:
+  virtual void SetParams(
+                         const MatrixBase<BaseFloat> &linear);
+  const CuMatrix<BaseFloat> &LinearParams() const { return linear_params_; }
+  explicit LinearComponent(const LinearComponent &other);
+  // The next constructor is used in converting from nnet1.
+  LinearComponent(const CuMatrixBase<BaseFloat> &linear_params,
+                  BaseFloat learning_rate);
+  void Init(int32 input_dim, int32 output_dim,
+            BaseFloat param_stddev);
+  void Init(std::string matrix_filename);
+
+  // This function resizes the dimensions of the component, setting the
+  // parameters to zero, while leaving any other configuration values the same.
+  virtual void Resize(int32 input_dim, int32 output_dim);
+
+ protected:
+  friend class NaturalGradientAffineComponent;
+  // This function Update() is for extensibility; child classes may override
+  // this, e.g. for natural gradient update.
+  virtual void Update(
+      const std::string &debug_info,
+      const CuMatrixBase<BaseFloat> &in_value,
+      const CuMatrixBase<BaseFloat> &out_deriv) {
+    UpdateSimple(in_value, out_deriv);
+  }
+  // UpdateSimple is used when *this is a gradient.  Child classes may override
+  // this if needed, but typically won't need to.
+  virtual void UpdateSimple(
+      const CuMatrixBase<BaseFloat> &in_value,
+      const CuMatrixBase<BaseFloat> &out_deriv);
+
+  const LinearComponent &operator = (const LinearComponent &other); // Disallow.
+  CuMatrix<BaseFloat> linear_params_;
+};
+
 // Affine means a linear function plus an offset.
 // Note: although this class can be instantiated, it also
 // functions as a base-class for more specialized versions of
@@ -404,6 +538,11 @@ class AffineComponent: public UpdatableComponent {
   virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
                          const CuMatrixBase<BaseFloat> &in,
                          CuMatrixBase<BaseFloat> *out) const;
+
+//  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
+//                         const SparseMatrix<BaseFloat> &in,
+//                         CuMatrixBase<BaseFloat> *out) const;
+
   virtual void Backprop(const std::string &debug_info,
                         const ComponentPrecomputedIndexes *indexes,
                         const CuMatrixBase<BaseFloat> &in_value,
@@ -702,6 +841,84 @@ class LogSoftmaxComponent: public NonlinearComponent {
   LogSoftmaxComponent &operator = (const LogSoftmaxComponent &other); // Disallow.
 };
 
+class NaturalGradientLinearComponent: public LinearComponent {
+ public:
+  virtual std::string Type() const { return "NaturalGradientLinearComponent"; }
+  virtual void Read(std::istream &is, bool binary);
+  virtual void Write(std::ostream &os, bool binary) const;
+  void Init(int32 input_dim, int32 output_dim,
+            BaseFloat param_stddev,
+            int32 rank_in, int32 rank_out, int32 update_period,
+            BaseFloat num_samples_history, BaseFloat alpha,
+            BaseFloat max_change_per_sample);
+  void Init(int32 rank_in, int32 rank_out, int32 update_period,
+            BaseFloat num_samples_history,
+            BaseFloat alpha, BaseFloat max_change_per_sample,
+            std::string matrix_filename);
+  // this constructor does not really initialize, use Init() or Read().
+  NaturalGradientLinearComponent();
+  virtual void Resize(int32 input_dim, int32 output_dim);
+  virtual void InitFromConfig(ConfigLine *cfl);
+  virtual std::string Info() const;
+  virtual Component* Copy() const;
+  virtual void Scale(BaseFloat scale);
+  virtual void Add(BaseFloat alpha, const Component &other);
+  // copy constructor
+  explicit NaturalGradientLinearComponent(
+      const NaturalGradientLinearComponent &other);
+  virtual void ZeroStats();
+
+ private:
+  // disallow assignment operator.
+  NaturalGradientLinearComponent &operator= (
+      const NaturalGradientLinearComponent&);
+
+  // Configs for preconditioner.  The input side tends to be better conditioned ->
+  // smaller rank needed, so make them separately configurable.
+  int32 rank_in_;
+  int32 rank_out_;
+  int32 update_period_;
+  BaseFloat num_samples_history_;
+  BaseFloat alpha_;
+
+  OnlineNaturalGradient preconditioner_in_;
+
+  OnlineNaturalGradient preconditioner_out_;
+
+  // If > 0, max_change_per_sample_ is the maximum amount of parameter
+  // change (in L2 norm) that we allow per sample, averaged over the minibatch.
+  // This was introduced in order to control instability.
+  // Instead of the exact L2 parameter change, for
+  // efficiency purposes we limit a bound on the exact
+  // change.  The limit is applied via a constant <= 1.0
+  // for each minibatch, A suitable value might be, for
+  // example, 10 or so; larger if there are more
+  // parameters.
+  BaseFloat max_change_per_sample_;
+
+  // update_count_ records how many updates we have done.
+  double update_count_;
+
+  // active_scaling_count_ records how many updates we have done,
+  // where the scaling factor is active (not 1.0).
+  double active_scaling_count_;
+
+  // max_change_scale_stats_ records the sum of scaling factors
+  // in each update, so we can compute the averaged scaling factor
+  // in Info().
+  double max_change_scale_stats_;
+
+  // Sets the configs rank, alpha and eta in the preconditioner objects,
+  // from the class variables.
+  void SetNaturalGradientConfigs();
+
+  virtual void Update(
+      const std::string &debug_info,
+      const CuMatrixBase<BaseFloat> &in_value,
+      const CuMatrixBase<BaseFloat> &out_deriv);
+};
+
+
 /// Keywords: natural gradient descent, NG-SGD, naturalgradient.  For
 /// the top-level of the natural gradient code look here, and also in
 /// nnet-precondition-online.h.
@@ -982,7 +1199,7 @@ class NoOpComponent: public NonlinearComponent {
   NoOpComponent() { }
   virtual std::string Type() const { return "NoOpComponent"; }
   virtual int32 Properties() const {
-    return kSimpleComponent|kLinearInInput|kPropagateInPlace;
+    return kSimpleComponent|kLinearInInput;
   }
   virtual Component* Copy() const { return new NoOpComponent(*this); }
   virtual void Propagate(const ComponentPrecomputedIndexes *indexes,

@@ -245,7 +245,7 @@ void Randomize(const CuMatrixBase<double> &src,
 template<typename Real>
 void NormalizePerRow(const CuMatrixBase<Real>& in, const Real target_rms,
                      const bool add_log_stddev, CuMatrixBase<Real>* out) {
-  const Real kSquaredNormFloor = 1.35525271560688e-20; // 2^-66
+  const Real kSquaredNormFloor = 1.3552527156068805425e-20; // 2^-66
   if (add_log_stddev) {
     KALDI_ASSERT(in.NumRows() == out->NumRows());
     KALDI_ASSERT(in.NumCols() + 1 == out->NumCols());
@@ -289,6 +289,100 @@ void NormalizePerRow(const CuMatrixBase<float>& in, const float target_rms,
 template
 void NormalizePerRow(const CuMatrixBase<double>& in, const double target_rms,
                      const bool add_log_stddev, CuMatrixBase<double>* out);
+
+
+// A note on the derivative of NormalizeComponent...
+// let both row_in and row_out be vectors of dimension D.
+// Let p = row_in^T row_in / (D * target_rms^2), and let
+// f = 1.0 / sqrt(max(kSquaredNormFloor, p)), and we compute row_out as:
+// row_out = f row_in.
+// Suppose we have a quantity deriv_out which is the derivative
+// of the objective function w.r.t. row_out.  We want to compute
+// deriv_in which is the derivative of the objective function w.r.t.
+// row_in.  Let the objective function be F.  One term is obvious: we have
+// deriv_in = f deriv_out + ....
+// next we have to take into account the derivative that gets back-propagated
+// through f.  Obviously, dF/df = deriv_out^T row_in.
+// And df/dp = (p <= kSquaredNormFloor ? 0.0 : -0.5 p^{-1.5}) = (f == 1.0 / sqrt(kSquaredNormFloor) ? 0.0 : -0.5 f^3),
+// and dp/d(row_in) = 2/(D * target_rms^2) row_in. [it's vector_valued].
+// So this term in dF/d(row_in) equals:
+// dF/df df/dp dp/d(row_in)   =    2/(D * target_rms^2) (f == 1.0 / sqrt(kSquaredNormFloor)  ? 0.0 : -0.5 f^3) (deriv_out^T row_in) row_in
+// So
+// deriv_in = f deriv_out + (f == 1.0 ? 0.0 : -f^3  / (D * target_rms^2) ) (deriv_out^T row_in) row_in
+//  if add_log_stddev_ true, the deriv_in has another term as
+// dF/dx_i = dF/df . df/dx_i => df/dx_i = x_i/(x^T x)
+template<typename Real>
+void DiffNormalizePerRow(const CuMatrixBase<Real> &in_value,
+                         const CuMatrixBase<Real> &out_deriv,
+                         const Real target_rms, const bool add_log_stddev,
+                         CuMatrixBase<Real>* in_deriv) {
+  const Real kSquaredNormFloor = 1.3552527156068805425e-20; // 2^-66
+#if HAVE_CUDA == 1
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+    size_t dimBlock = CU1DBLOCK;
+    size_t dimGrid = in_deriv->NumRows();
+    cuda_diff_normalize_per_row(dimGrid, dimBlock, in_deriv->Data(),
+                                in_deriv->Stride(), in_value.Data(),
+                                in_value.Dim(), out_deriv.Data(),
+                                out_deriv.Stride(), target_rms, add_log_stddev);
+    CU_SAFE_CALL(cudaGetLastError());
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    const CuSubMatrix<Real> out_deriv_no_log(out_deriv, 0, out_deriv.NumRows(),
+                                             0, in_value.NumCols());
+    CuVector<Real> dot_products(out_deriv.NumRows());
+    dot_products.AddDiagMatMat(1.0, out_deriv_no_log, kNoTrans, in_value,
+                               kTrans, 0.0);
+    CuVector<Real> in_norm(in_value.NumRows());
+    Real d_scaled = (in_value.NumCols() * target_rms * target_rms);
+    in_norm.AddDiagMat2(1.0, in_value, kNoTrans, 0.0);
+
+    if (add_log_stddev) {
+      CuVector<Real> log_stddev_deriv(in_norm), // log_stddev deriv as dF/dy .* (x^T x)^-1
+      out_deriv_for_stddev(out_deriv.NumRows(), kUndefined);
+      // f = log(sqrt(max(epsi, x^T x / D)))
+      // df/dx = epsi^2 * D < x^T x ? (1/(x^T x)) * x  : 0.
+      // we don't compute this exactly below for the case when x^2 x is very
+      // small, but we do make sure that the deriv isn't infinity when the input
+      // is zero.
+      log_stddev_deriv.ApplyFloor(in_value.NumCols() * kSquaredNormFloor);
+      log_stddev_deriv.ApplyPow(-1.0);
+      out_deriv_for_stddev.CopyColFromMat(out_deriv, (out_deriv.NumCols() - 1));
+      log_stddev_deriv.MulElements(out_deriv_for_stddev);
+      if (in_deriv)
+        in_deriv->AddDiagVecMat(1.0, log_stddev_deriv, in_value, kNoTrans, 1.0);
+    }
+    in_norm.Scale(1.0 / d_scaled);
+    in_norm.ApplyFloor(kSquaredNormFloor);
+    in_norm.ApplyPow(-0.5);
+    if (in_deriv) {
+      if (in_deriv->Data() != out_deriv_no_log.Data())
+        in_deriv->AddDiagVecMat(1.0, in_norm, out_deriv_no_log, kNoTrans, 1.0);
+      else
+        in_deriv->MulRowsVec(in_norm);
+      in_norm.ReplaceValue(1.0 / sqrt(kSquaredNormFloor), 0.0);
+      in_norm.ApplyPow(3.0);
+      dot_products.MulElements(in_norm);
+
+      in_deriv->AddDiagVecMat(-1.0 / d_scaled, dot_products, in_value, kNoTrans,
+                              1.0);
+    }
+  }
+}
+
+template
+void DiffNormalizePerRow(const CuMatrixBase<float> &in_value,
+                         const CuMatrixBase<float> &out_deriv,
+                         const float target_rms, const bool add_log_stddev,
+                         CuMatrixBase<float>* in_deriv);
+template
+void DiffNormalizePerRow(const CuMatrixBase<double> &in_value,
+                         const CuMatrixBase<double> &out_deriv,
+                         const double target_rms, const bool add_log_stddev,
+                         CuMatrixBase<double>* in_deriv);
 
 
 // not calling this Sigmoid to reduce the chance of future collisions.
@@ -808,8 +902,126 @@ void BackpropLstmNonlinearity(const CuMatrixBase<double> &input,
                               CuMatrixBase<double> *deriv_sum_out,
                               CuMatrixBase<double> *self_repair_sum_out);
 
+template<typename Real>
+void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
+                           const SparseMatrix<Real> &sp,
+                           CuMatrixBase<Real> *output) {
+  KALDI_ASSERT(output->NumCols() == params.NumRows());
+  KALDI_ASSERT(sp.NumRows() == output->NumRows());
+#if HAVE_CUDA == 1
+  std::vector<MatrixIndexT> vis;
+  for (size_t i = 0; i < sp.NumRows(); i++) {
+    const SparseVector<Real> &sv = sp.Row(i);
+    MatrixIndexT non_zero_index = -1;
+    sv.Max(&non_zero_index);
+    vis.push_back(non_zero_index);
+  }
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
 
+    CuArray<MatrixIndexT> indices(vis);
 
+    dim3 dimGrid, dimBlock;
+    GetBlockSizesForSimpleMatrixOperation(output->NumRows(), output->NumCols(),
+                                          &dimGrid, &dimBlock);
+    cuda_affine_on_sparse(dimGrid, dimBlock, params.Data(), params.Stride(),
+                          indices.Data(), output->Dim(), output->Data());
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    MatrixIndexT* arr = new MatrixIndexT[sp.NumRows()];
+    for (size_t i = 0; i < sp.NumRows(); i++) {
+      const SparseVector<Real> &sv = sp.Row(i);
+      MatrixIndexT non_zero_index = -1;
+      sv.Max(&non_zero_index);
+      KALDI_ASSERT(non_zero_index != -1);
+      arr[i] = non_zero_index;
+    }
+
+    Matrix<Real> cpu_out_transpose(output->Mat().NumCols(),
+                                   output->Mat().NumRows());
+    cpu_out_transpose.CopyFromMat(*output, kTrans);
+
+    cpu_out_transpose.AddCols(params.Mat(), arr);
+    output->CopyFromMat(cpu_out_transpose, kTrans);
+    delete []arr;
+  }
+}
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(Real alpha,
+                                const CuMatrixBase<Real> &out_deriv,
+                                const SparseMatrix<Real> &sp,
+                                CuMatrixBase<Real> *params) {
+  KALDI_ASSERT(out_deriv.NumRows() == sp.NumRows());
+  KALDI_ASSERT(params->NumRows() == out_deriv.NumCols());
+  KALDI_ASSERT(params->NumCols() == sp.NumCols());
+#if HAVE_CUDA == 1
+  std::vector<MatrixIndexT> vis;
+  for (size_t i = 0; i < sp.NumRows(); i++) {
+    const SparseVector<Real> &sv = sp.Row(i);
+    MatrixIndexT non_zero_index = -1;
+    sv.Max(&non_zero_index);
+    vis.push_back(non_zero_index);
+  }
+  KALDI_ASSERT(vis.size() == sp.NumRows());
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+
+    CuArray<MatrixIndexT> indices(vis);
+
+    dim3 dimGrid, dimBlock;
+    GetBlockSizesForSimpleMatrixOperation(out_deriv.NumRows(),
+                                          out_deriv.NumCols(),
+                                          &dimGrid, &dimBlock);
+    cuda_update_simple_affine_on_sparse(dimGrid, dimBlock, alpha, out_deriv.Data(),
+                                        indices.Data(), out_deriv.Dim(),
+                                        params->Stride(), params->Data());
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Matrix<Real> cpu_params_transpose(params->Mat().NumCols(),
+                                           params->Mat().NumRows());
+    Real** arr = new Real*[sp.NumRows()];
+    for (size_t i = 0; i < sp.NumRows(); i++) {
+      const SparseVector<Real> &sv = sp.Row(i);
+      MatrixIndexT non_zero_index = -1;
+      sv.Max(&non_zero_index);
+      arr[i] = cpu_params_transpose.RowData(non_zero_index);
+    }
+    out_deriv.Mat().AddToRows(1.0, arr);
+    delete []arr;
+    params->Mat().AddMat(alpha, cpu_params_transpose, kTrans);
+  }
+}
+
+template
+void ComputeAffineOnSparse(const CuMatrixBase<float> &params,
+                           const SparseMatrix<float> &sp,
+                           CuMatrixBase<float> *output);
+ 
+template
+void ComputeAffineOnSparse(const CuMatrixBase<double> &params,
+                           const SparseMatrix<double> &sp,
+                           CuMatrixBase<double> *output);
+ 
+template
+void UpdateSimpleAffineOnSparse(float alpha, const CuMatrixBase<float> &out_deriv,
+                                const SparseMatrix<float> &sp,
+                                CuMatrixBase<float> *params);
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(double alpha, const CuMatrixBase<double> &out_deriv,
+                                const SparseMatrix<double> &sp,
+                                CuMatrixBase<double> *params);
+ 
+ 
 } //namespace cu
 
 } //namespace kaldi

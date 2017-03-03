@@ -1339,6 +1339,40 @@ inline void cuda_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
                                self_repair_sum_out_stride);
 }
 
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, double* output) {
+  cudaD_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, float* output) {
+  cudaF_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                double alpha,
+                                                const double* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                double* params) {
+  cudaD_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                float alpha,
+                                                const float* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                float* params) {
+  cudaF_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
+}
 inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
                                     MatrixDim d_out, const double *v_in) {
   cudaD_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
@@ -1346,6 +1380,23 @@ inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
 inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, float *mat_out,
                                     MatrixDim d_out, const float *v_in) {
   cudaF_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
+}
+
+inline void cuda_diff_normalize_per_row(size_t Gr, size_t Bl, double *id,
+                                        int id_stride, const double *iv,
+                                        MatrixDim iv_dim, const double* od,
+                                        int od_stride, double target_rms,
+                                        bool add_log_stddev) {
+  cudaD_diff_normalize_per_row(Gr, Bl, id, id_stride, iv, iv_dim, od, od_stride,
+                               target_rms, add_log_stddev);
+}
+inline void cuda_diff_normalize_per_row(size_t Gr, size_t Bl, float *id,
+                                        int id_stride, const float *iv,
+                                        MatrixDim iv_dim, const float* od,
+                                        int od_stride, float target_rms,
+                                        bool add_log_stddev) {
+  cudaF_diff_normalize_per_row(Gr, Bl, id, id_stride, iv, iv_dim, od, od_stride,
+                               target_rms, add_log_stddev);
 }
 
 } // namespace kaldi

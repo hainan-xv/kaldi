@@ -93,14 +93,20 @@ Component* Component::NewComponentOfType(const std::string &component_type) {
     ans = new RectifiedLinearComponent();
   } else if (component_type == "NormalizeComponent") {
     ans = new NormalizeComponent();
+  } else if (component_type == "NormalizeOneComponent") {
+    ans = new NormalizeOneComponent();
   } else if (component_type == "PnormComponent") {
     ans = new PnormComponent();
   } else if (component_type == "SumReduceComponent") {
     ans = new SumReduceComponent();
   } else if (component_type == "AffineComponent") {
     ans = new AffineComponent();
+  } else if (component_type == "LinearComponent") {
+    ans = new LinearComponent();
   } else if (component_type == "NaturalGradientAffineComponent") {
     ans = new NaturalGradientAffineComponent();
+  } else if (component_type == "NaturalGradientLinearComponent") {
+    ans = new NaturalGradientLinearComponent();
   } else if (component_type == "PerElementScaleComponent") {
     ans = new PerElementScaleComponent();
   } else if (component_type == "NaturalGradientPerElementScaleComponent") {
