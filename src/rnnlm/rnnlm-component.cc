@@ -810,6 +810,7 @@ void AffineImportanceSamplingComponent::Init(std::string matrix_filename) {
 void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
   std::string matrix_filename;
+  std::string unigram_filename;
   int32 input_dim = -1, output_dim = -1;
   InitLearningRatesFromConfig(cfl);
   if (cfl->GetValue("matrix", &matrix_filename)) {
@@ -837,6 +838,19 @@ void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
 
     // TODO(hxu)
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
+
+    if (cfl->GetValue("unigram", &unigram_filename)) {
+      std::vector<BaseFloat> u;
+      ReadUnigram(unigram_filename, &u);
+      KALDI_ASSERT(u.size() == params_.NumRows());
+      Matrix<BaseFloat> m(1, u.size(), kUndefined);
+      for (int i = 0; i < u.size(); i++) {
+        m(0, i) = log(u[i]);
+      }
+      CuMatrix<BaseFloat> g(m);
+      params_.ColRange(params_.NumCols() - 1, 1).Set(0.0);
+      params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, g, kTrans);
+    }
   }
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "

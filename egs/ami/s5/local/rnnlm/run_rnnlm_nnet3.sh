@@ -23,7 +23,7 @@ num_archives=4
 shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of the samples
 minibatch_size=1:128
 
-hidden_dim=200
+hidden_dim=150
 initial_learning_rate=0.1
 final_learning_rate=0.01
 learning_rate_decline_factor=1.01
@@ -51,7 +51,8 @@ id=
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}_wang_update
+outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}_wang_update_${wang_interval}_${wang_scale}
+#outdir=rnnlm_nnet3_${hidden_dim}_${initial_learning_rate}
 srcdir=data/local/dict
 
 set -e
@@ -178,7 +179,6 @@ if [ $stage -le -2 ]; then
 
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
-
   input-node name=input dim=$num_words_in
 #  component name=first_affine type=LinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
   component name=first_affine type=NaturalGradientLinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
@@ -197,7 +197,41 @@ if [ $stage -le -2 ]; then
   component-node name=final_log_softmax component=final_log_softmax input=final_affine
   output-node    name=output input=final_log_softmax objective=linear
 
+#  input-node name=input dim=$num_words_in
+#  component name=first_affine type=NaturalGradientLinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+#  component name=recur_affine type=NaturalGradientAffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim max-change=5
+#  component name=first_nonlin type=RectifiedLinearComponent dim=$hidden_dim
+#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim
+#  component name=final_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=5
+#  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_out
+#
+##Component nodes
+#  component-node name=first_affine component=first_affine  input=input
+#  component-node name=recur_affine component=recur_affine  input=IfDefined(Offset(first_nonlin, -1))
+#  component-node name=first_nonlin component=first_nonlin  input=Sum(first_affine, recur_affine)
+#  component-node name=first_renorm component=first_renorm  input=first_nonlin
+#  component-node name=final_affine component=final_affine  input=first_renorm
+#  component-node name=final_log_softmax component=final_log_softmax input=final_affine
+#  output-node    name=output input=final_log_softmax objective=linear
+
 EOF
+#  input-node name=input dim=$num_words_in
+##  component name=first_affine type=LinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+#  component name=first_affine type=NaturalGradientLinearComponent input-dim=$[$num_words_in] output-dim=$hidden_dim max-change=5
+#  component name=recur_affine type=NaturalGradientAffineComponent input-dim=$[$hidden_dim] output-dim=$hidden_dim max-change=5
+#  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
+##  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+#  component name=final_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=5
+#  component name=final_log_softmax type=LogSoftmaxComponent dim=$num_words_out
+#
+##Component nodes
+#  component-node name=first_affine component=first_affine  input=input
+#  component-node name=recur_affine component=recur_affine  input=IfDefined(Offset(first_nonlin, -1))
+#  component-node name=first_nonlin component=first_nonlin  input=Sum(first_affine, recur_affine)
+##  component-node name=first_renorm component=first_renorm  input=first_nonlin
+#  component-node name=final_affine component=final_affine  input=first_nonlin
+#  component-node name=final_log_softmax component=final_log_softmax input=final_affine
+#  output-node    name=output input=final_log_softmax objective=linear
   fi
 fi
 
