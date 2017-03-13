@@ -4,23 +4,6 @@ namespace kaldi {
 namespace rnnlm {
 
 
-void AddGroup(const vector<int> &v, interval in, vector<interval>* new_grouping) {
-  KALDI_ASSERT(v.size() > 0);
-  if (v[0] != in.L) {
-    new_grouping->push_back(interval(in.L, v[0]));
-  }
-
-  int i = 0;
-  for (; i < v.size() - 1; i++) {
-    new_grouping->push_back(interval(v[i], v[i] + 1)); // the single element itself
-    new_grouping->push_back(interval(v[i] + 1, v[i + 1]));  // the part to the right of itself and before the next bigram
-  }
-  new_grouping->push_back(interval(v[i], v[i] + 1));
-  if (v[i] + 1 != v.size()) {
-    new_grouping->push_back(interval(v[i] + 1, v.size()));
-  }
-}
-
 void CheckValidGrouping(const vector<interval> &g, int k) {
   KALDI_ASSERT(g.size() >= k);
   // check sum
@@ -41,6 +24,148 @@ void CheckValidGrouping(const vector<interval> &g, int k) {
     KALDI_ASSERT(g[i].L == g[i - 1].R);
   }
 } 
+
+using std::set;
+using std::map;
+// assume u is CDF of already sorted unigrams
+void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u, int k,
+                   const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
+                   vector<interval> *out) {
+
+  // TODO(hxu) I will move this outside and pass it as a parameter
+  vector<BaseFloat> cdf(u.size(), 0);
+  vector<double> bigram_probs;  // used in figuring out the max-allowed-unigram
+
+  cdf[0] = u[0].second;
+  for (int i = 1; i < u.size(); i++) {
+    cdf[i] = cdf[i - 1] + u[i].second;
+  }
+
+  KALDI_ASSERT(ApproxEqual(cdf[cdf.size() - 1], 1.0));
+
+  BaseFloat alpha = 0.0;
+  BaseFloat max_allowed_ngram_prob = 1.0 / k;
+
+  // compute the value for alpha
+  {
+    BaseFloat bigram_sum = 0.0;
+    BaseFloat unigram_sum = 1.0;
+
+    for (map<int, BaseFloat>::const_iterator iter = bigrams.begin();
+                                             iter != bigrams.end();
+                                             iter++) {
+      bigram_sum += iter->second;
+      unigram_sum -= u[iter->first].second;
+      bigram_probs.push_back(iter->second);
+    }
+
+    alpha = unigram_sum / (1.0 - bigram_sum);
+    // now the n-gram probs for word i are bigram[i], or alpha * u[i] (standard arpa file rules)
+    //////////////////////////////////////////////////////////////////////////
+
+    BaseFloat total_selection_wgt = k - must_sample.size();
+    BaseFloat total_ngram_wgt = 1.0;
+
+    for (set<int>::const_iterator i = must_sample.begin(); i != must_sample.end(); i++) {
+      map<int, BaseFloat>::const_iterator ii = bigrams.find(*i);
+      if (ii != bigrams.end()) {
+        total_ngram_wgt -= ii->second;
+      } else {
+        total_ngram_wgt -= u[*i].second * alpha;
+      }
+    }
+    
+    sort(bigram_probs.begin(), bigram_probs.end(), std::greater<BaseFloat>());
+
+    int i = 0, j = 0;  // iteratos 2 vectors like merge sort
+    while (true) {
+      while (must_sample.find(i) != must_sample.end()) {
+        i++;
+      }
+      while (must_sample.find(j) != must_sample.end()) {
+        j++;
+      }
+      // now neither i or j has "special" probs; both only depend on the ngram probs
+
+      BaseFloat p;
+      if (bigram_probs[i] > alpha * u[j].second) {
+        p = bigram_probs[i];
+        i++;
+      } else {
+        p = alpha * u[j].second;
+        j++;
+      }
+      if (p / total_ngram_wgt * total_selection_wgt > 1.0) {
+        // needs a cutoff
+        total_ngram_wgt -= p;
+        total_selection_wgt -= 1.0;
+      } else {
+        max_allowed_ngram_prob = total_ngram_wgt / total_selection_wgt;
+        break;
+      }
+    }
+    KALDI_LOG << "max allowed ngram prob is " << max_allowed_ngram_prob;
+  }
+
+  set<int>::const_iterator must_sample_iter = must_sample.begin();
+  map<int, BaseFloat>::const_iterator bigram_iter = bigrams.begin();
+
+//  int next_single_index = std::min(*must_sample_iter, bigram_iter->first);
+
+  for (int i = 0; i < u.size();) {
+    // a must-sample word
+    if (*must_sample_iter == i) {
+      out->push_back(interval(i, i + 1, -1.0, ONE));
+      if (*must_sample_iter == bigram_iter->first) {
+        bigram_iter++;
+      }
+      must_sample_iter++;
+      i++;
+    } else if (bigram_iter->first == i) {
+      BaseFloat p = bigram_iter->second / max_allowed_ngram_prob;
+      if (p > 1.0) {
+        p = ONE;
+      }
+      out->push_back(interval(i, i + 1, bigram_iter->second, p));
+      i++;
+    } else {
+      BaseFloat u_i = u[i].second * alpha;
+
+      int n = max_allowed_ngram_prob / u_i; // since we know the original unigram is sorted we could at least have n
+      int group_end = i + n;
+      // could expand this range but for now keep it this way for simplicity TODO(hxu)
+
+      group_end = std::min(group_end, int(u.size()));
+
+      if (*must_sample_iter < group_end) {
+        group_end = *must_sample_iter;
+      } else if (bigram_iter->first < group_end) {
+        group_end = bigram_iter->first;
+      }
+
+      while (*must_sample_iter < group_end) {
+        must_sample_iter++;
+      }
+      while (bigram_iter->first < group_end) {
+        bigram_iter++;
+      }
+
+
+      BaseFloat uni_prob = u[group_end - 1].second;
+      if (i != 0) {
+        uni_prob -= u[i - 1].second;
+      }
+      BaseFloat selection_prob = uni_prob / max_allowed_ngram_prob;
+
+      KALDI_ASSERT(selection_prob <= 1.0);
+      out->push_back(interval(i, group_end, uni_prob, selection_prob));
+
+    }
+  }
+
+  CheckValidGrouping(*out, k);
+  
+}
 
 // assume u is already sorted
 void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *out) {
@@ -251,76 +376,7 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
   return eg;
 }
 
-void ChangeGrouping(const map<int, BaseFloat> &bigrams, const vector<interval> &old_grouping,
-                    vecotr<interval> *new_grouping) {
 
-  map<int, int> bigram_group_indexes;
-  map<int, vector<int> > group_to_bigram;
-  int group_index = 0;
-  for (map<int, BaseFloat>::const_iterator i = bigrams.begin(); i != bigrams.end(); i++) {
-    int word_id = i->first;
-    
-    while (!grouping[group_index].Contains(word_id)) {
-      word_id++;
-    }
-
-    bigram_group_indexes[word_id] = group_index;
-    group_to_bigram[group_index].push_back(word_id); /// TODO
-  }
-
-  {
-    for (int i = 0; i < old_grouping.sizei(); i++) {
-      if (group_to_bigram.find(i) != group_to_bigram.end()) {
-        AddGroup(group_to_bigram[i], old_grouping[i], new_grouping);
-      }
-    }
-  }
-}
-
-// assume sorted already
-void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u,
-                                    const map<int, BaseFloat>& bigrams,
-                                    int n,
-                                    vector<int> *out) {
-//  sort(u.begin(), u.end(), LargerThan);
-  vector<BaseFloat> cdf(u.size() + 1);
-  cdf[0] = 0;
-  for (int i = 1; i <= cdf.size(); i++) {
-    cdf[i] = cdf[i - 1] + std::min(BaseFloat(1.0), u[i - 1].second);
-  }
-
-  vector<interval> g;
-  DoGrouping(u, n, &g);
-
-  ChangeGrouping(bigrams, &g);
-
-  vector<std::pair<int, BaseFloat> > group_u(g.size());
-  for (int i = 0; i < g.size(); i++) {
-    group_u[i].first = i;
-    group_u[i].second = g[i].selection_prob;
-  }
-  SampleWithoutReplacement_(group_u, n, out);
-
-//  std::cout << "selected groups are: ";
-//  for (int i = 0; i < out->size(); i++) {
-//    std::cout << (*out)[i] << " ";
-//  }
-//  std::cout << std::endl;
-
-  for (int i = 0; i < out->size(); i++) {
-    if (g[(*out)[i]].L + 1 < g[(*out)[i]].R) { // is a group of many
-      int index = SelectOne(cdf, g[(*out)[i]].L, g[(*out)[i]].R);
-      (*out)[i] = u[index].first;
-    } else {
-      (*out)[i] = u[g[(*out)[i]].L].first;
-    }
-  }
-//  cout << "selected words are: ";
-//  for (int i = 0; i < out->size(); i++) {
-//    cout << (*out)[i] << " ";
-//  }
-//  cout << endl;
-}
 
 void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
                               vector<int> *out) {

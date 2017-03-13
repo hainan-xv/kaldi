@@ -24,6 +24,8 @@ using std::set;
 namespace kaldi {
 namespace rnnlm {
 
+const BaseFloat ONE = 10.0;
+
 using nnet3::NnetExample;
 
 typedef struct _interval {

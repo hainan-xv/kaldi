@@ -7,6 +7,10 @@
 namespace kaldi {
 namespace rnnlm {
 
+void UnitTestCDFGrouping() {
+
+}
+
 void UnitTestSamplingNonlinearity() {
   for (int i = 0; i < 100; i++) {
     int num_rows = rand() % 200 + 200;
@@ -117,6 +121,7 @@ int main() {
       CuDevice::Instantiate().SelectGpuId("yes");
 #endif
     UnitTestSamplingNonlinearity();
+    UnitTestCDFGrouping();
 
     if (loop == 0)
       KALDI_LOG << "Tests without GPU use succeeded.";
