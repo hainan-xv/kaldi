@@ -219,7 +219,7 @@ if [ $stage -le $num_iters ]; then
     echo for iter $n, training on archive $this_archive, learning rate = $learning_rate
     [ $n -ge $stage ] && (
 
-        $cuda_cmd $outdir/log/train.rnnlm.$n.log nnet3-train \
+        $cuda_cmd $outdir/log/train.$n.log nnet3-train \
         --max-param-change=$max_param_change "nnet3-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl
 
@@ -244,14 +244,13 @@ if [ $stage -le $num_iters ]; then
 
     [ $n -ge $stage ] && (
 
-      $decode_cmd $outdir/log/compute_prob_train.rnnlm.$n.log \
+      $decode_cmd $outdir/log/compute_prob_train.$n.log \
         nnet3-compute-prob $outdir/$n.mdl ark:$outdir/train.subset.egs &
-      $decode_cmd $outdir/log/compute_prob_valid.rnnlm.$n.log \
+      $decode_cmd $outdir/log/compute_prob_valid.$n.log \
         nnet3-compute-prob $outdir/$n.mdl ark:$outdir/dev.subset.egs 
 
-      ppl=`grep Overall $outdir/log/compute_prob_valid.rnnlm.$n.log | grep like | awk '{print exp(-$8)}'`
-      ppl2=`echo $ppl $ppl_oos_penalty | awk '{print $1 * $2}'`
-      echo DEV PPL on model $n.mdl is $ppl w/o OOS penalty, $ppl2 w OOS penalty
+      ppl=`grep Overall $outdir/log/compute_prob_valid.$n.log | grep like | awk '{print exp(-$8)}'`
+      echo DEV PPL on model $n.mdl is $ppl w/o OOS penalty
     ) &
   done
   cp $outdir/$num_iters.mdl $outdir/rnnlm

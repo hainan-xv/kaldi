@@ -3,6 +3,24 @@
 namespace kaldi {
 namespace rnnlm {
 
+
+void AddGroup(const vector<int> &v, interval in, vector<interval>* new_grouping) {
+  KALDI_ASSERT(v.size() > 0);
+  if (v[0] != in.L) {
+    new_grouping->push_back(interval(in.L, v[0]));
+  }
+
+  int i = 0;
+  for (; i < v.size() - 1; i++) {
+    new_grouping->push_back(interval(v[i], v[i] + 1)); // the single element itself
+    new_grouping->push_back(interval(v[i] + 1, v[i + 1]));  // the part to the right of itself and before the next bigram
+  }
+  new_grouping->push_back(interval(v[i], v[i] + 1));
+  if (v[i] + 1 != v.size()) {
+    new_grouping->push_back(interval(v[i] + 1, v.size()));
+  }
+}
+
 void CheckValidGrouping(const vector<interval> &g, int k) {
   KALDI_ASSERT(g.size() >= k);
   // check sum
@@ -231,6 +249,77 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
   eg.io.push_back(nnet3::NnetIo("output", output_dim, 0, posterior));
   return eg;
+}
+
+void ChangeGrouping(const map<int, BaseFloat> &bigrams, const vector<interval> &old_grouping,
+                    vecotr<interval> *new_grouping) {
+
+  map<int, int> bigram_group_indexes;
+  map<int, vector<int> > group_to_bigram;
+  int group_index = 0;
+  for (map<int, BaseFloat>::const_iterator i = bigrams.begin(); i != bigrams.end(); i++) {
+    int word_id = i->first;
+    
+    while (!grouping[group_index].Contains(word_id)) {
+      word_id++;
+    }
+
+    bigram_group_indexes[word_id] = group_index;
+    group_to_bigram[group_index].push_back(word_id); /// TODO
+  }
+
+  {
+    for (int i = 0; i < old_grouping.sizei(); i++) {
+      if (group_to_bigram.find(i) != group_to_bigram.end()) {
+        AddGroup(group_to_bigram[i], old_grouping[i], new_grouping);
+      }
+    }
+  }
+}
+
+// assume sorted already
+void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u,
+                                    const map<int, BaseFloat>& bigrams,
+                                    int n,
+                                    vector<int> *out) {
+//  sort(u.begin(), u.end(), LargerThan);
+  vector<BaseFloat> cdf(u.size() + 1);
+  cdf[0] = 0;
+  for (int i = 1; i <= cdf.size(); i++) {
+    cdf[i] = cdf[i - 1] + std::min(BaseFloat(1.0), u[i - 1].second);
+  }
+
+  vector<interval> g;
+  DoGrouping(u, n, &g);
+
+  ChangeGrouping(bigrams, &g);
+
+  vector<std::pair<int, BaseFloat> > group_u(g.size());
+  for (int i = 0; i < g.size(); i++) {
+    group_u[i].first = i;
+    group_u[i].second = g[i].selection_prob;
+  }
+  SampleWithoutReplacement_(group_u, n, out);
+
+//  std::cout << "selected groups are: ";
+//  for (int i = 0; i < out->size(); i++) {
+//    std::cout << (*out)[i] << " ";
+//  }
+//  std::cout << std::endl;
+
+  for (int i = 0; i < out->size(); i++) {
+    if (g[(*out)[i]].L + 1 < g[(*out)[i]].R) { // is a group of many
+      int index = SelectOne(cdf, g[(*out)[i]].L, g[(*out)[i]].R);
+      (*out)[i] = u[index].first;
+    } else {
+      (*out)[i] = u[g[(*out)[i]].L].first;
+    }
+  }
+//  cout << "selected words are: ";
+//  for (int i = 0; i < out->size(); i++) {
+//    cout << (*out)[i] << " ";
+//  }
+//  cout << endl;
 }
 
 void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,

@@ -30,6 +30,9 @@ typedef struct _interval {
   _interval(): L(0), R(0) {}
   _interval(int l, int r, BaseFloat u, BaseFloat p):
          L(l), R(r), unigram_prob(u), selection_prob(p) {}
+  bool Contains(int i) {
+    return L <= i && i < R;
+  }
   int L;
   int R;
   BaseFloat unigram_prob;
@@ -62,6 +65,8 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n
 void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
+
+void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 
 void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 
