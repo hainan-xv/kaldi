@@ -20,6 +20,7 @@ using std::ifstream;
 using std::ofstream;
 using std::vector;
 using std::set;
+using std::map;
 
 namespace kaldi {
 namespace rnnlm {
@@ -63,6 +64,12 @@ unordered_map<string, int> ReadWordlist(string filename);
 
 NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
                            const vector<int>& word_ids_out, int output_dim);
+
+void CheckValidGrouping(const vector<interval> &g, int k);
+
+void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u, int k,
+                   const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
+                   vector<interval> *out);
 
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n

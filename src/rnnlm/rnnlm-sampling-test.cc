@@ -1,6 +1,7 @@
 #include <math.h>
 
 #include "rnnlm-training.h"
+#include "rnnlm-utils.h"
 #include "cudamatrix/cu-matrix.h"
 #include "matrix/kaldi-matrix.h"
 
@@ -8,6 +9,40 @@ namespace kaldi {
 namespace rnnlm {
 
 void UnitTestCDFGrouping() {
+  int dim = 16;
+  vector<std::pair<int, BaseFloat> > u(dim);
+  
+  for (int i = 0; i < dim / 2; i++) {
+    u[i].first = i;
+    u[i].second = 0.9 / dim * 2;
+  }
+  for (int i = dim / 2; i < dim; i++) {
+    u[i].first = i;
+    u[i].second = 0.1 / dim * 2;
+  }
+
+  int k = 6;
+
+  std::set<int> must_sample;
+  std::map<int, BaseFloat> bigrams;
+
+  for (int i = 3; i < dim; i += 2) {
+    bigrams[i] = 2.0 / dim; 
+  }
+
+  for (int i = 5; i < dim; i += 5) {
+    must_sample.insert(i);
+  }
+
+  std::vector<interval> groups;
+  DoGroupingCDF(u, k, must_sample, bigrams, &groups);
+
+  for (int i = 0; i < groups.size(); i++) {
+    KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
+  }
+
+  CheckValidGrouping(groups, k);
+  
 
 }
 
@@ -120,7 +155,7 @@ int main() {
     else
       CuDevice::Instantiate().SelectGpuId("yes");
 #endif
-    UnitTestSamplingNonlinearity();
+//    UnitTestSamplingNonlinearity();
     UnitTestCDFGrouping();
 
     if (loop == 0)
