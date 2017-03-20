@@ -27,7 +27,7 @@ void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
   std::set<int> must_sample_set;
   vector<BaseFloat> selection_probs;
   PrepareVector(n, ones_size, &must_sample_set, &selection_probs);
-  NormalizeVec(k, must_sample_set, &selection_probs);
+//  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<std::pair<int, BaseFloat> > u(selection_probs.size());
   for (int i = 0; i < u.size(); i++) {
@@ -39,7 +39,7 @@ void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
   for (int i = 0; i < u.size(); i++) {
     sum += std::min(BaseFloat(1.0), selection_probs[i]);
   }
-  KALDI_ASSERT(ApproxEqual(sum, k));
+  KALDI_ASSERT(ApproxEqual(sum, 1.0));
   for (int i = 0; i < u.size(); i++) {
     selection_probs[i] = std::min(BaseFloat(1.0), selection_probs[i]) / sum;
   }
@@ -116,7 +116,7 @@ void UnitTestSampleWithProbOne(int iters) {
 
   // generate a random number k from ones_size + 1 to n
   int k = rand() % (n - ones_size) + ones_size + 1;
-  NormalizeVec(k, must_sample_set, &selection_probs);
+//  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<std::pair<int, BaseFloat> > u(selection_probs.size());
   for (int i = 0; i < u.size(); i++) {
@@ -151,7 +151,7 @@ void UnitTestSamplingTime(int iters) {
 
   // generate a random number k from ones_size + 1 to n
   int k = rand() % (n - ones_size) + ones_size + 1;
-  NormalizeVec(k, must_sample_set, &selection_probs);
+//  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<std::pair<int, BaseFloat> > u(selection_probs.size());
   for (int i = 0; i < u.size(); i++) {
@@ -179,8 +179,8 @@ int main() {
   using namespace kaldi;
   using namespace rnnlm;
   int N = 10000;
+  UnitTestSamplingConvergence();
   UnitTestSampleWithProbOne(N);
   UnitTestSamplingTime(N);
-  UnitTestSamplingConvergence();
 }
 

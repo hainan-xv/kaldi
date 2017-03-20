@@ -21,6 +21,12 @@ void UnitTestCDFGrouping() {
     u[i].second = 0.1 / dim * 2;
   }
 
+  vector<BaseFloat> cdf(u.size(), 0);
+  cdf[0] = u[0].second;
+  for (int i = 1; i < u.size(); i++) {
+    cdf[i] = cdf[i - 1] + u[i].second;
+  }
+
   int k = 6;
 
   std::set<int> must_sample;
@@ -35,7 +41,7 @@ void UnitTestCDFGrouping() {
   }
 
   std::vector<interval> groups;
-  DoGroupingCDF(u, k, must_sample, bigrams, &groups);
+  DoGroupingCDF(u, cdf, k, must_sample, bigrams, &groups);
 
   for (int i = 0; i < groups.size(); i++) {
     KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
@@ -146,6 +152,9 @@ int main() {
   using namespace kaldi;
   using namespace rnnlm;
 
+  UnitTestCDFGrouping();
+
+  return 0;
 
   for (int32 loop = 0; loop < 2; loop++) {
 #if HAVE_CUDA == 1
@@ -156,7 +165,6 @@ int main() {
       CuDevice::Instantiate().SelectGpuId("yes");
 #endif
 //    UnitTestSamplingNonlinearity();
-    UnitTestCDFGrouping();
 
     if (loop == 0)
       KALDI_LOG << "Tests without GPU use succeeded.";

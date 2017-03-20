@@ -67,7 +67,9 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 void CheckValidGrouping(const vector<interval> &g, int k);
 
-void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u, int k,
+void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
+                   const vector<BaseFloat> &cdf,
+                   int k,
                    const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
                    vector<interval> *out);
 
