@@ -47,7 +47,9 @@ void UnitTestCDFGrouping() {
     KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
   }
 
-  CheckValidGrouping(groups, k);
+//  CheckValidGrouping(groups, k);
+
+  CheckValidGrouping(u, must_sample, bigrams, k, groups);
   
 
 }
