@@ -29,7 +29,7 @@ const BaseFloat ONE = 10.0;
 
 using nnet3::NnetExample;
 
-void DoSamplingInExamples(NnetExample *egs);
+void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs);
 
 typedef struct _interval {
   _interval(): L(0), R(0) {}

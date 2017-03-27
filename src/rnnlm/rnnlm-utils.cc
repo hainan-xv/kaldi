@@ -31,7 +31,15 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
         }
       }
 
+      if (length == -1) {
+        length = current_t + 1;
+      }
+
       int32 minibatch_size = current_n + 1;
+
+      if (num_samples == -1) {
+        num_samples = minibatch_size;
+      }
 
       vector<int32> words;
       num_words = egs->io[i].features.NumCols();
@@ -549,9 +557,10 @@ void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
   for (int i = 0; i < out->size(); i++) {
     if (g[(*out)[i].first].L + 1 < g[(*out)[i].first].R) { // is a group of many
       int index = SelectOne(cdf, g[(*out)[i].first].L, g[(*out)[i].first].R);
-      (*out)[i].first = u[index];
+      (*out)[i].first = index;
+      (*out)[i].second = u[index];
     } else {
-      (*out)[i].first = u[g[(*out)[i].first].L];
+      (*out)[i].second = u[g[(*out)[i].first].L];
     }
   }
 //  cout << "selected words are: ";
