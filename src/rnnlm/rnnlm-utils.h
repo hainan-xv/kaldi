@@ -29,6 +29,8 @@ const BaseFloat ONE = 10.0;
 
 using nnet3::NnetExample;
 
+void DoSamplingInExamples(NnetExample *egs);
+
 typedef struct _interval {
   _interval(): L(0), R(0) {}
   _interval(int l, int r, BaseFloat u, BaseFloat p):
@@ -67,23 +69,24 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 void CheckValidGrouping(const vector<interval> &g, int k);
 
-void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
+void CheckValidGrouping(const vector<BaseFloat> &u,
                         const std::set<int> &must_sample,
                         const std::map<int, BaseFloat> &bigrams,
                         int k, const vector<interval> &g);
 
-void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
+void DoGroupingCDF(const vector<BaseFloat> &u,
                    const vector<BaseFloat> &cdf, int k,
                    const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
                    vector<interval> *out);
 
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n
-void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
+void SampleWithoutReplacement(const vector<BaseFloat>& u, int n, vector<std::pair<int, BaseFloat> > *out);
 
 // void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 
-void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
+void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
+                               vector<std::pair<int, BaseFloat> > *out);
 
 // normalize the prob vector such that
 // every prob satisfies 0 < p <= 1

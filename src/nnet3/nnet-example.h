@@ -104,6 +104,7 @@ struct NnetExample {
   /// types of both input and output, with different names.  The order is
   /// irrelevant.
   std::vector<NnetIo> io;
+  std::vector<std::vector<std::pair<int32, BaseFloat> > > samples;
 
   void Write(std::ostream &os, bool binary) const;
   void Read(std::istream &is, bool binary);

@@ -3,6 +3,67 @@
 namespace kaldi {
 namespace rnnlm {
 
+void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
+  int num_words = 0;  // TODO(hxu) there might be a problem with input-dim != output-dim
+  for (int i = 0; i < egs->io.size(); i++) {
+    string &name = egs->io[i].name;
+    if (name == "input") {
+      vector<Index> &indexes = egs->io[i].indexes;
+
+      int current_n = 0, current_t = 0;
+      KALDI_ASSERT(current_n == indexes[0].n && current_t == indexes[0].t);
+
+      int length = -1;
+      for (int i = 1; i < indexes.size(); i++) {
+        Index &index = indexes[i];
+        if (index.n == current_n) {
+          KALDI_ASSERT(index.t == ++current_t);
+        } else {
+          // just finished a sentence
+          KALDI_ASSERT(index.t == 0);
+          KALDI_ASSERT(index.n == ++current_n);
+          if (length == -1) {
+            length = current_t + 1;
+          } else {
+            KALDI_ASSERT(current_t == length);
+          }
+          current_t = 0;
+        }
+      }
+
+      int32 minibatch_size = current_n + 1;
+
+      vector<int32> words;
+      num_words = egs->io[i].features.NumCols();
+      SparseMatrixToVector(egs->io[i].features.GetSparseMatrix(), &words);
+
+      egs->samples.resize(length, vector<std::pair<int32, BaseFloat> >(minibatch_size));
+    
+      // v[t][n] is a vector representing the history of the input and n, t
+      vector<vector<vector<int32> > > histories(length, vector<vector<int32> >(minibatch_size));
+
+      for (int t = 0; t < length; t++) {
+        for (int n = 0; n < minibatch_size; n++) {
+          vector<int32> &history = histories[t][n];
+
+          for (int j = 0; j < ngram_order && j <= t; j++) {
+            history.push_back(words[length * n + t - j]);
+          }
+        }
+      }
+
+      // TODO(hxu)
+      for (int t = 0; t < length; t++) {
+        std::vector<BaseFloat> unigram(num_words, 1.0 / num_words);
+        SampleWithoutReplacement(unigram, num_samples, &egs->samples[t]);
+      }
+      
+
+      
+      return;
+    }
+  }
+}
 
 void CheckValidGrouping(const vector<interval> &g, int k) {
   KALDI_ASSERT(g.size() >= k);
@@ -16,6 +77,7 @@ void CheckValidGrouping(const vector<interval> &g, int k) {
     KALDI_ASSERT(g[i].L < g[i].R);
     KALDI_ASSERT(g[i].selection_prob <= 1.0 || g[i].selection_prob > 5.0);
   }
+
   KALDI_ASSERT(ApproxEqual(selection_sum, k));
   KALDI_ASSERT(g[0].L == 0);
   for (int i = 1; i < g.size(); i++) {
@@ -23,7 +85,7 @@ void CheckValidGrouping(const vector<interval> &g, int k) {
   }
 } 
 
-void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
+void CheckValidGrouping(const vector<BaseFloat> &u,
                         const std::set<int> &must_sample,
                         const std::map<int, BaseFloat> &bigrams,
                         int k, const vector<interval> &g) {
@@ -35,8 +97,7 @@ void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
   vector<BaseFloat> cdf(u.size() + 1);
   cdf[0] = 0.0;
   for (int i = 0; i < u.size(); i++) {
-    KALDI_ASSERT(u[i].first == i);
-    cdf[i + 1] = cdf[i] + u[i].second;
+    cdf[i + 1] = cdf[i] + u[i];
   }
   unigram_sum = cdf[cdf.size() - 1];
 
@@ -44,13 +105,13 @@ void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
   for (map<int, BaseFloat>::const_iterator iter = bigrams.begin();
                                            iter != bigrams.end(); iter++) {
     bigram_sum += iter->second;
-    unigram_sum -= u[iter->first].second;
+    unigram_sum -= u[iter->first];
   }
 
-  KALDI_LOG << "bigram sum is " << bigram_sum;
-  KALDI_LOG << "unigram sum is " << unigram_sum;
+//  KALDI_LOG << "bigram sum is " << bigram_sum;
+//  KALDI_LOG << "unigram sum is " << unigram_sum;
   BaseFloat alpha = (1.0 - bigram_sum) / unigram_sum;
-  KALDI_LOG << "alpha is " << alpha;
+//  KALDI_LOG << "alpha is " << alpha;
 
   BaseFloat ratio = -1.0;
   for (int i = 0; i < g.size(); i++) {
@@ -67,7 +128,7 @@ void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
         }
       } else {
         if (g[i].selection_prob < 1.0) {
-          ratio_ = alpha * u[key].second / g[i].selection_prob;
+          ratio_ = alpha * u[key] / g[i].selection_prob;
         }
       }
     } else {
@@ -79,15 +140,16 @@ void CheckValidGrouping(const vector<std::pair<int, BaseFloat> > &u,
     if (ratio < 0) {
       ratio = ratio_;
     } else {
-      KALDI_ASSERT(ApproxEqual(ratio_, ratio));
-      KALDI_LOG << ratio_ << " vs " << ratio;
+      KALDI_ASSERT(ApproxEqual(ratio_, ratio, 0.01));
+//      KALDI_ASSERT(ApproxEqual(ratio_, ratio));
+//      KALDI_LOG << ratio_ << " vs " << ratio;
     }
   }
 }
 
 
 // assume u is CDF of already sorted unigrams
-void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
+void DoGroupingCDF(const vector<BaseFloat> &u,
                    const vector<BaseFloat> &cdf,
                    int k,
                    const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
@@ -111,13 +173,16 @@ void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
                                              iter != bigrams.end();
                                              iter++) {
       bigram_sum += iter->second;
-      unigram_sum -= u[iter->first].second;
+      unigram_sum -= u[iter->first];
       if (must_sample.find(iter->first) == must_sample.end()) {
         bigram_probs.push_back(iter->second);
       }
     }
 
     alpha = (1.0 - bigram_sum) / unigram_sum;
+//    KALDI_LOG << "bigram_sum: " << bigram_sum;
+//    KALDI_LOG << "unigram_sum: " << unigram_sum;
+//    KALDI_LOG << "alpha: " << alpha;
 
     // now the n-gram probs for word i are bigram[i], or alpha * u[i] (standard arpa file rules)
     //////////////////////////////////////////////////////////////////////////
@@ -130,7 +195,7 @@ void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
       if (ii != bigrams.end()) {
         total_ngram_wgt -= ii->second;
       } else {
-        total_ngram_wgt -= u[*i].second * alpha;
+        total_ngram_wgt -= u[*i] * alpha;
       }
     }
     
@@ -146,11 +211,11 @@ void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
       // now neither i or j has "special" probs; both only depend on the ngram probs
 
       BaseFloat p;
-      if (i < bigrams.size() && bigram_probs[i] > alpha * u[j].second) {
+      if (i < bigrams.size() && bigram_probs[i] > alpha * u[j]) {
         p = bigram_probs[i];
         i++;
       } else {
-        p = alpha * u[j].second;
+        p = alpha * u[j];
         j++;
       }
       if (p / total_ngram_wgt * total_selection_wgt > 1.0) {
@@ -187,7 +252,7 @@ void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
       bigram_iter++;
       i++;
     } else {
-      BaseFloat u_i = u[i].second * alpha;
+      BaseFloat u_i = u[i] * alpha;
 
       int n = max_allowed_ngram_prob / u_i; // since we know the original unigram is sorted we could at least have n
       int group_end = i + n;
@@ -223,16 +288,13 @@ void DoGroupingCDF(const vector<std::pair<int, BaseFloat> > &u,
         uni_prob *= alpha;
         BaseFloat selection_prob = uni_prob / max_allowed_ngram_prob;
 
-        KALDI_ASSERT(selection_prob <= 1.0);
+        KALDI_ASSERT(selection_prob > 0 && selection_prob <= 1.0);
         out->push_back(interval(i, group_end, uni_prob, selection_prob));
   //      KALDI_LOG << "adding interval " << i << " " << group_end << " with selection-probs = " << selection_prob;
         i = group_end;
       }
     }
   }
-
-//  CheckValidGrouping(*out, k);
-  
 }
 
 // assume u is already sorted
@@ -446,13 +508,14 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 
 
-void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
-                              vector<int> *out) {
-  sort(u.begin(), u.end(), LargerThan);
+void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
+                              vector<std::pair<int, BaseFloat> > *out) {
+// assume u is sorted from large to small
+//  sort(u.begin(), u.end(), LargerThan);
   vector<BaseFloat> cdf(u.size() + 1);
   cdf[0] = 0;
   for (int i = 1; i <= cdf.size(); i++) {
-    cdf[i] = cdf[i - 1] + std::min(BaseFloat(1.0), u[i - 1].second);
+    cdf[i] = cdf[i - 1] + u[i - 1];
   }
 
 //    cout << "cdf: ";
@@ -460,9 +523,9 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
 //      cout << cdf[i] << " ";
 //    } cout << endl;
   vector<BaseFloat> cdf2(u.size(), 0);
-  cdf2[0] = u[0].second;
+  cdf2[0] = u[0];
   for (int i = 1; i < u.size(); i++) {
-    cdf2[i] = cdf2[i - 1] + u[i].second;
+    cdf2[i] = cdf2[i - 1] + u[i];
   }
 
 //  KALDI_ASSERT(cdf[cdf.size() - 1], n)
@@ -484,11 +547,11 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
 //  std::cout << std::endl;
 
   for (int i = 0; i < out->size(); i++) {
-    if (g[(*out)[i]].L + 1 < g[(*out)[i]].R) { // is a group of many
-      int index = SelectOne(cdf, g[(*out)[i]].L, g[(*out)[i]].R);
-      (*out)[i] = u[index].first;
+    if (g[(*out)[i].first].L + 1 < g[(*out)[i].first].R) { // is a group of many
+      int index = SelectOne(cdf, g[(*out)[i].first].L, g[(*out)[i].first].R);
+      (*out)[i].first = u[index];
     } else {
-      (*out)[i] = u[g[(*out)[i]].L].first;
+      (*out)[i].first = u[g[(*out)[i].first].L];
     }
   }
 //  cout << "selected words are: ";
@@ -499,19 +562,19 @@ void SampleWithoutReplacement(vector<std::pair<int, BaseFloat> > u, int n,
 }
 
 void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
-                              vector<int> *out) {
+                              vector<std::pair<int, BaseFloat> > *out) {
   sort(u.begin(), u.end(), LargerThan);
 
   KALDI_ASSERT(n != 0);
 
-  vector<int>& ans = *out;
+  vector<std::pair<int, BaseFloat> >& ans = *out;
   ans.resize(n);
 
   BaseFloat tot_weight = 0;
 
   for (int i = 0; i < n; i++) {
     tot_weight += std::min(BaseFloat(1.0), u[i].second);
-    ans[i] = i;
+    ans[i].first = i;
   }
 
   for (int k = n; k < u.size(); k++) {
@@ -534,11 +597,11 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
       BaseFloat Lk = 0;
       BaseFloat Tk = 0;
       for (int i = 0; i < n; i++) {
-        BaseFloat pi_k_i = u[ans[i]].second /
+        BaseFloat pi_k_i = u[ans[i].first].second /
                    (tot_weight - std::min(BaseFloat(1.0), u[k].second)) * n;
-        BaseFloat pi_k1_i = u[ans[i]].second / tot_weight * n;
+        BaseFloat pi_k1_i = u[ans[i].first].second / tot_weight * n;
 
-        if (u[ans[i]].second >= 5.0) {
+        if (u[ans[i].first].second >= 5.0) {
           pi_k_i = pi_k1_i = 1;
         }
 
@@ -559,9 +622,9 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
 
       BaseFloat sum = 0;
       for (int i = 0; i < n; i++) {
-        BaseFloat pi_k_i = u[ans[i]].second /
+        BaseFloat pi_k_i = u[ans[i].first].second /
             (tot_weight - std::min(BaseFloat(1.0), u[k].second)) * n;
-        BaseFloat pi_k1_i = u[ans[i]].second / tot_weight * n;
+        BaseFloat pi_k1_i = u[ans[i].first].second / tot_weight * n;
 
         if (pi_k_i < 1 && pi_k1_i < 1) {
           // case C
@@ -607,33 +670,14 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
 
     KALDI_ASSERT(R[index] != 0);
     KALDI_ASSERT(u[index].second < 1.0);
-    ans[index] = k;
+    ans[index].first = k;
 
-//    bool replaced = false;
-//    for (int i = 0; i < n; i++) {
-//      p -= R[i];
-//      if (p <= 0) {
-//        ans[i] = k;
-//        KALDI_ASSERT(abs(i - index) < 2);
-//        replaced = true;
-//        break;
-//      }
-//    }
-//
-//    if (!replaced) {
-//      KALDI_LOG << "p should be close to 0; it is " << p;
-//      for (int i = 1; ; i++) {
-//        if (u[ans[n - i]].second < 1) {
-//          ans[n - 1] = k;
-//          break;
-//        }
-//      }
-//    }
   }
 
   //  change to the correct indexes
   for (int i = 0; i < ans.size(); i++) {
-    ans[i] = u[ans[i]].first;
+    ans[i].first = u[ans[i].first].first;
+    ans[i].second = u[ans[i].first].second;
   }
 }
 

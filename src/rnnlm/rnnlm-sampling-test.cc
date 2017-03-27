@@ -8,50 +8,101 @@
 namespace kaldi {
 namespace rnnlm {
 
+void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sample_set,
+                   vector<BaseFloat>* u, std::map<int, BaseFloat> *bigrams) {
+  u->resize(n, 0);
+  BaseFloat unigram_sum = 0.0;
+  for (int i = 0; i < n; i++) {
+    BaseFloat up = RandUniform();
+    (*u)[i] = up;
+    unigram_sum += up;
+  }
+  for (int i = 0; i < n; i++) {
+    (*u)[i] /= unigram_sum;
+  }
+
+  sort(u->begin(), u->end(), std::greater<BaseFloat>());
+
+  BaseFloat bigram_total_sum = RandUniform(); // the total_sum we want
+  BaseFloat bigram_sum = 0.0;    // the sum we're getting with random initializations
+  while (bigrams->size() < num_bigrams) {
+    int index = rand() % n;
+    BaseFloat b = RandUniform();
+    (*bigrams)[index] += b;
+    bigram_sum += b;
+  }
+
+  for (std::map<int, BaseFloat>::iterator iter = bigrams->begin();
+                                                iter != bigrams->end(); iter++) {
+    iter->second = iter->second / bigram_sum * bigram_total_sum;
+  }
+
+  while (must_sample_set->size() < ones_size) {
+    int key = rand() % n;
+    must_sample_set->insert(key);
+  }
+}
+
 void UnitTestCDFGrouping() {
-  int dim = 16;
-  vector<std::pair<int, BaseFloat> > u(dim);
-  
-  for (int i = 0; i < dim / 2; i++) {
-    u[i].first = i;
-    u[i].second = 0.9 / dim * 2;
+////  int dim = 16;
+////  vector<BaseFloat> u(dim);
+////  
+////  for (int i = 0; i < dim / 2; i++) {
+////    u[i] = 0.9 / dim * 2;
+////  }
+////  for (int i = dim / 2; i < dim; i++) {
+////    u[i] = 0.1 / dim * 2;
+////  }
+////
+////  vector<BaseFloat> cdf(u.size(), 0);
+////  cdf[0] = u[0];
+////  for (int i = 1; i < u.size(); i++) {
+////    cdf[i] = cdf[i - 1] + u[i];
+////  }
+////
+////  int k = 6;
+////
+////  std::set<int> must_sample;
+////  std::map<int, BaseFloat> bigrams;
+////
+////  for (int i = 3; i < dim; i += 2) {
+////    bigrams[i] = 2.0 / dim; 
+////  }
+////
+////  for (int i = 5; i < dim; i += 5) {
+////    must_sample.insert(i);
+////  }
+  for (int t = 0; t < 100; t++) {
+
+    int dim = rand() % 3000 + 2000;
+
+    int k = rand() % (dim / 2);
+
+    vector<BaseFloat> u;
+    set<int> must_sample;
+    map<int, BaseFloat> bigrams;
+    int ones_size = rand() % (k / 2);
+    int bigram_size = rand() % (k / 2);
+
+    PrepareVector(dim, ones_size, bigram_size, &must_sample, &u, &bigrams);
+
+    vector<BaseFloat> cdf(u.size(), 0);                                          
+    cdf[0] = u[0];                                                               
+    for (int i = 1; i < u.size(); i++) {                                          
+      cdf[i] = cdf[i - 1] + u[i];                                               
+    } 
+
+    std::vector<interval> groups;
+    DoGroupingCDF(u, cdf, k, must_sample, bigrams, &groups);
+
+//    for (int i = 0; i < groups.size(); i++) {
+//      KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
+//    }
+
+  //  CheckValidGrouping(groups, k);
+
+    CheckValidGrouping(u, must_sample, bigrams, k, groups);
   }
-  for (int i = dim / 2; i < dim; i++) {
-    u[i].first = i;
-    u[i].second = 0.1 / dim * 2;
-  }
-
-  vector<BaseFloat> cdf(u.size(), 0);
-  cdf[0] = u[0].second;
-  for (int i = 1; i < u.size(); i++) {
-    cdf[i] = cdf[i - 1] + u[i].second;
-  }
-
-  int k = 6;
-
-  std::set<int> must_sample;
-  std::map<int, BaseFloat> bigrams;
-
-  for (int i = 3; i < dim; i += 2) {
-    bigrams[i] = 2.0 / dim; 
-  }
-
-  for (int i = 5; i < dim; i += 5) {
-    must_sample.insert(i);
-  }
-
-  std::vector<interval> groups;
-  DoGroupingCDF(u, cdf, k, must_sample, bigrams, &groups);
-
-  for (int i = 0; i < groups.size(); i++) {
-    KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
-  }
-
-//  CheckValidGrouping(groups, k);
-
-  CheckValidGrouping(u, must_sample, bigrams, k, groups);
-  
-
 }
 
 void UnitTestSamplingNonlinearity() {
