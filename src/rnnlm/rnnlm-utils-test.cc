@@ -205,7 +205,10 @@ int main(int argc, char **argv) {
    
   Input k2(history_file, &binary);
   mdl.ReadHistories(k2.Stream(), binary);
-  
+  // command for running the test binary: ./test-binary arpa-file history-file
+  // arpa-file is the ARPA-format language model
+  // history-file has lines of histories, one history per line
+  mdl.TestPdfsEqual(); 
   mdl.TestSampling();
   return 0;
 }

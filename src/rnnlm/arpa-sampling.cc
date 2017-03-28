@@ -76,6 +76,7 @@ BaseFloat ArpaSampling::GetBackoffWeight(int32 order, int32 word, const HistType
 void ArpaSampling::ComputeWordPdf(const HistType& history, std::vector<std::pair<int32, BaseFloat> >* pdf) {
   int32 order = history.size();
   BaseFloat prob = 0.0;
+  (*pdf).resize(num_words_); // if do not do this, (*pdf)[word] += prob will get seg fault
   for (int32 i = 0; i < num_words_; i++) {
     auto it = probs_[order].find(history);
     int32 word = vocab_[i].second; // get word from the map
@@ -126,7 +127,8 @@ void ArpaSampling::ComputeHistoriesWeights() {
         HistType h(h_tmp.begin(), last);
         int32 word = h_tmp.back();
         prob *= pow(10, GetBackoffWeight(h_tmp.size(), word, h));
-        h_tmp = h;
+        HistType h_up(h_tmp.begin() + 1, h_tmp.end());
+        h_tmp = h_up;
       }
       HistType::iterator begin = history.begin() + i;
       HistType h(begin, history.end());
@@ -244,6 +246,44 @@ void ArpaSampling::TestSampling() {
   KALDI_LOG << "Number of words OOV : " << count_nons;
 }
 
+// this function check the estimated pdfs from 1) weighted history and 2) normal computation
+// are the same
+void ArpaSampling::TestPdfsEqual() {
+  // get the weighted pdf
+  ComputeHistoriesWeights();
+  std::vector<std::pair<int32, BaseFloat> > pdf_hist_weight;
+  ComputeWeightedPdf(&pdf_hist_weight);
+  // check the averaged pdf sums to 1
+  BaseFloat sum = 0;
+  for (int32 i = 0; i < num_words_; i++) {
+    sum += pdf_hist_weight[i].second;
+  }
+  KALDI_LOG << "Sum of weighted pfd: " << sum;
+  // get the average pdf
+  std::vector<std::pair<int32, BaseFloat> > pdf;
+  pdf.resize(num_words_);
+  for (int32 i = 0; i < histories_.size(); i++) {
+    std::vector<std::pair<int32, BaseFloat> > pdf_h;
+    ComputeWordPdf(histories_[i], &pdf_h);
+    for(int32 j = 0; j < pdf_h.size(); j++) {
+      pdf[j].first = pdf_h[j].first;
+      pdf[j].second += pdf_h[j].second / histories_.size();
+    }
+  }
+  // check the averaged pdf sums to 1
+  sum = 0;
+  for (int32 i = 0; i < num_words_; i++) {
+    sum += pdf[i].second;
+  }
+  KALDI_LOG << "Sum of averaged pdf: " << sum;
+  // check equality of the two pdfs
+  BaseFloat diff = 0;
+  for (int32 i = 0; i < num_words_; i++) {
+    diff += abs(pdf_hist_weight[i].second - pdf[i].second);
+  }
+  KALDI_LOG << " diff of the two pdfs: " << diff;
+  
+}
 // this function returns the log probability of the given sentence
 BaseFloat ArpaSampling::ComputeSentenceProb(const std::vector<int32>& sentence) {
   BaseFloat prob = 0;

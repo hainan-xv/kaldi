@@ -109,6 +109,8 @@ class ArpaSampling : public ArpaFileParser {
   void TestProbs(std::istream &is, bool binary);
 
   void TestSampling();
+  
+  void TestPdfsEqual();
 
   // print history
   void PrintHist(const HistType& h);
