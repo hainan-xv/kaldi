@@ -336,7 +336,7 @@ class LinearSoftmaxNormalizedComponent: public LmOutputComponent {
         kBackpropNeedsInput|kBackpropAdds;
   }
 
-  void InitFromUnigram(const std::vector<BaseFloat> &unigram);
+  void InitFromUnigram(const std::vector<double> &unigram);
 
   void Propagate(const CuMatrixBase<BaseFloat> &in,
                  const vector<int> &indexes,

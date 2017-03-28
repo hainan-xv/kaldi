@@ -59,7 +59,7 @@ void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
 
 LmNnetSamplingTrainer::LmNnetSamplingTrainer(
                           const LmNnetTrainerOptions &config,
-                          const vector<BaseFloat> &unigram,
+                          const vector<double> &unigram,
                           LmNnet *nnet):
                           config_(config),
                           unigram_(unigram),
@@ -565,7 +565,7 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
 
 void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                               int num_samples,
-                              const vector<BaseFloat> &unigram,
+                              const vector<double> &unigram,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,
@@ -587,22 +587,22 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
   const SparseMatrix<BaseFloat> &post = supervision.GetSparseMatrix();
 
-  vector<BaseFloat> selection_probs = unigram;
+  vector<double> selection_probs = unigram;
 
   std::vector<int> outputs;  // outputs[i] is the correct work for row i
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
 
-  vector<std::pair<int, BaseFloat> > samples(num_samples);
-  vector<BaseFloat> selected_probs(num_samples);
+  vector<std::pair<int, double> > samples(num_samples);
+  vector<double> selected_probs(num_samples);
 
   if (num_samples != unigram.size()) {
     for (int i = 0; i < outputs.size(); i++) {
       outputs_set.insert(outputs[i]);
     }
     NormalizeVec(num_samples, outputs_set, &selection_probs);
-    vector<BaseFloat> u(selection_probs.size());
+    vector<double> u(selection_probs.size());
     for (int i = 0; i < u.size(); i++) {
 //      u[i].first = i;
 //      u[i].second = selection_probs[i];
@@ -612,7 +612,7 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     for (int i = 0; i < samples.size(); i++) {
       // use min with 1.0 because we use prob=10 for "must sampled" words
       // in the vector to avoid numerical issues
-      selected_probs[i] = std::min(BaseFloat(1.0), selection_probs[samples[i].first]);
+      selected_probs[i] = std::min(1.0, selection_probs[samples[i].first]);
     }
   } else {
     for (int i = 0; i < num_samples; i++) {

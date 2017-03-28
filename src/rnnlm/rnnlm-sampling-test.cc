@@ -9,7 +9,7 @@ namespace kaldi {
 namespace rnnlm {
 
 void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sample_set,
-                   vector<BaseFloat>* u, std::map<int, BaseFloat> *bigrams) {
+                   vector<double>* u, std::map<int, double> *bigrams) {
   u->resize(n, 0);
   BaseFloat unigram_sum = 0.0;
   for (int i = 0; i < n; i++) {
@@ -21,7 +21,7 @@ void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sa
     (*u)[i] /= unigram_sum;
   }
 
-  sort(u->begin(), u->end(), std::greater<BaseFloat>());
+  sort(u->begin(), u->end(), std::greater<double>());
 
   BaseFloat bigram_total_sum = RandUniform(); // the total_sum we want
   BaseFloat bigram_sum = 0.0;    // the sum we're getting with random initializations
@@ -32,8 +32,8 @@ void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sa
     bigram_sum += b;
   }
 
-  for (std::map<int, BaseFloat>::iterator iter = bigrams->begin();
-                                                iter != bigrams->end(); iter++) {
+  for (std::map<int, double>::iterator iter = bigrams->begin();
+                                              iter != bigrams->end(); iter++) {
     iter->second = iter->second / bigram_sum * bigram_total_sum;
   }
 
@@ -78,15 +78,15 @@ void UnitTestCDFGrouping() {
 
     int k = rand() % (dim / 2);
 
-    vector<BaseFloat> u;
+    vector<double> u;
     set<int> must_sample;
-    map<int, BaseFloat> bigrams;
+    map<int, double> bigrams;
     int ones_size = rand() % (k / 2);
     int bigram_size = rand() % (k / 2);
 
     PrepareVector(dim, ones_size, bigram_size, &must_sample, &u, &bigrams);
 
-    vector<BaseFloat> cdf(u.size(), 0);                                          
+    vector<double> cdf(u.size(), 0);                                          
     cdf[0] = u[0];                                                               
     for (int i = 1; i < u.size(); i++) {                                          
       cdf[i] = cdf[i - 1] + u[i];                                               

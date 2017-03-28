@@ -139,7 +139,7 @@ void NnetExample::Read(std::istream &is, bool binary) {
     int num_samples;
     ReadBasicType(is, binary, &sample_size);
     ReadBasicType(is, binary, &num_samples);
-    samples.resize(sample_size, std::vector<std::pair<int32, BaseFloat> >(num_samples));
+    samples.resize(sample_size, std::vector<std::pair<int32, double> >(num_samples));
     for (int i = 0; i < sample_size; i++) {
       for (int j = 0; j < sample_size; j++) {
         ReadBasicType(is, binary, &samples[i][j].first);

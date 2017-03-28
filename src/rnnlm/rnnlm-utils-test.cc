@@ -7,9 +7,9 @@ namespace kaldi {
 namespace rnnlm {
 
 void PrepareVector(int n, int ones_size, std::set<int>* must_sample_set,
-                   vector<BaseFloat>* selection_probs) {
-  BaseFloat prob = 0;
-  BaseFloat prob_sum = 0;
+                   vector<double>* selection_probs) {
+  double prob = 0;
+  double prob_sum = 0;
   for (int i = 0; i < n; i++) {
     prob = RandUniform();
     prob_sum += prob;
@@ -19,7 +19,7 @@ void PrepareVector(int n, int ones_size, std::set<int>* must_sample_set,
     (*selection_probs)[i] /= prob_sum;
   }
 
-  sort(selection_probs->begin(), selection_probs->end(), std::greater<BaseFloat>());
+  sort(selection_probs->begin(), selection_probs->end(), std::greater<double>());
 
   for (int i = 0; i < ones_size; i++) {
     (*must_sample_set).insert(rand() % n);
@@ -28,31 +28,31 @@ void PrepareVector(int n, int ones_size, std::set<int>* must_sample_set,
 
 void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
   std::set<int> must_sample_set;
-  vector<BaseFloat> selection_probs;
+  vector<double> selection_probs;
   PrepareVector(n, ones_size, &must_sample_set, &selection_probs);
 //  NormalizeVec(k, must_sample_set, &selection_probs);
 
-  vector<BaseFloat> &u(selection_probs);
+  vector<double> &u(selection_probs);
   // normalize the selection_probs
-  BaseFloat sum = 0;
+  double sum = 0;
   for (int i = 0; i < u.size(); i++) {
-    sum += std::min(BaseFloat(1.0), selection_probs[i]);
+    sum += std::min(double(1.0), selection_probs[i]);
   }
   KALDI_ASSERT(ApproxEqual(sum, 1.0));
 
-  vector<BaseFloat> samples_counts(u.size(), 0);
+  vector<double> samples_counts(u.size(), 0);
   int count = 0;
   for (int i = 0; ; i++) {
     count++;
-    vector<std::pair<int, BaseFloat> > samples;
+    vector<std::pair<int, double> > samples;
     SampleWithoutReplacement(u, k, &samples);
     for (int j = 0; j < samples.size(); j++) {
       samples_counts[samples[j].first] += 1;
     }
     // update Euclidean distance between the two pdfs every 1000 iters
     if (count % 1000 == 0) {
-      BaseFloat distance = 0;
-      vector<BaseFloat> samples_probs(u.size());
+      double distance = 0;
+      vector<double> samples_probs(u.size());
       for (int j = 0; j < samples_probs.size(); j++) {
         samples_probs[j] = samples_counts[j] / (count * k);
       }
@@ -99,7 +99,7 @@ void UnitTestSampleWithProbOne(int iters) {
   // generate a must_sample_set with ones
   int ones_size = rand() % (n / 2);
   std::set<int> must_sample_set;
-  vector<BaseFloat> selection_probs;
+  vector<double> selection_probs;
 
   PrepareVector(n, ones_size, &must_sample_set, &selection_probs);
 
@@ -112,18 +112,18 @@ void UnitTestSampleWithProbOne(int iters) {
 
   // generate a random number k from ones_size + 1 to n
   int k = rand() % (n - ones_size) + ones_size + 1;
-//  NormalizeVec(k, must_sample_set, &selection_probs);
+  NormalizeVec(k, must_sample_set, &selection_probs);
 
-  vector<BaseFloat> u(selection_probs);
+  vector<double> u(selection_probs);
 
   int N = iters;
   for (int i = 0; i < N; i++) {
-    vector<std::pair<int, BaseFloat> > samples;
+    vector<std::pair<int, double> > samples;
     SampleWithoutReplacement(u, k, &samples);
     if (must_sample_set.size() > 0) {
       // assert every item in must_sample_set is sampled
       for (set<int>::iterator it = must_sample_set.begin(); it != must_sample_set.end(); ++it) {
-        KALDI_ASSERT(std::find(samples.begin(), samples.end(), std::make_pair(*it, BaseFloat(1.0))) != samples.end());
+        KALDI_ASSERT(std::find(samples.begin(), samples.end(), std::make_pair(*it, double(1.0))) != samples.end());
       }
     }
   }
@@ -136,7 +136,7 @@ void UnitTestSamplingTime(int iters) {
   // generate a must_sample_set with ones
   int ones_size = rand() % (n / 2);
   std::set<int> must_sample_set;
-  vector<BaseFloat> selection_probs;
+  vector<double> selection_probs;
 
   PrepareVector(n, ones_size, &must_sample_set, &selection_probs);
 
@@ -144,14 +144,14 @@ void UnitTestSamplingTime(int iters) {
   int k = rand() % (n - ones_size) + ones_size + 1;
 //  NormalizeVec(k, must_sample_set, &selection_probs);
 
-  vector<BaseFloat> &u(selection_probs);
+  vector<double> &u(selection_probs);
 
   int N = iters;
   Timer t;
   t.Reset();
-  BaseFloat total_time;
+  double total_time;
   for (int i = 0; i < N; i++) {
-    vector<std::pair<int, BaseFloat> > samples;
+    vector<std::pair<int, double> > samples;
     SampleWithoutReplacement(u, k, &samples);
   }
   total_time = t.Elapsed();

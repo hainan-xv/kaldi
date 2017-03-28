@@ -128,7 +128,7 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
 
     if (cfl->GetValue("unigram", &unigram_filename)) {
-      std::vector<BaseFloat> u;
+      std::vector<double> u;
       ReadUnigram(unigram_filename, &u);
       KALDI_ASSERT(u.size() == params_.NumRows());
       Matrix<BaseFloat> m(1, u.size(), kUndefined);
@@ -840,7 +840,7 @@ void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
 
     if (cfl->GetValue("unigram", &unigram_filename)) {
-      std::vector<BaseFloat> u;
+      std::vector<double> u;
       ReadUnigram(unigram_filename, &u);
       KALDI_ASSERT(u.size() == params_.NumRows());
       Matrix<BaseFloat> m(1, u.size(), kUndefined);
@@ -1485,7 +1485,7 @@ void LinearSoftmaxNormalizedComponent::InitFromConfig(ConfigLine *cfl) {
     Init(input_dim, output_dim, param_stddev);
 
     if (cfl->GetValue("unigram", &unigram_filename)) {
-      std::vector<BaseFloat> u;
+      std::vector<double> u;
       ReadUnigram(unigram_filename, &u);
       InitFromUnigram(u);
 
@@ -1507,7 +1507,7 @@ void LinearSoftmaxNormalizedComponent::InitFromConfig(ConfigLine *cfl) {
     KALDI_ERR << "Bad initializer " << cfl->WholeLine();
 }
 
-void LinearSoftmaxNormalizedComponent::InitFromUnigram(const std::vector<BaseFloat> &unigram) {
+void LinearSoftmaxNormalizedComponent::InitFromUnigram(const std::vector<double> &unigram) {
   KALDI_ASSERT(unigram.size() == linear_params_.NumRows());
 //  for (int i = 0; i < unigram.size(); i++) {
 //    unigram[i] = log(unigram[i]);

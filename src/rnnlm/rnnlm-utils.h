@@ -33,15 +33,15 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs);
 
 typedef struct _interval {
   _interval(): L(0), R(0) {}
-  _interval(int l, int r, BaseFloat u, BaseFloat p):
+  _interval(int l, int r, double u, double p):
          L(l), R(r), unigram_prob(u), selection_prob(p) {}
   bool Contains(int i) {
     return L <= i && i < R;
   }
   int L;
   int R;
-  BaseFloat unigram_prob;
-  BaseFloat selection_prob;
+  double unigram_prob;
+  double selection_prob;
 } interval;
 
 const int kOosId = 1;
@@ -69,24 +69,24 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 void CheckValidGrouping(const vector<interval> &g, int k);
 
-void CheckValidGrouping(const vector<BaseFloat> &u,
+void CheckValidGrouping(const vector<double> &u,
                         const std::set<int> &must_sample,
-                        const std::map<int, BaseFloat> &bigrams,
+                        const std::map<int, double> &bigrams,
                         int k, const vector<interval> &g);
 
-void DoGroupingCDF(const vector<BaseFloat> &u,
-                   const vector<BaseFloat> &cdf, int k,
-                   const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
+void DoGroupingCDF(const vector<double> &u,
+                   const vector<double> &cdf, int k,
+                   const set<int>& must_sample, const map<int, double> &bigrams,
                    vector<interval> *out);
 
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n
-void SampleWithoutReplacement(const vector<BaseFloat>& u, int n, vector<std::pair<int, BaseFloat> > *out);
+void SampleWithoutReplacement(const vector<double>& u, int n, vector<std::pair<int, double> > *out);
 
 // void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 
-void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
-                               vector<std::pair<int, BaseFloat> > *out);
+void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
+                               vector<std::pair<int, double> > *out);
 
 // normalize the prob vector such that
 // every prob satisfies 0 < p <= 1
@@ -97,12 +97,12 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
 // sometimes we will see min(1.0, probs[i])
 
 // probs should add up to 1 initually (a valid unigram distribution)
-void NormalizeVec(int k, const set<int> &ones, vector<BaseFloat> *probs);
+void NormalizeVec(int k, const set<int> &ones, vector<double> *probs);
 
 bool LargerThan(const std::pair<int, BaseFloat> &t1,
                 const std::pair<int, BaseFloat> &t2);
 
-void ReadUnigram(string f, vector<BaseFloat> *u);
+void ReadUnigram(string f, vector<double> *u);
 
 void ComponentDotProducts(const LmNnet &nnet1,
                           const LmNnet &nnet2,

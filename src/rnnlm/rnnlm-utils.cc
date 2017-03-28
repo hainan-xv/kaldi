@@ -45,7 +45,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
       num_words = egs->io[i].features.NumCols();
       SparseMatrixToVector(egs->io[i].features.GetSparseMatrix(), &words);
 
-      egs->samples.resize(length, vector<std::pair<int32, BaseFloat> >(minibatch_size));
+      egs->samples.resize(length, vector<std::pair<int32, double> >(minibatch_size));
     
       // v[t][n] is a vector representing the history of the input and n, t
       vector<vector<vector<int32> > > histories(length, vector<vector<int32> >(minibatch_size));
@@ -62,7 +62,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
 
       // TODO(hxu)
       for (int t = 0; t < length; t++) {
-        std::vector<BaseFloat> unigram(num_words, 1.0 / num_words);
+        std::vector<double> unigram(num_words, 1.0 / num_words);
         SampleWithoutReplacement(unigram, num_samples, &egs->samples[t]);
       }
       
@@ -76,10 +76,10 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
 void CheckValidGrouping(const vector<interval> &g, int k) {
   KALDI_ASSERT(g.size() >= k);
   // check sum
-  BaseFloat selection_sum = 0.0;
-  BaseFloat unigram_sum = 0.0;
+  double selection_sum = 0.0;
+  double unigram_sum = 0.0;
   for (int i = 0; i < g.size(); i++) {
-    selection_sum += std::min(BaseFloat(1.0), g[i].selection_prob);
+    selection_sum += std::min(1.0, g[i].selection_prob);
     unigram_sum += g[i].unigram_prob;
 
     KALDI_ASSERT(g[i].L < g[i].R);
@@ -93,16 +93,16 @@ void CheckValidGrouping(const vector<interval> &g, int k) {
   }
 } 
 
-void CheckValidGrouping(const vector<BaseFloat> &u,
+void CheckValidGrouping(const vector<double> &u,
                         const std::set<int> &must_sample,
-                        const std::map<int, BaseFloat> &bigrams,
+                        const std::map<int, double> &bigrams,
                         int k, const vector<interval> &g) {
   CheckValidGrouping(g, k); // check the self-consistency first
 
-  BaseFloat bigram_sum = 0.0;
-  BaseFloat unigram_sum = 0.0;
+  double bigram_sum = 0.0;
+  double unigram_sum = 0.0;
 
-  vector<BaseFloat> cdf(u.size() + 1);
+  vector<double> cdf(u.size() + 1);
   cdf[0] = 0.0;
   for (int i = 0; i < u.size(); i++) {
     cdf[i + 1] = cdf[i] + u[i];
@@ -110,7 +110,7 @@ void CheckValidGrouping(const vector<BaseFloat> &u,
   unigram_sum = cdf[cdf.size() - 1];
 
   KALDI_ASSERT(ApproxEqual(1.0, unigram_sum));
-  for (map<int, BaseFloat>::const_iterator iter = bigrams.begin();
+  for (map<int, double>::const_iterator iter = bigrams.begin();
                                            iter != bigrams.end(); iter++) {
     bigram_sum += iter->second;
     unigram_sum -= u[iter->first];
@@ -118,16 +118,16 @@ void CheckValidGrouping(const vector<BaseFloat> &u,
 
 //  KALDI_LOG << "bigram sum is " << bigram_sum;
 //  KALDI_LOG << "unigram sum is " << unigram_sum;
-  BaseFloat alpha = (1.0 - bigram_sum) / unigram_sum;
+  double alpha = (1.0 - bigram_sum) / unigram_sum;
 //  KALDI_LOG << "alpha is " << alpha;
 
-  BaseFloat ratio = -1.0;
+  double ratio = -1.0;
   for (int i = 0; i < g.size(); i++) {
-    BaseFloat ratio_;
+    double ratio_;
     if (g[i].L + 1 == g[i].R) {
       // single world group
       int key = g[i].L;
-      std::map<int, BaseFloat>::const_iterator iter;
+      std::map<int, double>::const_iterator iter;
       if (must_sample.find(key) != must_sample.end()) {
         KALDI_ASSERT(g[i].selection_prob >= 1.0);
       } else if ((iter = bigrams.find(key)) != bigrams.end()) {
@@ -157,10 +157,10 @@ void CheckValidGrouping(const vector<BaseFloat> &u,
 
 
 // assume u is CDF of already sorted unigrams
-void DoGroupingCDF(const vector<BaseFloat> &u,
-                   const vector<BaseFloat> &cdf,
+void DoGroupingCDF(const vector<double> &u,
+                   const vector<double> &cdf,
                    int k,
-                   const set<int>& must_sample, const map<int, BaseFloat> &bigrams,
+                   const set<int>& must_sample, const map<int, double> &bigrams,
                    vector<interval> *out) {
 
   KALDI_ASSERT(k >= must_sample.size());
@@ -169,15 +169,15 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
 
   KALDI_ASSERT(ApproxEqual(cdf[cdf.size() - 1], 1.0));
 
-  BaseFloat alpha = 0.0;
-  BaseFloat max_allowed_ngram_prob = 1.0 / (k - must_sample.size());
+  double alpha = 0.0;
+  double max_allowed_ngram_prob = 1.0 / (k - must_sample.size());
 
   // compute the value for alpha
   {
-    BaseFloat bigram_sum = 0.0;
-    BaseFloat unigram_sum = 1.0;
+    double bigram_sum = 0.0;
+    double unigram_sum = 1.0;
 
-    for (map<int, BaseFloat>::const_iterator iter = bigrams.begin();
+    for (map<int, double>::const_iterator iter = bigrams.begin();
                                              iter != bigrams.end();
                                              iter++) {
       bigram_sum += iter->second;
@@ -195,11 +195,11 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
     // now the n-gram probs for word i are bigram[i], or alpha * u[i] (standard arpa file rules)
     //////////////////////////////////////////////////////////////////////////
 
-    BaseFloat total_selection_wgt = k - must_sample.size();
-    BaseFloat total_ngram_wgt = 1.0;
+    double total_selection_wgt = k - must_sample.size();
+    double total_ngram_wgt = 1.0;
 
     for (set<int>::const_iterator i = must_sample.begin(); i != must_sample.end(); i++) {
-      map<int, BaseFloat>::const_iterator ii = bigrams.find(*i);
+      map<int, double>::const_iterator ii = bigrams.find(*i);
       if (ii != bigrams.end()) {
         total_ngram_wgt -= ii->second;
       } else {
@@ -207,7 +207,7 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
       }
     }
     
-    sort(bigram_probs.begin(), bigram_probs.end(), std::greater<BaseFloat>());
+    sort(bigram_probs.begin(), bigram_probs.end(), std::greater<double>());
 
     int i = 0, j = 0;  // iteratos 2 vectors like merge sort
     // i for bigram_probs, j for u
@@ -218,7 +218,7 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
       }
       // now neither i or j has "special" probs; both only depend on the ngram probs
 
-      BaseFloat p;
+      double p;
       if (i < bigrams.size() && bigram_probs[i] > alpha * u[j]) {
         p = bigram_probs[i];
         i++;
@@ -239,7 +239,7 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
   }
 
   set<int>::const_iterator must_sample_iter = must_sample.begin();
-  map<int, BaseFloat>::const_iterator bigram_iter = bigrams.begin();
+  map<int, double>::const_iterator bigram_iter = bigrams.begin();
 
   for (int i = 0; i < u.size();) {
     // a must-sample word
@@ -252,7 +252,7 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
       must_sample_iter++;
       i++;
     } else if (bigram_iter != bigrams.end() && bigram_iter->first == i) {
-      BaseFloat p = bigram_iter->second / max_allowed_ngram_prob;
+      double p = bigram_iter->second / max_allowed_ngram_prob;
       if (p > 1.0) {
         p = ONE;
       }
@@ -260,15 +260,15 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
       bigram_iter++;
       i++;
     } else {
-      BaseFloat u_i = u[i] * alpha;
+      double u_i = u[i] * alpha;
 
       int n = max_allowed_ngram_prob / u_i; // since we know the original unigram is sorted we could at least have n
       int group_end = i + n;
-      BaseFloat cdf_start = 0;
+      double cdf_start = 0;
       if (i > 1) {
         cdf_start = cdf[i - 1];
       }
-      BaseFloat current_probs = cdf[group_end - 1] - cdf_start;
+      double current_probs = cdf[group_end - 1] - cdf_start;
 
       int index_upper_bound = INT_MAX;
       if (must_sample_iter != must_sample.end()) {
@@ -289,12 +289,12 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
         out->push_back(interval(i, i + 1, -1, ONE));
         i++;
       } else {
-        BaseFloat uni_prob = cdf[group_end - 1];
+        double uni_prob = cdf[group_end - 1];
         if (i != 0) {
           uni_prob -= cdf[i - 1];
         }
         uni_prob *= alpha;
-        BaseFloat selection_prob = uni_prob / max_allowed_ngram_prob;
+        double selection_prob = uni_prob / max_allowed_ngram_prob;
 
         KALDI_ASSERT(selection_prob > 0 && selection_prob <= 1.0);
         out->push_back(interval(i, group_end, uni_prob, selection_prob));
@@ -306,24 +306,24 @@ void DoGroupingCDF(const vector<BaseFloat> &u,
 }
 
 // assume u is already sorted
-void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *out) {
-  BaseFloat sum = 0.0;
+void DoGrouping(vector<std::pair<int, double> > u, int k, vector<interval> *out) {
+  double sum = 0.0;
   for (int i = 0; i < u.size(); i++) {
-    sum += std::min(u[i].second, BaseFloat(1.0));
+    sum += std::min(u[i].second, 1.0);
   }
 //  for (int i = 0; i < u.size(); i++) {
 //    u[i].second /= sum;
 //  }
 
   KALDI_ASSERT(out->size() == 0);
-  BaseFloat weight_to_spare = k;
+  double weight_to_spare = k;
 
   int size = u.size();
 
   int begin = -1;
-  BaseFloat cumulative_unigram_weight = 0.0;
-  BaseFloat unigram_weight_left = 1.0;
-  BaseFloat selection_weight;
+  double cumulative_unigram_weight = 0.0;
+  double unigram_weight_left = 1.0;
+  double selection_weight;
 
   using std::min;
   int i;
@@ -332,19 +332,19 @@ void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *o
       int j  = 0;
       j++;
     }
-    if (begin == -1 && min(BaseFloat(10.0), u[i].second) / sum / unigram_weight_left * weight_to_spare >= 1) {
+    if (begin == -1 && min(10.0, u[i].second) / sum / unigram_weight_left * weight_to_spare >= 1) {
       // first case, the single word is too big
       weight_to_spare -= 1.0;
-      unigram_weight_left -= min(BaseFloat(1.0), u[i].second) / sum;
-      out->push_back(interval(i, i + 1, min(BaseFloat(1.0), u[i].second) / sum, 10.0));
+      unigram_weight_left -= min(1.0, u[i].second) / sum;
+      out->push_back(interval(i, i + 1, min(1.0, u[i].second) / sum, 10.0));
     } else if (begin == -1) {
       // first time we encounter a word whose prob isn't too big
       begin = i;
-      cumulative_unigram_weight = min(BaseFloat(1.0), u[i].second) / sum;
+      cumulative_unigram_weight = min(1.0, u[i].second) / sum;
     } else {
       // in the middle of grouping words
       // first test if including the new word would make it bigger than 1
-      selection_weight = (cumulative_unigram_weight + min(BaseFloat(1.0), u[i].second) / sum) / unigram_weight_left * weight_to_spare;
+      selection_weight = (cumulative_unigram_weight + min(1.0, u[i].second) / sum) / unigram_weight_left * weight_to_spare;
 
       if (selection_weight > 1) {
 //        cout << "here, i = " << i << endl;
@@ -356,9 +356,9 @@ void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *o
         out->push_back(interval(begin, i, cumulative_unigram_weight, selection_weight));
 
         begin = i;
-        cumulative_unigram_weight = min(BaseFloat(1.0), u[i].second) / sum;
+        cumulative_unigram_weight = min(1.0, u[i].second) / sum;
       } else {
-        cumulative_unigram_weight += min(BaseFloat(1.0), u[i].second) / sum;
+        cumulative_unigram_weight += min(1.0, u[i].second) / sum;
       }
     }
   }
@@ -379,13 +379,13 @@ void DoGrouping(vector<std::pair<int, BaseFloat> > u, int k, vector<interval> *o
 }
 
 // return an int i in [L, R - 1], w/ probs porportional to their pdf's
-int SelectOne(const vector<BaseFloat> &cdf, int L, int R) {
+int SelectOne(const vector<double> &cdf, int L, int R) {
 //  BaseFloat low = 0;
 //  if (L - 1 >= 0) {
 //    low = cdf[L];
 //  }
 //  BaseFloat p = RandUniform() * (cdf[R] - low) + low;
-  BaseFloat p = RandUniform() * (cdf[R] - cdf[L]) + cdf[L];
+  double p = RandUniform() * (cdf[R] - cdf[L]) + cdf[L];
 
   int index = -1;
 
@@ -472,7 +472,7 @@ unordered_map<string, int> ReadWordlist(string filename) {
   return ans;
 }
 
-void ReadUnigram(string f, vector<BaseFloat> *u) {
+void ReadUnigram(string f, vector<double> *u) {
   ifstream ifile(f.c_str());
   int id;
   BaseFloat prob;
@@ -516,11 +516,11 @@ NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 
 
-void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
-                              vector<std::pair<int, BaseFloat> > *out) {
+void SampleWithoutReplacement(const vector<double> &u, int n,
+                              vector<std::pair<int, double> > *out) {
 // assume u is sorted from large to small
 //  sort(u.begin(), u.end(), LargerThan);
-  vector<BaseFloat> cdf(u.size() + 1);
+  vector<double> cdf(u.size() + 1);
   cdf[0] = 0;
   for (int i = 1; i <= cdf.size(); i++) {
     cdf[i] = cdf[i - 1] + u[i - 1];
@@ -530,7 +530,7 @@ void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
 //    for (int i = 0; i < cdf.size(); i++) {
 //      cout << cdf[i] << " ";
 //    } cout << endl;
-  vector<BaseFloat> cdf2(u.size(), 0);
+  vector<double> cdf2(u.size(), 0);
   cdf2[0] = u[0];
   for (int i = 1; i < u.size(); i++) {
     cdf2[i] = cdf2[i - 1] + u[i];
@@ -539,9 +539,9 @@ void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
 //  KALDI_ASSERT(cdf[cdf.size() - 1], n)
   vector<interval> g;
 //  DoGrouping(u, n, &g);
-  DoGroupingCDF(u, cdf2, n, set<int>(), map<int, BaseFloat>(), &g);
+  DoGroupingCDF(u, cdf2, n, set<int>(), map<int, double>(), &g);
 
-  vector<std::pair<int, BaseFloat> > group_u(g.size());
+  vector<std::pair<int, double> > group_u(g.size());
   for (int i = 0; i < g.size(); i++) {
     group_u[i].first = i;
     group_u[i].second = g[i].selection_prob;
@@ -570,25 +570,25 @@ void SampleWithoutReplacement(const vector<BaseFloat> &u, int n,
 //  cout << endl;
 }
 
-void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
-                              vector<std::pair<int, BaseFloat> > *out) {
+void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
+                              vector<std::pair<int, double> > *out) {
   sort(u.begin(), u.end(), LargerThan);
 
   KALDI_ASSERT(n != 0);
 
-  vector<std::pair<int, BaseFloat> >& ans = *out;
+  vector<std::pair<int, double> >& ans = *out;
   ans.resize(n);
 
-  BaseFloat tot_weight = 0;
+  double tot_weight = 0;
 
   for (int i = 0; i < n; i++) {
-    tot_weight += std::min(BaseFloat(1.0), u[i].second);
+    tot_weight += std::min(1.0, u[i].second);
     ans[i].first = i;
   }
 
   for (int k = n; k < u.size(); k++) {
-    tot_weight += std::min(BaseFloat(1.0), u[k].second);
-    BaseFloat pi_k1_k1 = u[k].second / tot_weight * n;
+    tot_weight += std::min(1.0, u[k].second);
+    double pi_k1_k1 = u[k].second / tot_weight * n;
 
     if (pi_k1_k1 > 1) {
       KALDI_ASSERT(false); // never gonna happen in our setup since sorted
@@ -600,15 +600,15 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
       }
     }
 
-    vector<BaseFloat> R(n);
+    vector<double> R(n);
     // fill up R
     {
-      BaseFloat Lk = 0;
-      BaseFloat Tk = 0;
+      double Lk = 0;
+      double Tk = 0;
       for (int i = 0; i < n; i++) {
-        BaseFloat pi_k_i = u[ans[i].first].second /
-                   (tot_weight - std::min(BaseFloat(1.0), u[k].second)) * n;
-        BaseFloat pi_k1_i = u[ans[i].first].second / tot_weight * n;
+        double pi_k_i = u[ans[i].first].second /
+                   (tot_weight - std::min(1.0, u[k].second)) * n;
+        double pi_k1_i = u[ans[i].first].second / tot_weight * n;
 
         if (u[ans[i].first].second >= 5.0) {
           pi_k_i = pi_k1_i = 1;
@@ -629,11 +629,11 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
         }
       }
 
-      BaseFloat sum = 0;
+      double sum = 0;
       for (int i = 0; i < n; i++) {
-        BaseFloat pi_k_i = u[ans[i].first].second /
-            (tot_weight - std::min(BaseFloat(1.0), u[k].second)) * n;
-        BaseFloat pi_k1_i = u[ans[i].first].second / tot_weight * n;
+        double pi_k_i = u[ans[i].first].second /
+            (tot_weight - std::min(1.0, u[k].second)) * n;
+        double pi_k1_i = u[ans[i].first].second / tot_weight * n;
 
         if (pi_k_i < 1 && pi_k1_i < 1) {
           // case C
@@ -644,15 +644,15 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
       KALDI_ASSERT(ApproxEqual(sum, 1.0));
     }
 
-    vector<BaseFloat> cdf(R);
-    BaseFloat *cdf_ptr = &(cdf[0]);
+    vector<double> cdf(R);
+    double *cdf_ptr = &(cdf[0]);
     double cdf_sum = 0.0;
     for (int32 i = 0, size = cdf.size(); i < size; i++) {
       cdf_sum += cdf_ptr[i];
-      cdf_ptr[i] = static_cast<BaseFloat>(cdf_sum);
+      cdf_ptr[i] = static_cast<double>(cdf_sum);
     }
 
-    BaseFloat p = RandUniform() * cdf[cdf.size() - 1];
+    double p = RandUniform() * cdf[cdf.size() - 1];
     // binary search
 
     int index = -1;
@@ -690,7 +690,7 @@ void SampleWithoutReplacement_(vector<std::pair<int, BaseFloat> > u, int n,
   }
 }
 
-void NormalizeVec(int k, const set<int>& ones, vector<BaseFloat> *probs) {
+void NormalizeVec(int k, const set<int>& ones, vector<double> *probs) {
   KALDI_ASSERT(ones.size() < k);
   // first check the unigrams add up to 1
   BaseFloat sum = 0;
@@ -721,7 +721,7 @@ void NormalizeVec(int k, const set<int>& ones, vector<BaseFloat> *probs) {
   if (maxx / sum * (k - ones.size()) <= 1.0) {
 //    KALDI_LOG << "no need to interpolate";
     for (int i = 0; i < probs->size(); i++) {
-      BaseFloat &t = (*probs)[i];
+      double &t = (*probs)[i];
       if (t > 5.0) {
         continue;
       }
@@ -741,7 +741,7 @@ void NormalizeVec(int k, const set<int>& ones, vector<BaseFloat> *probs) {
     KALDI_ASSERT(w >= 0.0 && w <= 1.0);
 
     for (int i = 0; i < probs->size(); i++) {
-      BaseFloat &t = (*probs)[i];
+      double &t = (*probs)[i];
       if (t > 5.0) {
         continue;
       }
