@@ -178,8 +178,8 @@ void DoGroupingCDF(const vector<double> &u,
     double unigram_sum = 1.0;
 
     for (map<int, double>::const_iterator iter = bigrams.begin();
-                                             iter != bigrams.end();
-                                             iter++) {
+                                          iter != bigrams.end();
+                                          iter++) {
       bigram_sum += iter->second;
       unigram_sum -= u[iter->first];
       if (must_sample.find(iter->first) == must_sample.end()) {
@@ -206,6 +206,8 @@ void DoGroupingCDF(const vector<double> &u,
         total_ngram_wgt -= u[*i] * alpha;
       }
     }
+
+    KALDI_ASSERT(total_ngram_wgt > 0);
     
     sort(bigram_probs.begin(), bigram_probs.end(), std::greater<double>());
 
@@ -230,13 +232,16 @@ void DoGroupingCDF(const vector<double> &u,
         // needs a cutoff
         total_ngram_wgt -= p;
         total_selection_wgt -= 1.0;
+        KALDI_ASSERT(total_ngram_wgt > 0);
       } else {
         max_allowed_ngram_prob = total_ngram_wgt / total_selection_wgt;
+        KALDI_ASSERT(max_allowed_ngram_prob > 0);
         break;
       }
     }
 //    KALDI_LOG << "max allowed ngram prob is " << max_allowed_ngram_prob;
   }
+
 
   set<int>::const_iterator must_sample_iter = must_sample.begin();
   map<int, double>::const_iterator bigram_iter = bigrams.begin();

@@ -193,8 +193,7 @@ class LmNnetSamplingTrainer {
    // do the forward prop for last layer compute the objective based on the samples
    // do back-prop of last layer
  static void ComputeObjectiveFunctionSample(
-                              int num_samples,
-                              const vector<double>& unigram,
+                              const vector<vector<std::pair<int32, double> > > &sample,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,

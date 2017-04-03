@@ -361,7 +361,8 @@ void LmNnetSamplingTrainer::ProcessOutputs(bool is_adversarial_step,
       bool supply_deriv = true;
 
       if (dynamic_cast<const AffineImportanceSamplingComponent*>(nnet_->O()) != NULL) {
-        ComputeObjectiveFunctionSample(config_.sample_size, unigram_, io.features,
+        const vector<vector<std::pair<int32, double> > > &samples = eg.samples;
+        ComputeObjectiveFunctionSample(samples, io.features,
                                        obj_type, io.name,
                                        supply_deriv, computer,
                                        &tot_weight, &tot_objf,
@@ -564,8 +565,7 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionNormalized(
 }
 
 void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
-                              int num_samples,
-                              const vector<double> &unigram,
+                              const vector<vector<std::pair<int32, double> > > &samples,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,
@@ -576,75 +576,60 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                               const LmOutputComponent &output_projection,
                               const CuMatrixBase<BaseFloat> **old_output,
                               LmNnet *nnet) {
+  int t = samples.size();
+  KALDI_ASSERT(t > 0);
   *old_output = &computer->GetOutput(output_name);
-  int k = supervision.NumRows();
-  if (num_samples == -1) {
-    num_samples = unigram.size();
-  }
+  int num_samples = samples[0].size();
 
-  KALDI_ASSERT(num_samples > k && num_samples <= unigram.size());
+//  KALDI_ASSERT(num_samples > k && num_samples <= unigram.size());
 
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
   const SparseMatrix<BaseFloat> &post = supervision.GetSparseMatrix();
 
-  vector<double> selection_probs = unigram;
-
-  std::vector<int> outputs;  // outputs[i] is the correct work for row i
+  std::vector<int> outputs;  // outputs[i] is the correct word for row i
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
 
-  vector<std::pair<int, double> > samples(num_samples);
-  vector<double> selected_probs(num_samples);
+//  KALDI_ASSERT((*old_output)->NumRows() == samples.size() * samples[0].size());
+  int minibatch_size = (*old_output)->NumRows() / t;
+  KALDI_ASSERT(ApproxEqual(BaseFloat(minibatch_size), (*old_output)->NumRows() / BaseFloat(t)));
 
-  if (num_samples != unigram.size()) {
-    for (int i = 0; i < outputs.size(); i++) {
-      outputs_set.insert(outputs[i]);
+  CuMatrix<BaseFloat> out((*old_output)->NumRows(), num_samples, kSetZero);
+
+  for (int i = 0; i < t; i++) {
+    CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
+    CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
+    vector<int> indexes(samples.size());
+    for (int j = 0; j < indexes.size(); j++) {
+      indexes[j] = samples[t][j].first;
     }
-    NormalizeVec(num_samples, outputs_set, &selection_probs);
-    vector<double> u(selection_probs.size());
-    for (int i = 0; i < u.size(); i++) {
-//      u[i].first = i;
-//      u[i].second = selection_probs[i];
-      u[i] = selection_probs[i];
-    }
-    SampleWithoutReplacement(u, num_samples, &samples);
-    for (int i = 0; i < samples.size(); i++) {
-      // use min with 1.0 because we use prob=10 for "must sampled" words
-      // in the vector to avoid numerical issues
-      selected_probs[i] = std::min(1.0, selection_probs[samples[i].first]);
+    output_projection.Propagate(this_in, indexes, &this_out);
+  }
+
+  CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
+  ComputeSamplingNonlinearity(out, &f_out);
+
+  *tot_weight = post.NumRows();
+  vector<int32> correct_indexes(out.NumRows(), -1);
+//
+  if (num_samples == 0) {
+    for (int j = 0; j < outputs.size(); j++) {
+      correct_indexes[j] = outputs[j];
     }
   } else {
-    for (int i = 0; i < num_samples; i++) {
-      samples[i].first = i;
-      samples[i].second = 1.0;
+    // TODO(hxu) not tested it yet
+    for (int j = 0; j < t; j++) {
+      unordered_map<int32, int32> word2pos;
+      for (int i = 0; i < samples.size(); i++) {
+        word2pos[samples[j][i].first] = i;
+      }
+      for (int i = 0; i < outputs.size(); i++) {
+        correct_indexes[j * t + i] = word2pos[outputs[j * t + i]];
+      }
     }
   }
 
-  CuMatrix<BaseFloat> out((*old_output)->NumRows(), samples.size(), kSetZero);
-//  output_projection.Propagate(**old_output, samples, &out);
-//
-//  CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
-//  ComputeSamplingNonlinearity(out, &f_out);
-//
-//  *tot_weight = post.Sum();
-//  vector<int32> correct_indexes(out.NumRows(), -1);
-//
-//  if (num_samples == unigram.size()) {
-//    for (int j = 0; j < outputs.size(); j++) {
-//      correct_indexes[j] = outputs[j];
-//    }
-//  } else {
-//    // TODO(hxu) not tested it yet
-//    unordered_map<int32, int32> word2pos;
-//    for (int i = 0; i < samples.size(); i++) {
-//      word2pos[samples[i]] = i;
-//    }
-//    for (int i = 0; i < outputs.size(); i++) {
-//      correct_indexes[i] = word2pos[outputs[i]];
-//    }
-//  }
-//
 //  SparseMatrix<BaseFloat> supervision_cpu;
 //  VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
 //  CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
