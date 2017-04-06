@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
   fst::SymbolTable symbols;
   // Use spaces on special symbols, so we rather fail than read them by mistake.
   symbols.AddSymbol(" <eps>", kEps);
-  symbols.AddSymbol(" #0", kDisambig);
+  // symbols.AddSymbol(" #0", kDisambig);
   options.bos_symbol = symbols.AddSymbol("<s>", kBos);
   options.eos_symbol = symbols.AddSymbol("</s>", kEos);
   options.unk_symbol = symbols.AddSymbol("<unk>", kUnk);
@@ -208,7 +208,12 @@ int main(int argc, char **argv) {
   // command for running the test binary: ./test-binary arpa-file history-file
   // arpa-file is the ARPA-format language model
   // history-file has lines of histories, one history per line
-  mdl.TestPdfsEqual(); 
-  mdl.TestSampling();
+
+  // this test can be slow
+  KALDI_LOG << "Start weighted histories test...";
+  for (int i = 0; i < N / 100; i++) {
+    mdl.TestPdfsEqual(); 
+  }
+  KALDI_LOG << "Successfuly pass the test.";
   return 0;
 }

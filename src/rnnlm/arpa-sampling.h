@@ -25,36 +25,15 @@
 #include "lm/arpa-file-parser.h"
 #include "fst/fstlib.h"
 
-#ifdef _MSC_VER
-#include <unordered_map>
-#include <unordered_set>
-using std::unordered_map;
-using std::unordered_set;
-#elif __cplusplus > 199711L || defined(__GXX_EXPERIMENTAL_CXX0X__)
-#include <unordered_map>
-#include <unordered_set>
-using std::unordered_map;
-using std::unordered_set;
-#else
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
-using std::tr1::unordered_map;
-using std::tr1::unordered_set;
-#endif
-
-#include <cassert>
 #include <stdlib.h>
 #include <math.h>
 #include <algorithm>
 #include <map>
-#include <set>
 #include <string>
 #include <sstream>
 #include <fstream>
 #include <vector>
 #include <iostream>
-#include <queue>
-#include <limits>
 
 namespace kaldi {
 
@@ -78,7 +57,7 @@ struct IntVectorHasher {  // hashing function for vector<Int>.
 // Predefine some symbol values, because any integer is as good than any other.
 enum {
   kEps = 0,
-  kDisambig,
+  // kDisambig,
   kBos, kEos, kUnk
 };
 
@@ -108,8 +87,6 @@ class ArpaSampling : public ArpaFileParser {
 
   void TestProbs(std::istream &is, bool binary);
 
-  void TestSampling();
-  
   void TestPdfsEqual();
 
   // print history
@@ -133,6 +110,9 @@ class ArpaSampling : public ArpaFileParser {
 
   // Get the back-off weight of a ngram in the read-in model
   BaseFloat GetBackoffWeight(int32 order, int32 word, const HistType& history);
+  
+  // For test: randomly generate histories
+  void RandomGenerateHistories();
 
   // Compute a pdf of words in the vocab given a history
   void ComputeWordPdf(const HistType& history, std::vector<std::pair<int32, BaseFloat> >* pdf);
@@ -143,9 +123,6 @@ class ArpaSampling : public ArpaFileParser {
   // Compute weighted pdf given all histories
   void ComputeWeightedPdf(std::vector<std::pair<int32, BaseFloat> >* weighted_pdf);
   
-  // Sample the next word
-  int32 SampleWord(const std::vector<std::pair<int32, BaseFloat> >& pdf);
-
   // N-gram order of the read-in LM.
   int32 ngram_order_;
   

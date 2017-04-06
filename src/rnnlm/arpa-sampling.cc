@@ -135,12 +135,12 @@ void ArpaSampling::ComputeHistoriesWeights() {
       hists_weights_[h] += prob;
     }
   }
-  KALDI_LOG << "Size of hists_weights_ is: " << hists_weights_.size();
 }
 
 // Get weighted pdf
 void ArpaSampling::ComputeWeightedPdf(std::vector<std::pair<int32, BaseFloat> >* pdf_w) {
   BaseFloat prob = 0;
+  (*pdf_w).clear();
   (*pdf_w).resize(num_words_); // if do not do this, (*pdf_w)[word] += prob will get seg fault
   for (int32 i = 0; i < num_words_; i++) {
     for (auto it = hists_weights_.begin(); it != hists_weights_.end(); ++it) {
@@ -172,84 +172,31 @@ void ArpaSampling::ComputeWeightedPdf(std::vector<std::pair<int32, BaseFloat> >*
   } // end reading words
 }
 
-// sample a word that follows a pdf
-int32 ArpaSampling::SampleWord(const std::vector<std::pair<int32, BaseFloat> >& pdf) {
-  // generate a cdf from the given pdf 
-  std::vector<std::pair<int32, BaseFloat> > cdf;
-  BaseFloat upper = 0;
-  int32 word;
-  std::pair<int32, BaseFloat> probs;
-  for (int32 i = 0; i < num_words_; i++) {
-    upper += pdf[i].second;
-    word = vocab_[i].second;
-    probs = std::make_pair(word, upper);
-    cdf.push_back(probs);
-  }
-  BaseFloat u = 1.0 * RandUniform();
-  if (u >= 0 && u < cdf[1].second) {
-    return cdf[0].first;
-  }
-  for (int32 i = 1; i < num_words_; i++) {
-    if (cdf[i - 1].second <= u && u < cdf[i].second) {
-      return cdf[i].first;
+void ArpaSampling::RandomGenerateHistories() {
+  // clear previous histories
+  histories_.clear();
+  // randomly generate histories
+  int32 num_histories = rand() % 1000 + 5; // generate at least 5 histories
+  for (int32 i = 0; i < num_histories; i++) {
+    HistType hist;
+    // size of history should be in {1, 2, ..., ngram_order_}
+    int32 size_hist = rand() % (ngram_order_ - 1) + 1;
+    KALDI_ASSERT(size_hist <= ngram_order_);
+    for (int32 j = 0; j < size_hist; j++) {
+      // word can not be zero since zero represents epsilon in the fst symbol format
+      int32 word = rand() % (vocab_.size() - 1) + 1;
+      KALDI_ASSERT(word > 0 && word <= vocab_.size());
+      hist.push_back(word);
     }
+    histories_.push_back(hist);
   }
-  return -1;
 }
 
-// Sample a word
-void ArpaSampling::TestSampling() {
-  ComputeHistoriesWeights();
-  std::vector<std::pair<int32, BaseFloat> > pdf;
-  ComputeWeightedPdf(&pdf);
-  BaseFloat sum = 0;
-  for (int32 i = 0; i < num_words_; i++) {
-    sum += pdf[i].second;
-  }
-
-  // Check convergence 
-  unordered_map<int32, BaseFloat> pdf_est;
-  int32 word;
-  int32 count_nons = 0;
-  int32 count = 0;
-  for (int32 i = 0; ; i++) {
-    word = SampleWord(pdf);
-    if (word > num_words_ || word < 0) {
-      KALDI_LOG << "the next word is " << word;
-      count_nons += 1;
-      continue;
-    } else {
-      auto it = pdf_est.find(word);
-      if (it == pdf_est.end()) {
-        pdf_est.insert({word, 1.0});
-      } else {
-        pdf_est[word] += 1.0;
-      }
-    }
-    count++;
-    if (count % 1000 == 0) {
-      // normalization
-      BaseFloat ed = 0;
-      for (int32 i = 0; i < num_words_; i++) {
-        int32 word = vocab_[i].second;
-        pdf_est[word] /= count;
-        ed += pow(pdf_est[word] - pdf[i].second, 2); 
-      }
-      ed = pow(ed, 0.5);
-      // KALDI_LOG << "Run " << count << " times, Euclidean distance is " << ed;
-      if (ed <= 0.05) {
-        KALDI_LOG << "Run " << count << " times, Euclidean distance (expect <= 0.05) is " << ed;
-        break;
-      } 
-    }
-  }
-  KALDI_LOG << "Number of words OOV : " << count_nons;
-}
-
-// this function check the estimated pdfs from 1) weighted history and 2) normal computation
-// are the same
+// this function checks the two estimated pdfs from 1) weighted history 
+// and 2) normal computation are the same
 void ArpaSampling::TestPdfsEqual() {
-  // get the weighted pdf
+  RandomGenerateHistories();
+  hists_weights_.clear();
   ComputeHistoriesWeights();
   std::vector<std::pair<int32, BaseFloat> > pdf_hist_weight;
   ComputeWeightedPdf(&pdf_hist_weight);
@@ -258,7 +205,7 @@ void ArpaSampling::TestPdfsEqual() {
   for (int32 i = 0; i < num_words_; i++) {
     sum += pdf_hist_weight[i].second;
   }
-  KALDI_LOG << "Sum of weighted pfd: " << sum;
+  KALDI_ASSERT(ApproxEqual(sum, 1.0));
   // get the average pdf
   std::vector<std::pair<int32, BaseFloat> > pdf;
   pdf.resize(num_words_);
@@ -275,15 +222,15 @@ void ArpaSampling::TestPdfsEqual() {
   for (int32 i = 0; i < num_words_; i++) {
     sum += pdf[i].second;
   }
-  KALDI_LOG << "Sum of averaged pdf: " << sum;
+  KALDI_ASSERT(ApproxEqual(sum, 1.0));
   // check equality of the two pdfs
   BaseFloat diff = 0;
   for (int32 i = 0; i < num_words_; i++) {
     diff += abs(pdf_hist_weight[i].second - pdf[i].second);
   }
-  KALDI_LOG << " diff of the two pdfs: " << diff;
-  
+  KALDI_ASSERT(ApproxEqual(diff, 0.0));
 }
+
 // this function returns the log probability of the given sentence
 BaseFloat ArpaSampling::ComputeSentenceProb(const std::vector<int32>& sentence) {
   BaseFloat prob = 0;
@@ -339,6 +286,10 @@ void ArpaSampling::TestProbs(std::istream &is, bool binary) {
 void ArpaSampling::TestReadingModel() {
   KALDI_LOG << "Testing model reading part..."<< std::endl;
   KALDI_LOG << "Vocab size is: " << vocab_.size();
+  std::cout << "Print out vocab: " << std::endl;
+  for (int i = 0; i < vocab_.size(); i++) {
+    std::cout << i << " , " << vocab_[i].first << " , " << vocab_[i].second << std::endl;
+  }
   KALDI_LOG << "Ngram_order is: " << ngram_order_;
   KALDI_ASSERT(probs_.size() == ngram_counts_.size());
   for (int32 i = 0; i < ngram_order_; i++) {
@@ -415,7 +366,7 @@ void ArpaSampling::ReadHistories(std::istream &is, bool binary) {
   }
   const fst::SymbolTable* sym = Symbols();
   std::string line;
-  KALDI_LOG << "Start reading histories...";
+  KALDI_LOG << "Start reading histories from file...";
   while (getline(is, line)) {
     std::istringstream is(line);
     std::istream_iterator<std::string> begin(is), end;
@@ -436,7 +387,7 @@ void ArpaSampling::ReadHistories(std::istream &is, bool binary) {
     }
     histories_.push_back(history);
   }
-  KALDI_LOG << "Finished reading histories.";
+  KALDI_LOG << "Finished reading histories from file.";
 }
 
 } // end of kaldi
