@@ -600,9 +600,9 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   for (int i = 0; i < t; i++) {
     CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
     CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
-    vector<int> indexes(samples.size());
-    for (int j = 0; j < indexes.size(); j++) {
-      indexes[j] = samples[t][j].first;
+    vector<int> indexes(num_samples);
+    for (int j = 0; j < num_samples; j++) {
+      indexes[j] = samples[i][j].first;
     }
     output_projection.Propagate(this_in, indexes, &this_out);
   }
@@ -621,73 +621,75 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     // TODO(hxu) not tested it yet
     for (int j = 0; j < t; j++) {
       unordered_map<int32, int32> word2pos;
-      for (int i = 0; i < samples.size(); i++) {
+      for (int i = 0; i < num_samples; i++) {
         word2pos[samples[j][i].first] = i;
       }
-      for (int i = 0; i < outputs.size(); i++) {
-        correct_indexes[j * t + i] = word2pos[outputs[j * t + i]];
+      for (int i = 0; i < num_samples; i++) {
+//        KALDI_ASSERT(j * t + i < correct_indexes.size());
+//        KALDI_ASSERT(j * t + i < outputs.size());
+        correct_indexes[i * t + j] = word2pos[outputs[i * t + j]];
       }
     }
   }
 
-//  SparseMatrix<BaseFloat> supervision_cpu;
-//  VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
-//  CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
-//  *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf
-//  // (the objf regarding the positive reward for getting correct labels)
-//  // now for each row the objf is y_i where i is the correct label
-//  // we need to compute y_i - (\sum_j f(y_j)) + 1
-//  // or in the sampling case, y_i - (\sum_j f(y_j)/prob(j))
-//
-//  // the adjusted output by multiplying by -1/prob(sampling)
-//  CuMatrix<BaseFloat> f_out_div_probs(out.NumRows(), out.NumCols());
-//  CuVector<BaseFloat> selection_probs_inv(out.NumCols());
-//
-//  // first fill in the -1/probs
-//  if (num_samples != unigram.size()) {
-//    Vector<BaseFloat> v(out.NumCols(), kSetZero);
-//    for (int i = 0; i < out.NumCols(); i++) {
-//      v(i) = -1.0 / selected_probs[i];
-//    }
-//    selection_probs_inv.CopyFromVec(v);
-//    f_out_div_probs.CopyRowsFromVec(selection_probs_inv);
-//  } else {
-//    f_out_div_probs.Set(-1.0);
-//    selection_probs_inv.Set(-1.0);
-//  }
-//  // now both stores the probs only
-//
-//  // now multiply by f(y_i)
-//  f_out_div_probs.MulElements(f_out);
-//  // now each element is -f(y_i)/selection-prob
-//
-//  // need to add 1 per row
-//  BaseFloat neg_term = f_out_div_probs.Sum() + f_out_div_probs.NumRows();
-//  *tot_objf += neg_term;
-//
-//  if (supply_deriv && nnet != NULL) {
-//    CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), out.NumCols());
-//    BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
-//
-//    CuMatrix<BaseFloat> derivatives;
-//    derivatives.Swap(&f_out); // re-use the mem so that no need to malloc again
-//    supervision_gpu.CopyToMat(&derivatives); // setting 1 for the correct labels
-//    // derivative now has 1 for correct labels
-//
-//    derivatives.AddMat(1.0, f_out_div_probs_deriv);
-//
-//    CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
-//                                    (*old_output)->NumCols(),
-//                                    kSetZero);
-//
-//    output_projection.Backprop(samples, **old_output, out,
-//                               derivatives, nnet->output_projection_,
-//                               &input_deriv);
-//
-////    BaseFloat t = TraceMatMat(nnet->output_projection_->params_, nnet->output_projection_->params_, kTrans);
-//
-//    computer->AcceptInput(output_name, &input_deriv);
-//  }
+  SparseMatrix<BaseFloat> supervision_cpu;
+  VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
+  CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
+  *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf
+  // (the objf regarding the positive reward for getting correct labels)
+  // now for each row the objf is y_i where i is the correct label
+  // we need to compute y_i - (\sum_j f(y_j)) + 1
+  // or in the sampling case, y_i - (\sum_j f(y_j)/prob(j))
+
+  // the adjusted output by multiplying by -1/prob(sampling)
+  CuMatrix<BaseFloat> f_out_div_probs(out.NumRows(), out.NumCols());
+  CuVector<BaseFloat> selection_probs_inv(out.NumCols());
+
+  // first fill in the -1/probs
+  if (num_samples != 0) {
+    Vector<BaseFloat> v(out.NumCols(), kSetZero);
+    for (int i = 0; i < out.NumCols(); i++) {
+      v(i) = -1.0 / selected_probs[i];
+    }
+    selection_probs_inv.CopyFromVec(v);
+    f_out_div_probs.CopyRowsFromVec(selection_probs_inv);
+  } else {
+    f_out_div_probs.Set(-1.0);
+    selection_probs_inv.Set(-1.0);
+  }
+  // now both stores the probs only
+
+  // now multiply by f(y_i)
+  f_out_div_probs.MulElements(f_out);
+  // now each element is -f(y_i)/selection-prob
+
+  // need to add 1 per row
+  BaseFloat neg_term = f_out_div_probs.Sum() + f_out_div_probs.NumRows();
+  *tot_objf += neg_term;
+
+  if (supply_deriv && nnet != NULL) {
+    CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), out.NumCols());
+    BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
+
+    CuMatrix<BaseFloat> derivatives;
+    derivatives.Swap(&f_out); // re-use the mem so that no need to malloc again
+    supervision_gpu.CopyToMat(&derivatives); // setting 1 for the correct labels
+    // derivative now has 1 for correct labels
+
+    derivatives.AddMat(1.0, f_out_div_probs_deriv);
+
+    CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
+                                    (*old_output)->NumCols(),
+                                    kSetZero);
+
+    output_projection.Backprop(samples, **old_output, out,
+                               derivatives, nnet->output_projection_,
+                               &input_deriv);
+
+//    BaseFloat t = TraceMatMat(nnet->output_projection_->params_, nnet->output_projection_->params_, kTrans);
+
+    computer->AcceptInput(output_name, &input_deriv);
+  }
 }
 
 void LmNnetSamplingTrainer::ComputeObjectiveFunctionExact(

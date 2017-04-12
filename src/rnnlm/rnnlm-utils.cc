@@ -25,7 +25,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
           if (length == -1) {
             length = current_t + 1;
           } else {
-            KALDI_ASSERT(current_t == length);
+            KALDI_ASSERT(current_t + 1 == length);
           }
           current_t = 0;
         }
@@ -301,6 +301,10 @@ void DoGroupingCDF(const vector<double> &u,
         uni_prob *= alpha;
         double selection_prob = uni_prob / max_allowed_ngram_prob;
 
+        if (selection_prob > 1.0) {
+          KALDI_ASSERT(ApproxEqual(selection_prob, 1.0));
+          selection_prob = 1.0;
+        }
         KALDI_ASSERT(selection_prob > 0 && selection_prob <= 1.0);
         out->push_back(interval(i, group_end, uni_prob, selection_prob));
   //      KALDI_LOG << "adding interval " << i << " " << group_end << " with selection-probs = " << selection_prob;
@@ -527,7 +531,7 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
 //  sort(u.begin(), u.end(), LargerThan);
   vector<double> cdf(u.size() + 1);
   cdf[0] = 0;
-  for (int i = 1; i <= cdf.size(); i++) {
+  for (int i = 1; i < cdf.size(); i++) {
     cdf[i] = cdf[i - 1] + u[i - 1];
   }
 
@@ -581,7 +585,7 @@ void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
 
   KALDI_ASSERT(n != 0);
 
-  vector<std::pair<int, double> >& ans = *out;
+  vector<std::pair<int, double> >& ans(*out);
   ans.resize(n);
 
   double tot_weight = 0;

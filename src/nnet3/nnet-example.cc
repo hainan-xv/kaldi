@@ -135,13 +135,13 @@ void NnetExample::Read(std::istream &is, bool binary) {
   char ch = PeekToken(is, binary);
   if (ch == '[') {
     ExpectToken(is, binary, "[Samples]");
-    int sample_size;
-    int num_samples;
+    size_t sample_size;
+    size_t num_samples;
     ReadBasicType(is, binary, &sample_size);
     ReadBasicType(is, binary, &num_samples);
     samples.resize(sample_size, std::vector<std::pair<int32, double> >(num_samples));
     for (int i = 0; i < sample_size; i++) {
-      for (int j = 0; j < sample_size; j++) {
+      for (int j = 0; j < num_samples; j++) {
         ReadBasicType(is, binary, &samples[i][j].first);
         ReadBasicType(is, binary, &samples[i][j].second);
       }

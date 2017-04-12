@@ -96,9 +96,9 @@ num_words_total=`wc -l $outdir/unigramcounts.txt  | awk '{print $1}'`
 
 if [ $stage -le -3 ]; then
   echo Get Examples
-  $cmd $outdir/log/get-egs.train.txt \
+  $cmd $outdir/log/get-egs.train.log \
     rnnlm-get-egs $outdir/train.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/train.egs" &
-  $cmd $outdir/log/get-egs.dev.txt \
+  $cmd $outdir/log/get-egs.dev.log \
     rnnlm-get-egs $outdir/dev.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/dev.egs"
 
   wait
