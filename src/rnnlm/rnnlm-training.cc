@@ -590,6 +590,8 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
+//  std::vector<double> selected_probs(outputs.size(), -1.0);
+  std::vector<double> selected_probs;
 
 //  KALDI_ASSERT((*old_output)->NumRows() == samples.size() * samples[0].size());
   int minibatch_size = (*old_output)->NumRows() / t;
@@ -603,6 +605,7 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
     vector<int> indexes(num_samples);
     for (int j = 0; j < num_samples; j++) {
       indexes[j] = samples[i][j].first;
+      selected_probs.push_back(samples[i][j].second);
     }
     output_projection.Propagate(this_in, indexes, &this_out);
   }
@@ -682,9 +685,23 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionSample(
                                     (*old_output)->NumCols(),
                                     kSetZero);
 
-    output_projection.Backprop(samples, **old_output, out,
-                               derivatives, nnet->output_projection_,
-                               &input_deriv);
+    for (int i = 0; i < t; i++) {
+      CuSubMatrix<BaseFloat> this_in_value((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
+      CuSubMatrix<BaseFloat> this_in_deriv(input_deriv.Data() + i * input_deriv.Stride(), minibatch_size, input_deriv.NumCols(), input_deriv.Stride() * t);
+      CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
+      CuSubMatrix<BaseFloat> this_deriv(derivatives.Data() + i * derivatives.Stride(), minibatch_size, derivatives.NumCols(), derivatives.Stride() * t);
+      vector<int> indexes(num_samples);
+
+      for (int j = 0; j < num_samples; j++) {
+        indexes[j] = samples[i][j].first;
+      }
+//      output_projection.Propagate(this_in, indexes, &this_out);
+
+      output_projection.Backprop(indexes, this_in_value, this_out,
+                                 this_deriv, nnet->output_projection_,
+                                 &this_in_deriv);
+    }
+
 
 //    BaseFloat t = TraceMatMat(nnet->output_projection_->params_, nnet->output_projection_->params_, kTrans);
 
