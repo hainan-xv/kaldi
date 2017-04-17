@@ -41,6 +41,10 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
         num_samples = minibatch_size;
       }
 
+      if (num_samples < 64) {
+        num_samples = 64;
+      }
+
       vector<int32> words;
       num_words = egs->io[i].features.NumCols();
       SparseMatrixToVector(egs->io[i].features.GetSparseMatrix(), &words);
@@ -798,8 +802,8 @@ void ComponentDotProducts(const LmNnet &nnet1,
 //  KALDI_ASSERT(updatable_c == dot_prod->Dim());
 
   int32 dim = dot_prod->Dim();
-  dot_prod->Data()[dim - 2] = nnet1.I()->DotProduct(*nnet2.I());
-  dot_prod->Data()[dim - 1] = nnet1.O()->DotProduct(*nnet2.O());
+  dot_prod->Data()[dim - 2] = nnet1.InputLayer()->DotProduct(*nnet2.InputLayer());
+  dot_prod->Data()[dim - 1] = nnet1.OutputLayer()->DotProduct(*nnet2.OutputLayer());
 }
 
 std::string PrintVectorPerUpdatableComponent(const LmNnet &lm_nnet,

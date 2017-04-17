@@ -33,9 +33,14 @@ namespace rnnlm {
 
 using namespace nnet3;
 
+//  this function apply the following function to input and write to output:
+//  y = exp(x) if x < 0
+//  y = 1 + x if x >= 0
+//  this avoids the output to blow up
 void ComputeSamplingNonlinearity(const CuMatrixBase<BaseFloat> &in,
                                  CuMatrixBase<BaseFloat> *out);
 
+//  the back-prop version w.r.t. ComputeSamplingNonlinearity()
 void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
                                   CuMatrixBase<BaseFloat> *out_value,
                                   CuMatrixBase<BaseFloat> *in_deriv);
@@ -192,7 +197,7 @@ class LmNnetSamplingTrainer {
    // do sampling;
    // do the forward prop for last layer compute the objective based on the samples
    // do back-prop of last layer
- static void ComputeObjectiveFunctionSample(
+ static void ComputeObjfAndDerivSample(
                               const vector<vector<std::pair<int32, double> > > &sample,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
@@ -216,18 +221,6 @@ class LmNnetSamplingTrainer {
                               BaseFloat *tot_objf,
                               const LmOutputComponent &output_projection,
                               CuMatrix<BaseFloat> *new_output,
-                              LmNnet *delta_nnet = NULL);
-
- static void ComputeObjectiveFunctionNormalized(
-                              const GeneralMatrix &supervision,
-                              ObjectiveType objective_type,
-                              const std::string &output_name,
-                              bool supply_deriv,
-                              NnetComputer *computer,
-                              BaseFloat *tot_weight,
-                              BaseFloat *tot_objf,
-                              const LmOutputComponent &output_projection,
-                              const CuMatrixBase<BaseFloat> **new_output,
                               LmNnet *delta_nnet = NULL);
 
   LmNnetSamplingTrainer(const LmNnetTrainerOptions &config,

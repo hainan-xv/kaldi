@@ -63,10 +63,6 @@ LmComponent* LmComponent::NewComponentOfType(const std::string &component_type) 
     ans = new NaturalGradientAffineImportanceSamplingComponent();
   } else if (component_type == "AffineImportanceSamplingComponent") {
     ans = new AffineImportanceSamplingComponent();
-  } else if (component_type == "LinearSoftmaxNormalizedComponent") {
-    ans = new LinearSoftmaxNormalizedComponent();
-  } else if (component_type == "LinearSigmoidNormalizedComponent") {
-    ans = new LinearSigmoidNormalizedComponent();
 //  } else if (component_type == "NaturalGradientAffineComponent") {
 //    ans = new LmNaturalGradientAffineComponent();
 //  } else if (component_type == "LmFixedAffineComponent") {

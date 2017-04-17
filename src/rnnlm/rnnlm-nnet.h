@@ -91,8 +91,8 @@ class LmNnet {
 
   void Add(const LmNnet &other, BaseFloat scale) {
     nnet3::AddNnet(other.Nnet(), scale, nnet_);
-    input_projection_->Add(scale, *other.I());
-    output_projection_->Add(scale, *other.O());
+    input_projection_->Add(scale, *other.InputLayer());
+    output_projection_->Add(scale, *other.OutputLayer());
     
   }
 
@@ -141,11 +141,11 @@ class LmNnet {
     }
   }
 
-  const LmInputComponent* I() const {
+  const LmInputComponent* InputLayer() const {
     return input_projection_;
   }
 
-  const LmOutputComponent* O() const {
+  const LmOutputComponent* OutputLayer() const {
     return output_projection_;
   }
 
