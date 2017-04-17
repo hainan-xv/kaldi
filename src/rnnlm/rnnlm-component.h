@@ -56,7 +56,7 @@ class LmLinearComponent: public LmInputComponent {
   virtual void Backprop(const SparseMatrix<BaseFloat> &in_value,
                         const CuMatrixBase<BaseFloat> &, // out_value
                         const CuMatrixBase<BaseFloat> &out_deriv,
-                        LmComponent *to_update,
+                        LmInputComponent *to_update,
                         CuMatrixBase<BaseFloat> *in_deriv = NULL) const;
 
   virtual void Propagate(const SparseMatrix<BaseFloat> &in,
@@ -65,14 +65,14 @@ class LmLinearComponent: public LmInputComponent {
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
 
-  virtual LmComponent* Copy() const;
+  virtual LmInputComponent* Copy() const;
 
   // Some functions from base-class LmUpdatableComponent.
   virtual void Scale(BaseFloat scale);
-  virtual void Add(BaseFloat alpha, const LmComponent &other);
+  virtual void Add(BaseFloat alpha, const LmInputComponent &other);
   virtual void SetZero(bool treat_as_gradient);
   virtual void PerturbParams(BaseFloat stddev);
-  virtual BaseFloat DotProduct(const LmComponent &other) const;
+  virtual BaseFloat DotProduct(const LmInputComponent &other) const;
   virtual int32 NumParameters() const;
   virtual void Vectorize(VectorBase<BaseFloat> *params) const;
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);
@@ -96,8 +96,6 @@ class LmLinearComponent: public LmInputComponent {
   // This function resizes the dimensions of the component, setting the
   // parameters to zero, while leaving any other configuration values the same.
   virtual void Resize(int32 input_dim, int32 output_dim);
-
-  LmComponent *CollapseWithNext(const LmLinearComponent &next) const ;
 
  protected:
   virtual void Update(
@@ -253,14 +251,14 @@ class AffineImportanceSamplingComponent: public LmOutputComponent {
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
 
-  virtual LmComponent* Copy() const;
+  virtual LmOutputComponent* Copy() const;
 
   // Some functions from base-class UpdatableComponent.
   virtual void Scale(BaseFloat scale);
-  virtual void Add(BaseFloat alpha, const LmComponent &other);
+  virtual void Add(BaseFloat alpha, const LmOutputComponent &other);
   virtual void SetZero(bool treat_as_gradient);
   virtual void PerturbParams(BaseFloat stddev);
-  virtual BaseFloat DotProduct(const LmComponent &other) const;
+  virtual BaseFloat DotProduct(const LmOutputComponent &other) const;
   virtual int32 NumParameters() const;
   virtual void Vectorize(VectorBase<BaseFloat> *params) const;
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);
@@ -337,14 +335,14 @@ class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceS
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
 
-  virtual LmComponent* Copy() const;
+  virtual LmOutputComponent* Copy() const;
 
   // Some functions from base-class UpdatableComponent.
   virtual void Scale(BaseFloat scale);
-  virtual void Add(BaseFloat alpha, const LmComponent &other);
+  virtual void Add(BaseFloat alpha, const LmOutputComponent &other);
   virtual void SetZero(bool treat_as_gradient);
   virtual void PerturbParams(BaseFloat stddev);
-  virtual BaseFloat DotProduct(const LmComponent &other) const;
+  virtual BaseFloat DotProduct(const LmOutputComponent &other) const;
   virtual int32 NumParameters() const;
   virtual void Vectorize(VectorBase<BaseFloat> *params) const;
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);

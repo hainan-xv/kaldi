@@ -32,13 +32,12 @@ namespace kaldi {
 //using namespace nnet3;
 namespace rnnlm {
 
-// static
-LmComponent* LmComponent::ReadNew(std::istream &is, bool binary) {
+LmInputComponent* LmInputComponent::ReadNew(std::istream &is, bool binary) {
   std::string token;
   ReadToken(is, binary, &token); // e.g. "<SigmoidComponent>".
   token.erase(0, 1); // erase "<".
   token.erase(token.length()-1); // erase ">".
-  LmComponent *ans = NewComponentOfType(token);
+  LmInputComponent *ans = NewComponentOfType(token);
   if (!ans)
     KALDI_ERR << "Unknown component type " << token;
   ans->Read(is, binary);
@@ -46,27 +45,12 @@ LmComponent* LmComponent::ReadNew(std::istream &is, bool binary) {
 }
 
 // static
-LmComponent* LmComponent::NewComponentOfType(const std::string &component_type) {
-  LmComponent *ans = NULL;
-//  if (component_type == "LmSoftmaxComponent") {
-//    ans = new LmSoftmaxComponent();
-//  } else
-//   
-//  if (component_type == "LmLogSoftmaxComponent") {
-//    ans = new LmLogSoftmaxComponent();
-//  } else
+LmInputComponent* LmInputComponent::NewComponentOfType(const std::string &component_type) {
+  LmInputComponent *ans = NULL;
   if (component_type == "LmLinearComponent") {
     ans = new LmLinearComponent();
   } else if (component_type == "LmNaturalGradientLinearComponent") {
     ans = new LmNaturalGradientLinearComponent();
-  } else if (component_type == "NaturalGradientAffineImportanceSamplingComponent") {
-    ans = new NaturalGradientAffineImportanceSamplingComponent();
-  } else if (component_type == "AffineImportanceSamplingComponent") {
-    ans = new AffineImportanceSamplingComponent();
-//  } else if (component_type == "NaturalGradientAffineComponent") {
-//    ans = new LmNaturalGradientAffineComponent();
-//  } else if (component_type == "LmFixedAffineComponent") {
-//    ans = new LmFixedAffineComponent();
   }
   if (ans != NULL) {
     KALDI_ASSERT(component_type == ans->Type());
@@ -74,11 +58,30 @@ LmComponent* LmComponent::NewComponentOfType(const std::string &component_type) 
   return ans;
 }
 
-std::string LmComponent::Info() const {
-  std::stringstream stream;
-  stream << Type() << ", input-dim=" << InputDim()
-         << ", output-dim=" << OutputDim();
-  return stream.str();
+LmOutputComponent* LmOutputComponent::ReadNew(std::istream &is, bool binary) {
+  std::string token;
+  ReadToken(is, binary, &token); // e.g. "<SigmoidComponent>".
+  token.erase(0, 1); // erase "<".
+  token.erase(token.length()-1); // erase ">".
+  LmOutputComponent *ans = NewComponentOfType(token);
+  if (!ans)
+    KALDI_ERR << "Unknown component type " << token;
+  ans->Read(is, binary);
+  return ans;
+}
+
+// static
+LmOutputComponent* LmOutputComponent::NewComponentOfType(const std::string &component_type) {
+  LmOutputComponent *ans = NULL;
+  if (component_type == "NaturalGradientAffineImportanceSamplingComponent") {
+    ans = new NaturalGradientAffineImportanceSamplingComponent();
+  } else if (component_type == "AffineImportanceSamplingComponent") {
+    ans = new AffineImportanceSamplingComponent();
+  }
+  if (ans != NULL) {
+    KALDI_ASSERT(component_type == ans->Type());
+  }
+  return ans;
 }
 
 void LmInputComponent::InitLearningRatesFromConfig(ConfigLine *cfl) {

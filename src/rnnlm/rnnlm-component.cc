@@ -24,7 +24,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Resize(int32 input_dim, i
   params_.Resize(output_dim, input_dim + 1);
 }
 
-void NaturalGradientAffineImportanceSamplingComponent::Add(BaseFloat alpha, const LmComponent &other_in) {
+void NaturalGradientAffineImportanceSamplingComponent::Add(BaseFloat alpha, const LmOutputComponent &other_in) {
   const NaturalGradientAffineImportanceSamplingComponent *other =
              dynamic_cast<const NaturalGradientAffineImportanceSamplingComponent*>(&other_in);
   KALDI_ASSERT(other != NULL);
@@ -65,17 +65,17 @@ void NaturalGradientAffineImportanceSamplingComponent::PerturbParams(BaseFloat s
 
 std::string NaturalGradientAffineImportanceSamplingComponent::Info() const {
   std::ostringstream stream;
-  stream << LmComponent::Info();
+  stream << LmOutputComponent::Info();
   nnet3::PrintParameterStats(stream, "params", params_);
   return stream.str();
 }
 
-LmComponent* NaturalGradientAffineImportanceSamplingComponent::Copy() const {
+LmOutputComponent* NaturalGradientAffineImportanceSamplingComponent::Copy() const {
   NaturalGradientAffineImportanceSamplingComponent *ans = new NaturalGradientAffineImportanceSamplingComponent(*this);
   return ans;
 }
 
-BaseFloat NaturalGradientAffineImportanceSamplingComponent::DotProduct(const LmComponent &other_in) const {
+BaseFloat NaturalGradientAffineImportanceSamplingComponent::DotProduct(const LmOutputComponent &other_in) const {
   const NaturalGradientAffineImportanceSamplingComponent *other =
       dynamic_cast<const NaturalGradientAffineImportanceSamplingComponent*>(&other_in);
   KALDI_ASSERT(other != NULL);
@@ -736,7 +736,7 @@ void AffineImportanceSamplingComponent::Resize(int32 input_dim, int32 output_dim
   params_.Resize(output_dim, input_dim + 1);
 }
 
-void AffineImportanceSamplingComponent::Add(BaseFloat alpha, const LmComponent &other_in) {
+void AffineImportanceSamplingComponent::Add(BaseFloat alpha, const LmOutputComponent &other_in) {
   const AffineImportanceSamplingComponent *other =
              dynamic_cast<const AffineImportanceSamplingComponent*>(&other_in);
   KALDI_ASSERT(other != NULL);
@@ -777,17 +777,17 @@ void AffineImportanceSamplingComponent::PerturbParams(BaseFloat stddev) {
 
 std::string AffineImportanceSamplingComponent::Info() const {
   std::ostringstream stream;
-  stream << LmComponent::Info();
+  stream << LmOutputComponent::Info();
   nnet3::PrintParameterStats(stream, "params", params_);
   return stream.str();
 }
 
-LmComponent* AffineImportanceSamplingComponent::Copy() const {
+LmOutputComponent* AffineImportanceSamplingComponent::Copy() const {
   AffineImportanceSamplingComponent *ans = new AffineImportanceSamplingComponent(*this);
   return ans;
 }
 
-BaseFloat AffineImportanceSamplingComponent::DotProduct(const LmComponent &other_in) const {
+BaseFloat AffineImportanceSamplingComponent::DotProduct(const LmOutputComponent &other_in) const {
   const AffineImportanceSamplingComponent *other =
       dynamic_cast<const AffineImportanceSamplingComponent*>(&other_in);
   KALDI_ASSERT(other != NULL);
@@ -1016,7 +1016,7 @@ void LmLinearComponent::Resize(int32 input_dim, int32 output_dim) {
   linear_params_.Resize(output_dim, input_dim);
 }
 
-void LmLinearComponent::Add(BaseFloat alpha, const LmComponent &other_in) {
+void LmLinearComponent::Add(BaseFloat alpha, const LmInputComponent &other_in) {
   const LmLinearComponent *other =
       dynamic_cast<const LmLinearComponent*>(&other_in);
   KALDI_ASSERT(other != NULL);
@@ -1060,12 +1060,12 @@ std::string LmLinearComponent::Info() const {
   return stream.str();
 }
 
-LmComponent* LmLinearComponent::Copy() const {
+LmInputComponent* LmLinearComponent::Copy() const {
   LmLinearComponent *ans = new LmLinearComponent(*this);
   return ans;
 }
 
-BaseFloat LmLinearComponent::DotProduct(const LmComponent &other_in) const {
+BaseFloat LmLinearComponent::DotProduct(const LmInputComponent &other_in) const {
   const LmLinearComponent *other =
       dynamic_cast<const LmLinearComponent*>(&other_in);
   return TraceMatMat(linear_params_, other->linear_params_, kTrans);
@@ -1177,7 +1177,7 @@ void LmLinearComponent::Backprop(
                                const SparseMatrix<BaseFloat> &in_value,
                                const CuMatrixBase<BaseFloat> &, // out_value
                                const CuMatrixBase<BaseFloat> &out_deriv,
-                               LmComponent *to_update_in,
+                               LmInputComponent *to_update_in,
                                CuMatrixBase<BaseFloat> *in_deriv) const {
   LmLinearComponent *to_update = dynamic_cast<LmLinearComponent*>(to_update_in);
 

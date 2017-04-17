@@ -36,8 +36,8 @@ std::string LmNnet::Info() const {
 
 void LmNnet::Read(std::istream &is, bool binary) {
   ExpectToken(is, binary, "<LmNnet>");
-  input_projection_ = dynamic_cast<LmInputComponent*>(LmComponent::ReadNew(is, binary));
-  output_projection_ = dynamic_cast<LmOutputComponent*>(LmComponent::ReadNew(is, binary));
+  input_projection_  = LmInputComponent::ReadNew(is, binary);
+  output_projection_ = LmOutputComponent::ReadNew(is, binary);
 
   nnet_->Read(is, binary);
 
@@ -70,11 +70,11 @@ void LmNnet::ReadConfig(std::istream &config_is) {
   }
 
   int i = 0; 
-  input_projection_ = dynamic_cast<LmInputComponent*>(LmComponent::NewComponentOfType(type[i]));
+  input_projection_ = LmInputComponent::NewComponentOfType(type[i]);
   KALDI_ASSERT(input_projection_ != NULL);
   input_projection_->InitFromConfig(&config_lines[i++]);
 
-  output_projection_ = dynamic_cast<LmOutputComponent*>(LmComponent::NewComponentOfType(type[i]));
+  output_projection_ = LmOutputComponent::NewComponentOfType(type[i]);
   KALDI_ASSERT(output_projection_ != NULL);
   output_projection_->InitFromConfig(&config_lines[i++]);
 
