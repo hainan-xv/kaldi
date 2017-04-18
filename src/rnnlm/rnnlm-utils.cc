@@ -168,6 +168,7 @@ void DoGroupingCDF(const vector<double> &u,
 
   vector<double> bigram_probs;  // used in figuring out the max-allowed-unigram
   // it stores the bigram_probs of words that are not in the must_sample set
+  // will be sorted later from greater to smaller
 
   KALDI_ASSERT(ApproxEqual(cdf[cdf.size() - 1], 1.0));
 
@@ -192,13 +193,13 @@ void DoGroupingCDF(const vector<double> &u,
 
     alpha = (1.0 - bigram_sum) / unigram_sum;
 
-    // now the n-gram probs for word i are bigram[i], or alpha * u[i] (standard arpa file rules)
+    // now the n-gram probs for word i are bigram[i], or alpha * u[i]
     //////////////////////////////////////////////////////////////////////////
 
     double total_selection_wgt = k - must_sample.size();
     double total_ngram_wgt = 1.0;
 
-    // delete all the weights that are either bigrams[.] or alpha * u[.]
+    // delete all the weights that are in the must-sample set
     for (set<int>::const_iterator i = must_sample.begin(); i != must_sample.end(); i++) {
       map<int, double>::const_iterator ii = bigrams.find(*i);
       if (ii != bigrams.end()) {
@@ -208,19 +209,30 @@ void DoGroupingCDF(const vector<double> &u,
       }
     }
 
-    KALDI_ASSERT(total_ngram_wgt > 0);
+    KALDI_LOG << "total-ngram-wgt is " << total_ngram_wgt;
+    KALDI_ASSERT(total_ngram_wgt >= 0);
     
     sort(bigram_probs.begin(), bigram_probs.end(), std::greater<double>());
 
-    int i = 0, j = 0;  // iteratos 2 vectors like merge sort
+    int i = 0, j = 0;  // iterates 2 vectors like merge sort
     // i for bigram_probs, j for u
+    // the following loop does the following: it iterators 2 vectors, each
+    // time picking one with larger defacto probability and compute if we make
+    // the cutoff there, will the largest selection-prob be > 1.
+    // it keeps doing so until the right cut-off point is found
     while (true) {
-      // find the first unigram that counts
-      while (must_sample.find(j) != must_sample.end() && bigrams.find(j) != bigrams.end()) {
+      // find the first unigram that counts (neither in must-sample nor in bigram)
+      while (must_sample.find(j) != must_sample.end() || bigrams.find(j) != bigrams.end()) {
         j++;
       }
+      // no need to do this for bigram since it only stores one's that are not
+      // in must-sample
 
-      KALDI_ASSERT(j < u.size());
+      if (j == u.size()) {
+        max_allowed_ngram_prob = 1.0 / u.size();
+        break;
+      }
+
       // now neither i or j has "special" probs; both only depend on the ngram probs
 
       double p;
@@ -233,10 +245,14 @@ void DoGroupingCDF(const vector<double> &u,
         j++;
       }
       if (p / total_ngram_wgt * total_selection_wgt > 1.0) {
-        // needs a cutoff
+        // needs to look further
         total_ngram_wgt -= p;
         total_selection_wgt -= 1.0;
-        KALDI_ASSERT(total_ngram_wgt > 0);
+        if (total_ngram_wgt < 0) {
+//          KALDI_LOG << "the number should be close to 0.0" << total_ngram_wgt;
+          KALDI_ASSERT(-total_ngram_wgt < 0.0000001);
+          total_ngram_wgt = 0.0;
+        }
       } else {
         max_allowed_ngram_prob = total_ngram_wgt / total_selection_wgt;
         KALDI_ASSERT(max_allowed_ngram_prob > 0);
