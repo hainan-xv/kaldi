@@ -5,96 +5,99 @@ namespace rnnlm {
 
 void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
   int num_words = 0;  // TODO(hxu) there might be a problem with input-dim != output-dim
-  for (int i = 0; i < egs->io.size(); i++) {
-    string &name = egs->io[i].name;
-    if (name == "input") {
-      vector<Index> &indexes = egs->io[i].indexes;
+//  for (int i = 0; i < egs->io.size(); i++) {
+  int i = 0;
+  KALDI_ASSERT (egs->io[0].name == "input");
+  KALDI_ASSERT (egs->io[1].name == "output");
 
-      int current_n = 0, current_t = 0;
-      KALDI_ASSERT(current_n == indexes[0].n && current_t == indexes[0].t);
+  vector<Index> &indexes = egs->io[i].indexes;
 
-      int length = -1;
-      for (int i = 1; i < indexes.size(); i++) {
-        Index &index = indexes[i];
-        if (index.n == current_n) {
-          KALDI_ASSERT(index.t == ++current_t);
-        } else {
-          // just finished a sentence
-          KALDI_ASSERT(index.t == 0);
-          KALDI_ASSERT(index.n == ++current_n);
-          if (length == -1) {
-            length = current_t + 1;
-          } else {
-            KALDI_ASSERT(current_t + 1 == length);
-          }
-          current_t = 0;
-        }
-      }
+  int current_n = 0, current_t = 0;
+  KALDI_ASSERT(current_n == indexes[0].n && current_t == indexes[0].t);
 
+  int length = -1;
+  for (int i = 1; i < indexes.size(); i++) {
+    Index &index = indexes[i];
+    if (index.n == current_n) {
+      KALDI_ASSERT(index.t == ++current_t);
+    } else {
+      // just finished a sentence
+      KALDI_ASSERT(index.t == 0);
+      KALDI_ASSERT(index.n == ++current_n);
       if (length == -1) {
         length = current_t + 1;
+      } else {
+        KALDI_ASSERT(current_t + 1 == length);
       }
-
-      int32 minibatch_size = current_n + 1;
-
-      if (num_samples == -1) {
-        num_samples = minibatch_size;
-      }
-
-      if (num_samples < 64) {
-        num_samples = 64;
-      }
-
-      vector<int32> words;
-      num_words = egs->io[i].features.NumCols();
-      SparseMatrixToVector(egs->io[i].features.GetSparseMatrix(), &words);
-
-      egs->samples.resize(length, vector<std::pair<int32, double> >(minibatch_size));
-    
-      // v[t][n] is a vector representing the history of the input and n, t
-      vector<vector<vector<int32> > > histories(length, vector<vector<int32> >(minibatch_size));
-
-      for (int t = 0; t < length; t++) {
-        for (int n = 0; n < minibatch_size; n++) {
-          vector<int32> &history = histories[t][n];
-
-          for (int j = 0; j < ngram_order && j <= t; j++) {
-            history.push_back(words[length * n + t - j]);
-          }
-        }
-      }
-
-      // TODO(hxu)
-      for (int t = 0; t < length; t++) {
-
-        std::vector<double> unigram(num_words, 1.0 / num_words);
-        SampleWithoutReplacement(unigram, num_samples, set<int>(), map<int, double>(), &egs->samples[t]);
-      }
-      
-      return;
+      current_t = 0;
     }
   }
+
+  if (length == -1) {
+    length = current_t + 1;
+  }
+
+  int32 minibatch_size = current_n + 1;
+
+  if (num_samples == -1) {
+    num_samples = minibatch_size * 2;
+  }
+
+  if (num_samples < 4) {
+    num_samples = 4;
+  }
+
+  vector<int32> input_words;
+  vector<int32> output_words;
+  num_words = egs->io[0].features.NumCols();
+  SparseMatrixToVector(egs->io[0].features.GetSparseMatrix(), &input_words);
+  SparseMatrixToVector(egs->io[1].features.GetSparseMatrix(), &output_words);
+
+  egs->samples.resize(length, vector<std::pair<int32, double> >(minibatch_size));
+
+  // v[t][n] is a vector representing the history of the input and n, t
+  vector<vector<vector<int32> > > histories(length, vector<vector<int32> >(minibatch_size));
+  vector<set<int32> > must_samples(length);
+
+  for (int t = 0; t < length; t++) {
+    for (int n = 0; n < minibatch_size; n++) {
+      vector<int32> &history = histories[t][n];
+
+      for (int j = 0; j < ngram_order && j <= t; j++) {
+        history.push_back(input_words[length * n + t - j]);
+      }
+      must_samples[t].insert(output_words[length * n + t]);
+    }
+  }
+
+  // TODO(hxu)
+  for (int t = 0; t < length; t++) {
+    std::vector<double> unigram(num_words, 1.0 / num_words);
+    SampleWithoutReplacement(unigram, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
+  }
+  
+  return;
 }
 
- void CheckValidGrouping(const vector<interval> &g, int k) {
-   KALDI_ASSERT(g.size() >= k);
-   // check sum
-   double selection_sum = 0.0;
-   double unigram_sum = 0.0;
-   for (int i = 0; i < g.size(); i++) {
-     selection_sum += std::min(1.0, g[i].selection_prob);
-     unigram_sum += g[i].unigram_prob;
+void CheckValidGrouping(const vector<interval> &g, int k) {
+  KALDI_ASSERT(g.size() >= k);
+  // check sum
+  double selection_sum = 0.0;
+  double unigram_sum = 0.0;
+  for (int i = 0; i < g.size(); i++) {
+    selection_sum += std::min(1.0, g[i].selection_prob);
+    unigram_sum += g[i].unigram_prob;
  
-     KALDI_ASSERT(g[i].L < g[i].R);
-     KALDI_ASSERT(g[i].selection_prob <= 1.0 || g[i].selection_prob > 5.0);
-   }
+    KALDI_ASSERT(g[i].L < g[i].R);
+    KALDI_ASSERT(g[i].selection_prob <= 1.0 || g[i].selection_prob > 5.0);
+  }
  
-   KALDI_ASSERT(ApproxEqual(selection_sum, k));
-   KALDI_ASSERT(g[0].L == 0);
-   for (int i = 1; i < g.size(); i++) {
-     KALDI_ASSERT(g[i].L == g[i - 1].R);
-   }
- } 
+  KALDI_ASSERT(ApproxEqual(selection_sum, k));
+  KALDI_ASSERT(g[0].L == 0);
+  for (int i = 1; i < g.size(); i++) {
+    KALDI_ASSERT(g[i].L == g[i - 1].R);
+  }
+} 
 
 void CheckValidGrouping(const vector<double> &u,
                         const std::set<int> &must_sample,
@@ -514,27 +517,15 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 void SampleWithoutReplacement(const vector<double> &u, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
                               vector<std::pair<int, double> > *out) {
+// TODO(hxu) add alpha times
 // assume u is sorted from large to small
-//  sort(u.begin(), u.end(), LargerThan);
   vector<double> cdf(u.size() + 1);
   cdf[0] = 0;
   for (int i = 1; i < cdf.size(); i++) {
     cdf[i] = cdf[i - 1] + u[i - 1];
   }
 
-//    cout << "cdf: ";
-//    for (int i = 0; i < cdf.size(); i++) {
-//      cout << cdf[i] << " ";
-//    } cout << endl;
-//  vector<double> cdf2(u.size(), 0);
-//  cdf2[0] = u[0];
-//  for (int i = 1; i < u.size(); i++) {
-//    cdf2[i] = cdf2[i - 1] + u[i];
-//  }
-
-//  KALDI_ASSERT(cdf[cdf.size() - 1], n)
   vector<interval> g;
-//  DoGrouping(u, n, &g);
   DoGroupingCDF(u, cdf, n, must_sample, bigrams, &g);
 
   vector<std::pair<int, double> > group_u(g.size());
@@ -557,6 +548,13 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
       (*out)[i].second = u[index];
     } else {
       (*out)[i].second = u[g[(*out)[i].first].L];
+      (*out)[i].first = g[(*out)[i].first].L;
+      map<int, double>::const_iterator iter = bigrams.find((*out)[i].first);
+      if (iter != bigrams.end()) {
+        (*out)[i].second = iter->second;
+      } else if (must_sample.find((*out)[i].first) != must_sample.end()) {
+        (*out)[i].second = 1.0;
+      }
     }
   }
 //  cout << "selected words are: ";
@@ -566,8 +564,10 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
 //  cout << endl;
 }
 
+// u is vector of <word, prob> pairs
+// select words according to these probs into out
 void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
-                              vector<std::pair<int, double> > *out) {
+                               vector<std::pair<int, double> > *out) {
   sort(u.begin(), u.end(), LargerThan);
 
   KALDI_ASSERT(n != 0);
@@ -586,6 +586,9 @@ void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
     tot_weight += std::min(1.0, u[k].second);
     double pi_k1_k1 = u[k].second / tot_weight * n;
 
+    if (u[k].second > 5.0) {
+      pi_k1_k1 = 1.0;
+    }
     if (pi_k1_k1 > 1) {
       KALDI_ASSERT(false); // never gonna happen in our setup since sorted
       pi_k1_k1 = 1;  // must add
@@ -681,8 +684,12 @@ void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
 
   //  change to the correct indexes
   for (int i = 0; i < ans.size(); i++) {
-    ans[i].first = u[ans[i].first].first;
+    // need to change the second first
     ans[i].second = u[ans[i].first].second;
+    ans[i].first = u[ans[i].first].first;
+
+    KALDI_ASSERT(ans[i].first < u.size());
+//    KALDI_LOG << "select " << ans[i].first << " " << ans[i].second;
   }
 }
 
