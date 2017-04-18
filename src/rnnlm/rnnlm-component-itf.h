@@ -183,8 +183,7 @@ class LmInputComponent {
 
 class LmOutputComponent {
  public:
-  LmOutputComponent(const LmOutputComponent &other)
-    {}
+  LmOutputComponent(const LmOutputComponent &other) {}
 
   /// \brief Sets parameters to zero, and if treat_as_gradient is true,
   ///  sets is_gradient_ to true and sets learning_rate_ to 1, ignoring
@@ -230,10 +229,6 @@ class LmOutputComponent {
                  const vector<int> &indexes, // objf is computed on the chosen indexes
                  CuMatrixBase<BaseFloat> *out) const = 0;
   
-//  virtual void Propagate(const MatrixBase<BaseFloat> &in,
-//                 const vector<int> &indexes, // objf is computed on the chosen indexes
-//                 vector<vector<BaseFloat> > *out) const = 0;
-
   virtual void Backprop(
              const CuMatrixBase<BaseFloat> &in_value,
              const CuMatrixBase<BaseFloat> &, // out_value

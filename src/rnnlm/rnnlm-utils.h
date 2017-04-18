@@ -62,10 +62,10 @@ void SparseMatrixToVector(const SparseMatrix<BaseFloat> &sp,
 
 vector<string> SplitByWhiteSpace(const string &line);
 
-unordered_map<string, int> ReadWordlist(string filename);
+void ReadWordlist(string filename, unordered_map<string, int> *out);
 
-NnetExample GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
-                           const vector<int>& word_ids_out, int output_dim);
+void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
+                    const vector<int>& word_ids_out, int output_dim, NnetExample *out);
 
 void CheckValidGrouping(const vector<interval> &g, int k);
 
@@ -81,7 +81,9 @@ void DoGroupingCDF(const vector<double> &u,
 
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n
-void SampleWithoutReplacement(const vector<double>& u, int n, vector<std::pair<int, double> > *out);
+void SampleWithoutReplacement(const vector<double>& u, int n,
+                              const set<int>& must_sample, const map<int, double> &bigrams,
+                              vector<std::pair<int, double> > *out);
 
 // void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 

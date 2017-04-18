@@ -43,14 +43,15 @@ void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
   vector<double> samples_counts(u.size(), 0);
   int count = 0;
   for (int i = 0; ; i++) {
+//    KALDI_LOG << "count is " << count;
     count++;
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, &samples);
+    SampleWithoutReplacement(u, k, std::set<int>(), std::map<int, double>(), &samples);
     for (int j = 0; j < samples.size(); j++) {
       samples_counts[samples[j].first] += 1;
     }
     // update Euclidean distance between the two pdfs every 1000 iters
-    if (count % 1000 == 0) {
+    if (count % 100 == 0) {
       double distance = 0;
       vector<double> samples_probs(u.size());
       for (int j = 0; j < samples_probs.size(); j++) {
@@ -119,7 +120,7 @@ void UnitTestSampleWithProbOne(int iters) {
   int N = iters;
   for (int i = 0; i < N; i++) {
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, &samples);
+    SampleWithoutReplacement(u, k, set<int>(), map<int, double>(), &samples);
     if (must_sample_set.size() > 0) {
       // assert every item in must_sample_set is sampled
       for (set<int>::iterator it = must_sample_set.begin(); it != must_sample_set.end(); ++it) {
@@ -152,7 +153,7 @@ void UnitTestSamplingTime(int iters) {
   double total_time;
   for (int i = 0; i < N; i++) {
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, &samples);
+    SampleWithoutReplacement(u, k, set<int>(), map<int, double>(), &samples);
   }
   total_time = t.Elapsed();
   KALDI_LOG << "Time test: Sampling " << k << " items from " << n <<
@@ -165,7 +166,7 @@ void UnitTestSamplingTime(int iters) {
 int main() {
   using namespace kaldi;
   using namespace rnnlm;
-  int N = 10000;
+  int N = 1000;
   UnitTestSamplingConvergence();
   UnitTestSampleWithProbOne(N);
   UnitTestSamplingTime(N);

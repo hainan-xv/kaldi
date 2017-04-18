@@ -86,10 +86,10 @@ void UnitTestCDFGrouping() {
 
     PrepareVector(dim, ones_size, bigram_size, &must_sample, &u, &bigrams);
 
-    vector<double> cdf(u.size(), 0);                                          
-    cdf[0] = u[0];                                                               
-    for (int i = 1; i < u.size(); i++) {                                          
-      cdf[i] = cdf[i - 1] + u[i];                                               
+    vector<double> cdf(u.size() + 1, 0);                                          
+    cdf[0] = 0;                                                               
+    for (int i = 1; i <= u.size(); i++) {                                          
+      cdf[i] = cdf[i - 1] + u[i - 1];                                               
     } 
 
     std::vector<interval> groups;
