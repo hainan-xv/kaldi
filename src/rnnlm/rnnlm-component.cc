@@ -37,13 +37,6 @@ NaturalGradientAffineImportanceSamplingComponent::NaturalGradientAffineImportanc
 //    params_(component.params_)
     { }
 
-//NaturalGradientAffineImportanceSamplingComponent::NaturalGradientAffineImportanceSamplingComponent(
-//                                   const CuMatrixBase<BaseFloat> &params,
-//                                   BaseFloat learning_rate):
-//                                            params_(params) {
-//  SetUnderlyingLearningRate(learning_rate);
-//}
-
 void NaturalGradientAffineImportanceSamplingComponent::SetZero(bool treat_as_gradient) {
   if (treat_as_gradient) {
     SetActualLearningRate(1.0);
@@ -142,6 +135,8 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
 
 
   }
+  this->learning_rate_factor_ = 1.0; // TODO(hxu) quick fix
+
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
               << cfl->UnusedValues();
@@ -852,6 +847,7 @@ void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
       params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, g, kTrans);
     }
   }
+  this->learning_rate_factor_ = 1.0; // TODO(hxu) quick fix
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
               << cfl->UnusedValues();

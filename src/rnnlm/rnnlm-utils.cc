@@ -3,7 +3,8 @@
 namespace kaldi {
 namespace rnnlm {
 
-void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
+void DoSamplingInExamples(int num_samples, int ngram_order,
+                          const vector<double>& unigram, NnetExample *egs) {
   int num_words = 0;  // TODO(hxu) there might be a problem with input-dim != output-dim
 //  for (int i = 0; i < egs->io.size(); i++) {
   int i = 0;
@@ -39,17 +40,19 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
 
   int32 minibatch_size = current_n + 1;
 
+  num_words = egs->io[0].features.NumCols();
   if (num_samples == -1) {
     num_samples = minibatch_size * 2;
+  } else if (num_samples == 0) {
+    num_samples = num_words;
   }
 
-  if (num_samples < 4) {
-    num_samples = 4;
+  if (num_samples < 64) {
+    num_samples = 64;
   }
 
   vector<int32> input_words;
   vector<int32> output_words;
-  num_words = egs->io[0].features.NumCols();
   SparseMatrixToVector(egs->io[0].features.GetSparseMatrix(), &input_words);
   SparseMatrixToVector(egs->io[1].features.GetSparseMatrix(), &output_words);
 
@@ -72,7 +75,6 @@ void DoSamplingInExamples(int num_samples, int ngram_order, NnetExample *egs) {
 
   // TODO(hxu)
   for (int t = 0; t < length; t++) {
-    std::vector<double> unigram(num_words, 1.0 / num_words);
     SampleWithoutReplacement(unigram, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
   }
   
@@ -209,7 +211,7 @@ void DoGroupingCDF(const vector<double> &u,
       }
     }
 
-    KALDI_LOG << "total-ngram-wgt is " << total_ngram_wgt;
+//    KALDI_LOG << "total-ngram-wgt is " << total_ngram_wgt;
     KALDI_ASSERT(total_ngram_wgt >= 0);
     
     sort(bigram_probs.begin(), bigram_probs.end(), std::greater<double>());
@@ -533,6 +535,15 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 void SampleWithoutReplacement(const vector<double> &u, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
                               vector<std::pair<int, double> > *out) {
+  if (n == u.size()) {
+    KALDI_LOG << "selecting all!";
+    out->resize(n);
+    for (int i = 0; i < n; i++) {
+      (*out)[i].first = i;
+      (*out)[i].second = 1.0;
+    }
+    return;
+  }
 // TODO(hxu) add alpha times
 // assume u is sorted from large to small
   vector<double> cdf(u.size() + 1);
@@ -561,17 +572,18 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
     if (g[(*out)[i].first].L + 1 < g[(*out)[i].first].R) { // is a group of many
       int index = SelectOne(cdf, g[(*out)[i].first].L, g[(*out)[i].first].R);
       (*out)[i].first = index;
-      (*out)[i].second = u[index];
+      (*out)[i].second = u[index] * n;
     } else {
-      (*out)[i].second = u[g[(*out)[i].first].L];
+      (*out)[i].second = u[g[(*out)[i].first].L] * n;
       (*out)[i].first = g[(*out)[i].first].L;
       map<int, double>::const_iterator iter = bigrams.find((*out)[i].first);
       if (iter != bigrams.end()) {
-        (*out)[i].second = iter->second;
+        (*out)[i].second = iter->second * n;
       } else if (must_sample.find((*out)[i].first) != must_sample.end()) {
         (*out)[i].second = 1.0;
       }
     }
+    KALDI_ASSERT((*out)[i].second <= 1.0);
   }
 //  cout << "selected words are: ";
 //  for (int i = 0; i < out->size(); i++) {

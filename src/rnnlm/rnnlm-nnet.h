@@ -132,13 +132,12 @@ class LmNnet {
   void SetLearningRate(BaseFloat learning_rate) {
     nnet3::SetLearningRate(learning_rate, nnet_);
     LmInputComponent* p;
-    if ((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL) {
-      p->SetUnderlyingLearningRate(learning_rate);
-    }
+    KALDI_ASSERT((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL);
+    p->SetUnderlyingLearningRate(learning_rate);
+
     LmOutputComponent* p2;
-    if ((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL) {
-      p2->SetUnderlyingLearningRate(learning_rate);
-    }
+    KALDI_ASSERT((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL);
+    p2->SetUnderlyingLearningRate(learning_rate);
   }
 
   const LmInputComponent* InputLayer() const {

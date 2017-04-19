@@ -117,6 +117,7 @@ void NnetExample::Write(std::ostream &os, bool binary) const {
         WriteBasicType(os, binary, samples[i][j].second);
       }
     }
+    WriteToken(os, binary, "[/Samples]");
   }
   WriteToken(os, binary, "</Nnet3Eg>");
 }
@@ -146,6 +147,7 @@ void NnetExample::Read(std::istream &is, bool binary) {
         ReadBasicType(is, binary, &samples[i][j].second);
       }
     }
+    ExpectToken(is, binary, "[/Samples]");
   }
 
   ExpectToken(is, binary, "</Nnet3Eg>");

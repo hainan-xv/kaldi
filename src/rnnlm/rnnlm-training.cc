@@ -484,19 +484,24 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   *old_output = &computer->GetOutput(output_name);
   int num_samples = samples[0].size();
 
+//  num_samples = output_projection.NumCols();
+
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
   const SparseMatrix<BaseFloat> &post = supervision.GetSparseMatrix();
 
-  std::vector<int> outputs;  // outputs[i] is the correct word for row i
+  std::vector<int> outputs; // outputs[i] is the correct word for row i
+                            // will be initialized with SparsMatrixToVector
+                            // the size will be post.NumRows() = t * minibatch_size
+
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
-  KALDI_ASSERT(outputs.size() == t);
-  std::vector<double> selected_probs;
 
-//  KALDI_ASSERT((*old_output)->NumRows() == samples.size() * samples[0].size());
+  std::vector<double> selected_probs(num_samples * t);  // selected_probs[i * t + j] is the prob of
+                                                        // selecting samples[j][i]
+
   int minibatch_size = (*old_output)->NumRows() / t;
-  KALDI_ASSERT(ApproxEqual(BaseFloat(minibatch_size), (*old_output)->NumRows() / BaseFloat(t)));
+  KALDI_ASSERT(outputs.size() == t * minibatch_size);
 
   CuMatrix<BaseFloat> out((*old_output)->NumRows(), num_samples, kSetZero);
 
@@ -506,7 +511,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     vector<int> indexes(num_samples);
     for (int j = 0; j < num_samples; j++) {
       indexes[j] = samples[i][j].first;
-      selected_probs.push_back(samples[i][j].second);
+      selected_probs[j + t * i] = samples[i][j].second; // TODO(hxu) need to fix this in selection
     }
     output_projection.Propagate(this_in, indexes, &this_out);
   }
@@ -517,7 +522,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   *tot_weight = post.NumRows();
   vector<int32> correct_indexes(out.NumRows(), -1);
 //
-  if (num_samples == 0) {
+  if (num_samples == output_projection.OutputDim()) {
     for (int j = 0; j < outputs.size(); j++) {
       correct_indexes[j] = outputs[j];
     }
@@ -528,18 +533,14 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
       for (int i = 0; i < num_samples; i++) {
         word2pos[samples[j][i].first] = i;
       }
-      unordered_map<int32, int32>::iterator iter = word2pos.find(outputs[j]);
-      KALDI_ASSERT(iter != word2pos.end());
 
-      correct_indexes[j] = iter->second;
-      KALDI_ASSERT(outputs[j] == samples[j][correct_indexes[j]].first);
-//      for (int i = 0; i < num_samples; i++) {
-////        KALDI_ASSERT(j * t + i < correct_indexes.size());
-////        KALDI_ASSERT(j * t + i < outputs.size());
-//        correct_indexes[i * t + j] = word2pos[outputs[i * t + j]];
-//        KALDI_ASSERT(outputs[i * t + j] == samples[j][correct_indexes[i * t + j]].first);
-//        KALDI_LOG << outputs[i * t + j] << " " << samples[j][correct_indexes[i * t + j]].first;
-//      }
+      for (int i = 0; i < minibatch_size; i++) {
+        unordered_map<int32, int32>::iterator iter = word2pos.find(outputs[j + i * t]);
+        KALDI_ASSERT(iter != word2pos.end());
+
+        correct_indexes[j + i * t] = iter->second;
+        KALDI_ASSERT(outputs[j + i * t] == samples[j][correct_indexes[j + i * t]].first);
+      }
     }
   }
 
