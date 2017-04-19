@@ -30,7 +30,8 @@ const BaseFloat ONE = 10.0;
 using nnet3::NnetExample;
 
 void DoSamplingInExamples(int num_samples, int ngram_order,
-                          const vector<double>& unigram, NnetExample *egs);
+                          const vector<double>& unigram,
+                          const vector<double>& cdf, NnetExample *egs);
 
 typedef struct _interval {
   _interval(): L(0), R(0) {}
@@ -71,6 +72,7 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 void CheckValidGrouping(const vector<interval> &g, int k);
 
 void CheckValidGrouping(const vector<double> &u,
+                        const vector<double> &cdf,
                         const std::set<int> &must_sample,
                         const std::map<int, double> &bigrams,
                         int k, const vector<interval> &g);
@@ -82,7 +84,7 @@ void DoGroupingCDF(const vector<double> &u,
 
 // u should be the result of calling NormalizeVec(), i.e.
 // it should add up to n
-void SampleWithoutReplacement(const vector<double>& u, int n,
+void SampleWithoutReplacement(const vector<double>& u, const vector<double>& cdf, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
                               vector<std::pair<int, double> > *out);
 

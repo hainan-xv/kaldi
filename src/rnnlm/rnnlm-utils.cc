@@ -4,7 +4,8 @@ namespace kaldi {
 namespace rnnlm {
 
 void DoSamplingInExamples(int num_samples, int ngram_order,
-                          const vector<double>& unigram, NnetExample *egs) {
+                          const vector<double>& unigram, const vector<double> &cdf,
+                          NnetExample *egs) {
   int num_words = 0;  // TODO(hxu) there might be a problem with input-dim != output-dim
 //  for (int i = 0; i < egs->io.size(); i++) {
   int i = 0;
@@ -75,7 +76,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
 
   // TODO(hxu)
   for (int t = 0; t < length; t++) {
-    SampleWithoutReplacement(unigram, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
+    SampleWithoutReplacement(unigram, cdf, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
   }
   
   return;
@@ -102,6 +103,7 @@ void CheckValidGrouping(const vector<interval> &g, int k) {
 } 
 
 void CheckValidGrouping(const vector<double> &u,
+                        const vector<double> &cdf,
                         const std::set<int> &must_sample,
                         const std::map<int, double> &bigrams,
                         int k, const vector<interval> &g) {
@@ -110,11 +112,6 @@ void CheckValidGrouping(const vector<double> &u,
   double bigram_sum = 0.0;
   double unigram_sum = 0.0;
 
-  vector<double> cdf(u.size() + 1);
-  cdf[0] = 0.0;
-  for (int i = 0; i < u.size(); i++) {
-    cdf[i + 1] = cdf[i] + u[i];
-  }
   unigram_sum = cdf[cdf.size() - 1];
 
   KALDI_ASSERT(ApproxEqual(1.0, unigram_sum));
@@ -288,11 +285,6 @@ void DoGroupingCDF(const vector<double> &u,
 
       int n = max_allowed_ngram_prob / u_i; // since we know the original unigram is sorted we could at least have n
       int group_end = i + n;
-//      double cdf_start = 0;
-//      if (i > 1) {
-//        cdf_start = cdf[i];
-//      }
-//      double current_probs = cdf[group_end] - cdf_start;
 
       int index_upper_bound = INT_MAX;
       if (must_sample_iter != must_sample.end()) {
@@ -532,9 +524,10 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
   eg.io.push_back(nnet3::NnetIo("output", output_dim, 0, posterior));
 }
 
-void SampleWithoutReplacement(const vector<double> &u, int n,
+void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
                               vector<std::pair<int, double> > *out) {
+  KALDI_ASSERT(u.size() + 1 == cdf.size());
   if (n == u.size()) {
     KALDI_LOG << "selecting all!";
     out->resize(n);
@@ -546,12 +539,6 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
   }
 // TODO(hxu) add alpha times
 // assume u is sorted from large to small
-  vector<double> cdf(u.size() + 1);
-  cdf[0] = 0;
-  for (int i = 1; i < cdf.size(); i++) {
-    cdf[i] = cdf[i - 1] + u[i - 1];
-  }
-
   vector<interval> g;
   DoGroupingCDF(u, cdf, n, must_sample, bigrams, &g);
 
