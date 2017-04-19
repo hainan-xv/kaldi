@@ -108,7 +108,7 @@ void NnetExample::Write(std::ostream &os, bool binary) const {
   for (int32 i = 0; i < size; i++)
     io[i].Write(os, binary);
   if (samples.size() > 0) {
-    WriteToken(os, binary, "[Samples]");
+    WriteToken(os, binary, "<Samples>");
     WriteBasicType(os, binary, samples.size());
     WriteBasicType(os, binary, samples[0].size());
     for (int i = 0; i < samples.size(); i++) {
@@ -117,7 +117,7 @@ void NnetExample::Write(std::ostream &os, bool binary) const {
         WriteBasicType(os, binary, samples[i][j].second);
       }
     }
-    WriteToken(os, binary, "[/Samples]");
+    WriteToken(os, binary, "</Samples>");
   }
   WriteToken(os, binary, "</Nnet3Eg>");
 }
@@ -133,9 +133,9 @@ void NnetExample::Read(std::istream &is, bool binary) {
   for (int32 i = 0; i < size; i++)
     io[i].Read(is, binary);
 
-  char ch = PeekToken(is, binary);
-  if (ch == '[') {
-    ExpectToken(is, binary, "[Samples]");
+  string token;
+  ReadToken(is, binary, &token);
+  if (token == "<Samples>") {
     size_t sample_size;
     size_t num_samples;
     ReadBasicType(is, binary, &sample_size);
@@ -147,10 +147,11 @@ void NnetExample::Read(std::istream &is, bool binary) {
         ReadBasicType(is, binary, &samples[i][j].second);
       }
     }
-    ExpectToken(is, binary, "[/Samples]");
+    ExpectToken(is, binary, "</Samples>");
+    ExpectToken(is, binary, "</Nnet3Eg>");
+  } else {
+    KALDI_ASSERT(token ==  "</Nnet3Eg>");
   }
-
-  ExpectToken(is, binary, "</Nnet3Eg>");
 }
 
 

@@ -574,16 +574,20 @@ void SampleWithoutReplacement(const vector<double> &u, int n,
       (*out)[i].first = index;
       (*out)[i].second = u[index] * n;
     } else {
-      (*out)[i].second = u[g[(*out)[i].first].L] * n;
-      (*out)[i].first = g[(*out)[i].first].L;
-      map<int, double>::const_iterator iter = bigrams.find((*out)[i].first);
-      if (iter != bigrams.end()) {
-        (*out)[i].second = iter->second * n;
-      } else if (must_sample.find((*out)[i].first) != must_sample.end()) {
+      (*out)[i].second = g[(*out)[i].first].selection_prob;
+      if ((*out)[i].second > 1.0) {
+        KALDI_ASSERT((*out)[i].second == ONE);
         (*out)[i].second = 1.0;
       }
+      (*out)[i].first = g[(*out)[i].first].L;
+//      map<int, double>::const_iterator iter = bigrams.find((*out)[i].first);
+//      if (iter != bigrams.end()) {
+//        (*out)[i].second = iter->second * n;
+//      } else if (must_sample.find((*out)[i].first) != must_sample.end()) {
+//        (*out)[i].second = 1.0;
+//      }
     }
-    KALDI_ASSERT((*out)[i].second <= 1.0);
+//    KALDI_ASSERT((*out)[i].second <= 1.0);
   }
 //  cout << "selected words are: ";
 //  for (int i = 0; i < out->size(); i++) {
