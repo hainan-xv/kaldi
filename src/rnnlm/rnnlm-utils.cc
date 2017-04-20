@@ -6,14 +6,13 @@ namespace rnnlm {
 void DoSamplingInExamples(int num_samples, int ngram_order,
                           const vector<double>& unigram, const vector<double> &cdf,
                           NnetExample *egs) {
-  int num_words = 0;  // TODO(hxu) there might be a problem with input-dim != output-dim
-//  for (int i = 0; i < egs->io.size(); i++) {
+  int num_words_in = 0;
+  int num_words_out = 0;
   int i = 0;
   KALDI_ASSERT (egs->io[0].name == "input");
   KALDI_ASSERT (egs->io[1].name == "output");
 
   vector<Index> &indexes = egs->io[i].indexes;
-
   int current_n = 0, current_t = 0;
   KALDI_ASSERT(current_n == indexes[0].n && current_t == indexes[0].t);
 
@@ -41,15 +40,13 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
 
   int32 minibatch_size = current_n + 1;
 
-  num_words = egs->io[0].features.NumCols();
-  if (num_samples == -1) {
-    num_samples = minibatch_size * 2;
-  } else if (num_samples == 0) {
-    num_samples = num_words;
-  }
+  num_words_in = egs->io[0].features.NumCols();
+  num_words_out = egs->io[1].features.NumCols();
+  KALDI_ASSERT(unigram.size() == num_words_out);
 
-  if (num_samples < 64) {
-    num_samples = 64;
+  if (num_samples <= 0) {
+    egs->samples.resize(length, vector<std::pair<int32, double> >());
+    return;
   }
 
   vector<int32> input_words;
@@ -66,7 +63,6 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
   for (int t = 0; t < length; t++) {
     for (int n = 0; n < minibatch_size; n++) {
       vector<int32> &history = histories[t][n];
-
       for (int j = 0; j < ngram_order && j <= t; j++) {
         history.push_back(input_words[length * n + t - j]);
       }
@@ -74,12 +70,9 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
     }
   }
 
-  // TODO(hxu)
   for (int t = 0; t < length; t++) {
     SampleWithoutReplacement(unigram, cdf, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
   }
-  
-  return;
 }
 
 void CheckValidGrouping(const vector<interval> &g, int k) {
@@ -155,7 +148,6 @@ void CheckValidGrouping(const vector<double> &u,
   }
 }
 
-
 // assume u is CDF of already sorted unigrams
 void DoGroupingCDF(const vector<double> &u,
                    const vector<double> &cdf,
@@ -208,7 +200,6 @@ void DoGroupingCDF(const vector<double> &u,
       }
     }
 
-//    KALDI_LOG << "total-ngram-wgt is " << total_ngram_wgt;
     KALDI_ASSERT(total_ngram_wgt >= 0);
     
     sort(bigram_probs.begin(), bigram_probs.end(), std::greater<double>());
@@ -321,79 +312,6 @@ void DoGroupingCDF(const vector<double> &u,
     }
   }
 }
-
-// assume u is already sorted
-// void DoGrouping(vector<std::pair<int, double> > u, int k, vector<interval> *out) {
-//   double sum = 0.0;
-//   for (int i = 0; i < u.size(); i++) {
-//     sum += std::min(u[i].second, 1.0);
-//   }
-// //  for (int i = 0; i < u.size(); i++) {
-// //    u[i].second /= sum;
-// //  }
-// 
-//   KALDI_ASSERT(out->size() == 0);
-//   double weight_to_spare = k;
-// 
-//   int size = u.size();
-// 
-//   int begin = -1;
-//   double cumulative_unigram_weight = 0.0;
-//   double unigram_weight_left = 1.0;
-//   double selection_weight;
-// 
-//   using std::min;
-//   int i;
-//   for (i = 0; i < size; i++) {
-//     if (u[i].first == 97) {
-//       int j  = 0;
-//       j++;
-//     }
-//     if (begin == -1 && min(10.0, u[i].second) / sum / unigram_weight_left * weight_to_spare >= 1) {
-//       // first case, the single word is too big
-//       weight_to_spare -= 1.0;
-//       unigram_weight_left -= min(1.0, u[i].second) / sum;
-//       out->push_back(interval(i, i + 1, min(1.0, u[i].second) / sum, 10.0));
-//     } else if (begin == -1) {
-//       // first time we encounter a word whose prob isn't too big
-//       begin = i;
-//       cumulative_unigram_weight = min(1.0, u[i].second) / sum;
-//     } else {
-//       // in the middle of grouping words
-//       // first test if including the new word would make it bigger than 1
-//       selection_weight = (cumulative_unigram_weight + min(1.0, u[i].second) / sum) / unigram_weight_left * weight_to_spare;
-// 
-//       if (selection_weight > 1) {
-// //        cout << "here, i = " << i << endl;
-//         // too big, then group thing from begin to i - 1
-//         selection_weight = cumulative_unigram_weight / unigram_weight_left * weight_to_spare;
-// //        weight_to_spare -= selection_weight;
-// //        unigram_weight_left -= cumulative_unigram_weight;
-//         KALDI_ASSERT(selection_weight >= 0 && selection_weight <= 1);
-//         out->push_back(interval(begin, i, cumulative_unigram_weight, selection_weight));
-// 
-//         begin = i;
-//         cumulative_unigram_weight = min(1.0, u[i].second) / sum;
-//       } else {
-//         cumulative_unigram_weight += min(1.0, u[i].second) / sum;
-//       }
-//     }
-//   }
-//   
-//   if (begin != -1 && begin < size) {
-//     selection_weight = (cumulative_unigram_weight) / unigram_weight_left * weight_to_spare;
-//   //  selection_weight = (cumulative_unigram_weight + min(BaseFloat(1.0), u[i].second) / sum) / unigram_weight_left * weight_to_spare;
-//     KALDI_ASSERT(selection_weight <= 1.0);
-//     out->push_back(interval(begin, i, cumulative_unigram_weight, selection_weight));
-//   }
-// //  for (int i = 0; i < out->size(); i++) {
-// //    const interval &j = (*out)[i];
-// //    cout << j.L << ", " << j.R << ": " << j.unigram_prob << ", " << j.selection_prob << endl;
-// //  }
-// 
-//   CheckValidGrouping(*out, k);
-//   
-// }
 
 // return an int i in [L, R - 1], w/ probs porportional to their pdf's
 int SelectOne(const vector<double> &cdf, int L, int R) {
@@ -527,9 +445,9 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
                               vector<std::pair<int, double> > *out) {
+  // out.first is the word and out.second is P(choose that word)
   KALDI_ASSERT(u.size() + 1 == cdf.size());
   if (n == u.size()) {
-    KALDI_LOG << "selecting all!";
     out->resize(n);
     for (int i = 0; i < n; i++) {
       (*out)[i].first = i;
@@ -537,7 +455,7 @@ void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf
     }
     return;
   }
-// TODO(hxu) add alpha times
+
 // assume u is sorted from large to small
   vector<interval> g;
   DoGroupingCDF(u, cdf, n, must_sample, bigrams, &g);
@@ -558,10 +476,12 @@ void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf
   for (int i = 0; i < out->size(); i++) {
     if (g[(*out)[i].first].L + 1 < g[(*out)[i].first].R) { // is a group of many
       int index = SelectOne(cdf, g[(*out)[i].first].L, g[(*out)[i].first].R);
+//      KALDI_ASSERT((*out)[i].second * u[index] / g[(*out)[i].first].unigram_prob == u[index] * n);
+      (*out)[i].second = (*out)[i].second * u[index] / g[(*out)[i].first].unigram_prob;
       (*out)[i].first = index;
-      (*out)[i].second = u[index] * n;
+
     } else {
-      (*out)[i].second = g[(*out)[i].first].selection_prob;
+      KALDI_ASSERT((*out)[i].second == g[(*out)[i].first].selection_prob);
       if ((*out)[i].second > 1.0) {
         KALDI_ASSERT((*out)[i].second == ONE);
         (*out)[i].second = 1.0;
@@ -706,9 +626,6 @@ void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
     // need to change the second first
     ans[i].second = u[ans[i].first].second;
     ans[i].first = u[ans[i].first].first;
-
-    KALDI_ASSERT(ans[i].first < u.size());
-//    KALDI_LOG << "select " << ans[i].first << " " << ans[i].second;
   }
 }
 

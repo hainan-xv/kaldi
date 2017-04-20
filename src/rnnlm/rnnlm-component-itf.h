@@ -102,7 +102,12 @@ enum ComponentProperties {
 
 class LmInputComponent {
  public:
-  LmInputComponent(const LmInputComponent &other) {}
+  LmInputComponent(const LmInputComponent &other) {
+    learning_rate_ = other.learning_rate_;
+    learning_rate_factor_ = other.learning_rate_factor_;
+    is_gradient_ = other.is_gradient_;
+    max_change_ = other.max_change_;
+  }
 
   /// \brief Sets parameters to zero, and if treat_as_gradient is true,
   ///  sets is_gradient_ to true and sets learning_rate_ to 1, ignoring
@@ -183,7 +188,12 @@ class LmInputComponent {
 
 class LmOutputComponent {
  public:
-  LmOutputComponent(const LmOutputComponent &other) {}
+  LmOutputComponent(const LmOutputComponent &other) {
+    learning_rate_ = other.learning_rate_;
+    learning_rate_factor_ = other.learning_rate_factor_;
+    is_gradient_ = other.is_gradient_;
+    max_change_ = other.max_change_;
+  }
 
   /// \brief Sets parameters to zero, and if treat_as_gradient is true,
   ///  sets is_gradient_ to true and sets learning_rate_ to 1, ignoring
@@ -227,6 +237,9 @@ class LmOutputComponent {
 
   virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                  const vector<int> &indexes, // objf is computed on the chosen indexes
+                 CuMatrixBase<BaseFloat> *out) const = 0;
+
+  virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                  CuMatrixBase<BaseFloat> *out) const = 0;
   
   virtual void Backprop(

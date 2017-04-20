@@ -468,23 +468,24 @@ LmNnetSamplingTrainer::~LmNnetSamplingTrainer() {
 }
 
 void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
-                              const vector<vector<std::pair<int32, double> > > &samples,
-                              const GeneralMatrix &supervision,
-                              ObjectiveType objective_type,
-                              const std::string &output_name,
-                              bool supply_deriv,
-                              NnetComputer *computer,
-                              BaseFloat *tot_weight,
-                              BaseFloat *tot_objf,
-                              const LmOutputComponent &output_projection,
-                              const CuMatrixBase<BaseFloat> **old_output,
-                              LmNnet *nnet_to_update) {
+                  const vector<vector<std::pair<int32, double> > > &samples,
+                  const GeneralMatrix &supervision,
+                  ObjectiveType objective_type,
+                  const std::string &output_name,
+                  bool supply_deriv,
+                  NnetComputer *computer,
+                  BaseFloat *tot_weight,
+                  BaseFloat *tot_objf,
+                  const LmOutputComponent &output_projection,
+                  const CuMatrixBase<BaseFloat> **old_output,
+                  LmNnet *nnet_to_update) {
   int t = samples.size();
   KALDI_ASSERT(t > 0);
   *old_output = &computer->GetOutput(output_name);
   int num_samples = samples[0].size();
-
-//  num_samples = output_projection.NumCols();
+  if (num_samples == 0) {
+    num_samples = output_projection.OutputDim();
+  }
 
   KALDI_ASSERT(supervision.Type() == kSparseMatrix);
   const SparseMatrix<BaseFloat> &post = supervision.GetSparseMatrix();
@@ -492,7 +493,6 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   std::vector<int> outputs; // outputs[i] is the correct word for row i
                             // will be initialized with SparsMatrixToVector
                             // the size will be post.NumRows() = t * minibatch_size
-
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
@@ -508,12 +508,17 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   for (int i = 0; i < t; i++) {
     CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
     CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
-    vector<int> indexes(num_samples);
-    for (int j = 0; j < num_samples; j++) {
-      indexes[j] = samples[i][j].first;
-      selected_probs[j + t * i] = samples[i][j].second; // TODO(hxu) need to fix this in selection
+
+    if (num_samples == output_projection.OutputDim()) {
+      output_projection.Propagate(this_in, &this_out);
+    } else {
+      vector<int> indexes(num_samples);
+      for (int j = 0; j < num_samples; j++) {
+        indexes[j] = samples[i][j].first;
+        selected_probs[j + t * i] = samples[i][j].second;
+      }
+      output_projection.Propagate(this_in, indexes, &this_out);
     }
-    output_projection.Propagate(this_in, indexes, &this_out);
   }
 
   CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
@@ -558,7 +563,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   CuVector<BaseFloat> selection_probs_inv(out.NumCols());
 
   // first fill in the -1/probs
-  if (num_samples != 0) {
+  if (num_samples != output_projection.OutputDim()) {
     Vector<BaseFloat> v(out.NumCols(), kSetZero);
     for (int i = 0; i < out.NumCols(); i++) {
       v(i) = -1.0 / selected_probs[i];
@@ -599,20 +604,21 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
       CuSubMatrix<BaseFloat> this_in_deriv(input_deriv.Data() + i * input_deriv.Stride(), minibatch_size, input_deriv.NumCols(), input_deriv.Stride() * t);
       CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
       CuSubMatrix<BaseFloat> this_deriv(derivatives.Data() + i * derivatives.Stride(), minibatch_size, derivatives.NumCols(), derivatives.Stride() * t);
-      vector<int> indexes(num_samples);
 
-      for (int j = 0; j < num_samples; j++) {
-        indexes[j] = samples[i][j].first;
+      if (num_samples == output_projection.OutputDim()) {
+        output_projection.Backprop(this_in_value, this_out,
+                                   this_deriv, nnet_to_update->output_projection_,
+                                   &this_in_deriv);
+      } else {
+        vector<int> indexes(num_samples);
+        for (int j = 0; j < num_samples; j++) {
+          indexes[j] = samples[i][j].first;
+        }
+        output_projection.Backprop(indexes, this_in_value, this_out,
+                                   this_deriv, nnet_to_update->output_projection_,
+                                   &this_in_deriv);
       }
-//      output_projection.Propagate(this_in, indexes, &this_out);
-
-      output_projection.Backprop(indexes, this_in_value, this_out,
-                                 this_deriv, nnet_to_update->output_projection_,
-                                 &this_in_deriv);
     }
-
-
-//    BaseFloat t = TraceMatMat(nnet->output_projection_->params_, nnet->output_projection_->params_, kTrans);
 
     computer->AcceptInput(output_name, &input_deriv);
   }

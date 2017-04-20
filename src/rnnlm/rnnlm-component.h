@@ -122,14 +122,6 @@ class LmLinearComponent: public LmInputComponent {
   CuMatrix<BaseFloat> linear_params_;
 };
 
-
-
-
-
-
-
-
-
 class LmNaturalGradientLinearComponent: public LmLinearComponent {
  public:
   void FreezeNaturalGradient(bool freeze);
@@ -228,6 +220,9 @@ class AffineImportanceSamplingComponent: public LmOutputComponent {
 
   virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                          const vector<int> &indexes,
+                         CuMatrixBase<BaseFloat> *out) const;
+
+  virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                          CuMatrixBase<BaseFloat> *out) const;
 
   void Propagate(const CuMatrixBase<BaseFloat> &in,

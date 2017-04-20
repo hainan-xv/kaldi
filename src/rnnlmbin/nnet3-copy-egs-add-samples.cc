@@ -345,7 +345,6 @@ int main(int argc, char *argv[]) {
       KALDI_ASSERT(eg.io.size() == 2);
       int32 index = 0;
         NnetExample eg_modified = eg;
-
         rnnlm::DoSamplingInExamples(num_samples, 1, unigram, cdf, &eg_modified);
         example_writers[index]->Write(key, eg_modified);
         num_written++;

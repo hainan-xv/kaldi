@@ -636,6 +636,7 @@ void LmNaturalGradientLinearComponent::Init(
   update_count_ = 0.0;
   active_scaling_count_ = 0.0;
   max_change_scale_stats_ = 0.0;
+  max_change_ = 1.0;
 }
 
 void LmNaturalGradientLinearComponent::Init(
@@ -665,6 +666,7 @@ void LmNaturalGradientLinearComponent::Init(
   update_count_ = 0.0;
   active_scaling_count_ = 0.0;
   max_change_scale_stats_ = 0.0;
+  max_change_ = 1.0;
 }
 
 void LmNaturalGradientLinearComponent::Write(std::ostream &os,
@@ -871,10 +873,24 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
   CuMatrix<BaseFloat> bias_params(1, params_.NumRows());
   bias_params.AddMat(1.0, bias_params_sub, kTrans);
 
-  // BUGGY here TODO(hxu)
   out->RowRange(0, 1).AddCols(bias_params, idx);
-  out->CopyRowsFromVec(out->Row(0));
+  if (out->NumRows() > 1)
+    out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, new_linear, kTrans, 1.0);
+}
+
+void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
+                                                CuMatrixBase<BaseFloat> *out) const {
+  Propagate(in, false, out);
+//  CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
+//  CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
+//
+//  KALDI_ASSERT(out->NumRows() == in.NumRows());
+//
+//  out->RowRange(0, 1).CopyFromMat(bias_params, kTrans);
+//  if (out->NumRows() > 1)
+//    out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
+//  out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
 }
 
 void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
@@ -883,7 +899,8 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
   out->Row(0).CopyColFromMat(bias_params, 0);
-  out->CopyRowsFromVec(out->Row(0));
+  if (out->NumRows() > 1)
+    out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
   if (normalize) {
     out->ApplyLogSoftMaxPerRow(*out);
@@ -900,30 +917,56 @@ void AffineImportanceSamplingComponent::Backprop(
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
 
-  CuMatrix<BaseFloat> tmp(out_value);
-  tmp.Set(0.0);
-  tmp.Row(0).CopyColFromMat(bias_params, 0);
-  tmp.CopyRowsFromVec(tmp.Row(0));
-  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
+  const CuMatrixBase<BaseFloat> &new_out_deriv = output_deriv;
 
-  // now tmp is the in_value for log-softmax
-
-  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
-
-  if (input_deriv != NULL)
-    input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, linear_params, kNoTrans,
-                           1.0);
+  input_deriv->AddMatMat(1.0, new_out_deriv, kNoTrans, linear_params, kNoTrans, 1.0);
 
   AffineImportanceSamplingComponent* to_update
              = dynamic_cast<AffineImportanceSamplingComponent*>(to_update_0);
 
   if (to_update != NULL) {
-    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
-    delta.Row(0).AddRowSumMat(learning_rate_, output_deriv, 1.0);
-    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
-    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, output_deriv, kTrans,
-                                in_value, kNoTrans, 1.0);
+    linear_params.SetZero();  // clear the contents
+    linear_params.AddMatMat(learning_rate_, new_out_deriv, kTrans,
+                         in_value, kNoTrans, 1.0);
+    CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
+    delta_bias.Row(0).AddRowSumMat(learning_rate_, new_out_deriv, kTrans);
+
+    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMat(1.0, linear_params);
+
+    CuMatrix<BaseFloat> delta_bias_trans(output_deriv.NumCols(), 1, kSetZero);
+    delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
+
+    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta_bias_trans);  // TODO(hxu)
   }
+//
+//  CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
+//  CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
+//
+//  CuMatrix<BaseFloat> tmp(out_value);
+//  tmp.Set(0.0);
+//  tmp.Row(0).CopyColFromMat(bias_params, 0);
+//  if (tmp.NumRows() > 1)
+//    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
+//  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
+//
+//  // now tmp is the in_value for log-softmax
+//
+//  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
+//
+//  if (input_deriv != NULL)
+//    input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, linear_params, kNoTrans,
+//                           1.0);
+//
+//  AffineImportanceSamplingComponent* to_update
+//             = dynamic_cast<AffineImportanceSamplingComponent*>(to_update_0);
+//
+//  if (to_update != NULL) {
+//    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
+//    delta.Row(0).AddRowSumMat(learning_rate_, output_deriv, 1.0);
+//    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
+//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, output_deriv, kTrans,
+//                                in_value, kNoTrans, 1.0);
+//  }
 }
 
 void AffineImportanceSamplingComponent::Backprop(
@@ -1069,6 +1112,7 @@ BaseFloat LmLinearComponent::DotProduct(const LmInputComponent &other_in) const 
 
 void LmLinearComponent::Init(int32 input_dim, int32 output_dim,
                            BaseFloat param_stddev) {//, BaseFloat bias_stddev) {
+  is_gradient_ = false;  // not configurable; there's no reason you'd want this
   linear_params_.Resize(output_dim, input_dim);
   KALDI_ASSERT(output_dim > 0 && input_dim > 0 && param_stddev >= 0.0);
   linear_params_.SetRandn(); // sets to random normally distributed noise.
@@ -1114,53 +1158,19 @@ void LmLinearComponent::InitFromConfig(ConfigLine *cfl) {
               << cfl->UnusedValues();
   if (!ok)
     KALDI_ERR << "Bad initializer " << cfl->WholeLine();
+
+  is_gradient_ = false;  // not configurable; there's no reason you'd want this
+  max_change_ = 1.0;
 }
 
 void LmLinearComponent::Propagate(const SparseMatrix<BaseFloat> &sp,
                                   CuMatrixBase<BaseFloat> *out) const {
-  // out->AddMatMat(1.0, sp, kNoTrans, linear_params_, kTrans, 1.0);
-
-//  CuMatrix<BaseFloat> out2(*out);
-//  CuSparseMatrix<BaseFloat> sp_input(sp);
-//  CuMatrix<BaseFloat> input(sp.NumRows(), sp.NumCols(), kSetZero);
-//  sp_input.CopyToMat(&input);
-//  out2.AddMatMat(1.0, input, kNoTrans, linear_params_, kTrans, 1.0);
-
   cu::ComputeAffineOnSparse(linear_params_, sp, out);
-
-//  BaseFloat r1 = out->Sum();
-//  BaseFloat r2 = out2.Sum();
-//  KALDI_LOG << r1 << " and " << r2;
-//  KALDI_ASSERT(out->ApproxEqual(out2));
-
 }
 
 void LmLinearComponent::UpdateSimple(const SparseMatrix<BaseFloat> &in_value,
                                    const CuMatrixBase<BaseFloat> &out_deriv) {
-  // linear_params_.AddMatMat(learning_rate, out_deriv, kTrans, in_value, kNoTrans, 1.0);
   cu::UpdateSimpleAffineOnSparse(learning_rate_, out_deriv, in_value, &linear_params_);
-
-//std::vector<MatrixIndexT> vis;
-//const SparseMatrix<BaseFloat> &sp = in_value;
-//
-//for (size_t i = 0; i < sp.NumRows(); i++) {
-//const SparseVector<BaseFloat> &sv = sp.Row(i);
-//int non_zero_index = -1;
-//ApproxEqual(sv.Max(&non_zero_index), 1.0);
-//vis.push_back(non_zero_index);
-//}
-//KALDI_ASSERT(vis.size() == sp.NumRows());
-//
-//// TODO(hxu)
-//for (int i = 0; i < vis.size(); i++) {
-//MatrixIndexT j = vis[i];
-//// i.e. in_value (i, j) = 1
-//
-//for (int k = 0; k < out_deriv.NumCols(); k++) {
-//linear_params_(k, j) += learning_rate_ * out_deriv(i, k);
-////      KALDI_LOG << k << ", " << j << " added " << out_deriv(k, i);
-//}
-//}
 }
 
 void LmLinearComponent::UpdateSimple(const CuMatrixBase<BaseFloat> &in_value,

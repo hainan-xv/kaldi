@@ -14,7 +14,6 @@
 #include <vector>
 #include <string>
 
-
 using std::string;
 using std::ifstream;
 using std::ofstream;
@@ -77,6 +76,7 @@ void CheckValidGrouping(const vector<double> &u,
                         const std::map<int, double> &bigrams,
                         int k, const vector<interval> &g);
 
+// group the words together into groups that have <=1 selection_probs
 void DoGroupingCDF(const vector<double> &u,
                    const vector<double> &cdf, int k,
                    const set<int>& must_sample, const map<int, double> &bigrams,
