@@ -90,6 +90,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Init(std::string matrix_f
 
 void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
+  this->learning_rate_factor_ = 1.0;
   std::string matrix_filename;
   std::string unigram_filename;
   int32 input_dim = -1, output_dim = -1;
@@ -105,8 +106,6 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
   } else {
     ok = ok && cfl->GetValue("input-dim", &input_dim);
     ok = ok && cfl->GetValue("output-dim", &output_dim);
-//    BaseFloat param_stddev = 1.0 / std::sqrt(input_dim),
-//        bias_stddev = 1.0;
     BaseFloat param_stddev = 0.01, /// log(1.0 / output_dim),
         bias_stddev = log(1.0 / output_dim);
 
@@ -117,7 +116,6 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
 
     Init(input_dim, output_dim, param_stddev, bias_stddev);
 
-    // TODO(hxu)
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
 
     if (cfl->GetValue("unigram", &unigram_filename)) {
@@ -132,10 +130,7 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
       params_.ColRange(params_.NumCols() - 1, 1).Set(0.0);
       params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, g, kTrans);
     }
-
-
   }
-  this->learning_rate_factor_ = 1.0; // TODO(hxu) quick fix
 
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
@@ -160,7 +155,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Propagate(const CuMatrixB
   CuMatrix<BaseFloat> bias_params(1, params_.NumRows());
   bias_params.AddMat(1.0, bias_params_sub, kTrans);
 
-  // BUGGY here TODO(hxu)
   out->RowRange(0, 1).AddCols(bias_params, idx);
   out->CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, new_linear, kTrans, 1.0);
@@ -185,18 +179,15 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                                const CuMatrixBase<BaseFloat> &output_deriv,
                                LmOutputComponent *to_update_0,
                                CuMatrixBase<BaseFloat> *input_deriv) const {
-
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-
-  CuMatrix<BaseFloat> tmp(out_value);
-  tmp.Set(0.0);
+  CuMatrix<BaseFloat> tmp(out_value.NumRows(), out_value.NumCols());
   tmp.Row(0).CopyColFromMat(bias_params, 0);
-  tmp.CopyRowsFromVec(tmp.Row(0));
+  if (tmp.NumRows() > 1)
+    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
+
   tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
-
   // now tmp is the in_value for log-softmax
-
   tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
 
   if (input_deriv != NULL)
@@ -207,10 +198,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
              = dynamic_cast<NaturalGradientAffineImportanceSamplingComponent*>(to_update_0);
 
   if (to_update != NULL) {
-
-    // TODO(hxu) need to add natural gradient
-
-
+    // need to add natural gradient TODO(hxu)
     CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
     delta.Row(0).AddRowSumMat(learning_rate_, output_deriv, 1.0);
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
@@ -226,7 +214,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                                const CuMatrixBase<BaseFloat> &output_deriv,
                                LmOutputComponent *to_update_0,
                                CuMatrixBase<BaseFloat> *input_deriv) const {
-
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
 
@@ -247,7 +234,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
     new_linear.SetZero();  // clear the contents
 
     {
-      KALDI_LOG << "here";
       CuMatrix<BaseFloat> in_value_temp;
       in_value_temp.Resize(in_value.NumRows(),
                            in_value.NumCols() + 1, kUndefined);
@@ -346,10 +332,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Vectorize(VectorBase<Base
   params->CopyRowsFromMat(params_);
 }
 void NaturalGradientAffineImportanceSamplingComponent::UnVectorize(const VectorBase<BaseFloat> &params) {
-//  KALDI_ASSERT(params.Dim() == this->NumParameters());
   params_.CopyRowsFromVec(params);
-//  bias_params_.Row(0).CopyFromVec(params.Range(InputDim() * OutputDim(),
-//                                        OutputDim()));
 }
 
 
@@ -374,18 +357,6 @@ void LmNaturalGradientLinearComponent::Update(
     const SparseMatrix<BaseFloat> &in_value,
     const CuMatrixBase<BaseFloat> &out_deriv) {
   CuMatrix<BaseFloat> in_value_temp;
-
-//  in_value_temp.Resize(in_value.NumRows(),
-//                       in_value.NumCols() + 1, kUndefined);
-////  in_value_temp.Range(0, in_value.NumRows(),
-////                      0, in_value.NumCols()).CopyFromMat(in_value);
-////  CuMatrixBase<BaseFloat> &m = in_value_temp.Range(0, in_value.NumRows(), 0, in_value.NumCols());
-//  CuSubMatrix<BaseFloat> m(in_value_temp.Data(), in_value.NumRows(), in_value.NumCols(), in_value_temp.Stride());
-//  in_value.CopyToMat(&m);
-//
-//  // Add the 1.0 at the end of each row "in_value_temp"
-//  in_value_temp.Range(0, in_value.NumRows(),
-//                      in_value.NumCols(), 1).Set(1.0);
 
   CuMatrix<BaseFloat> out_deriv_temp(out_deriv);
 
@@ -833,7 +804,6 @@ void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
 
     Init(input_dim, output_dim, param_stddev, bias_stddev);
 
-    // TODO(hxu)
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
 
     if (cfl->GetValue("unigram", &unigram_filename)) {
@@ -882,15 +852,6 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
 void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
                                                 CuMatrixBase<BaseFloat> *out) const {
   Propagate(in, false, out);
-//  CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
-//  CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-//
-//  KALDI_ASSERT(out->NumRows() == in.NumRows());
-//
-//  out->RowRange(0, 1).CopyFromMat(bias_params, kTrans);
-//  if (out->NumRows() > 1)
-//    out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
-//  out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
 }
 
 void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> &in,
@@ -925,18 +886,20 @@ void AffineImportanceSamplingComponent::Backprop(
              = dynamic_cast<AffineImportanceSamplingComponent*>(to_update_0);
 
   if (to_update != NULL) {
-    linear_params.SetZero();  // clear the contents
-    linear_params.AddMatMat(learning_rate_, new_out_deriv, kTrans,
-                         in_value, kNoTrans, 1.0);
+//    linear_params.SetZero();  // clear the contents
+//    linear_params.AddMatMat(learning_rate_, new_out_deriv, kTrans,
+//                         in_value, kNoTrans, 1.0);
     CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
     delta_bias.Row(0).AddRowSumMat(learning_rate_, new_out_deriv, kTrans);
 
-    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMat(1.0, linear_params);
+//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMat(1.0, linear_params);
+    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, new_out_deriv, kTrans,
+                                in_value, kNoTrans, 1.0);
 
-    CuMatrix<BaseFloat> delta_bias_trans(output_deriv.NumCols(), 1, kSetZero);
-    delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
+//    CuMatrix<BaseFloat> delta_bias_trans(output_deriv.NumCols(), 1, kSetZero);
+//    delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
 
-    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta_bias_trans);  // TODO(hxu)
+    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta_bias, kTrans);  // TODO(hxu)
   }
 //
 //  CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
