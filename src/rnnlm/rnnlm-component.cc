@@ -90,7 +90,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Init(std::string matrix_f
 
 void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
-  this->learning_rate_factor_ = 1.0;
   std::string matrix_filename;
   std::string unigram_filename;
   int32 input_dim = -1, output_dim = -1;
@@ -603,7 +602,6 @@ void LmNaturalGradientLinearComponent::Init(
   int32 input_dim = mat.NumCols() - 1, output_dim = mat.NumRows();
   linear_params_.Resize(output_dim, input_dim);
   linear_params_.CopyFromMat(mat.Range(0, output_dim, 0, input_dim));
-  is_gradient_ = false;  // not configurable; there's no reason you'd want this
   update_count_ = 0.0;
   active_scaling_count_ = 0.0;
   max_change_scale_stats_ = 0.0;
@@ -633,7 +631,6 @@ void LmNaturalGradientLinearComponent::Init(
                << "to activate the per-component max change mechanism.";
   KALDI_ASSERT(max_change_per_sample >= 0.0);
   max_change_per_sample_ = max_change_per_sample;
-  is_gradient_ = false;  // not configurable; there's no reason you'd want this
   update_count_ = 0.0;
   active_scaling_count_ = 0.0;
   max_change_scale_stats_ = 0.0;
@@ -819,7 +816,6 @@ void AffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
       params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, g, kTrans);
     }
   }
-  this->learning_rate_factor_ = 1.0; // TODO(hxu) quick fix
   if (cfl->HasUnusedValues())
     KALDI_ERR << "Could not process these elements in initializer: "
               << cfl->UnusedValues();
@@ -866,6 +862,14 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
   if (normalize) {
     out->ApplyLogSoftMaxPerRow(*out);
   }
+}
+
+BaseFloat AffineImportanceSamplingComponent::ComputeLogprobOfWordGivenHistory(
+                                             const CuVectorBase<BaseFloat> &hidden,
+                                             int32 word_index) {
+  CuSubVector<BaseFloat> param = params_.Row(word_index);
+  BaseFloat ans = VecVec(hidden, param);
+  return ans;
 }
 
 void AffineImportanceSamplingComponent::Backprop(
@@ -1122,8 +1126,6 @@ void LmLinearComponent::InitFromConfig(ConfigLine *cfl) {
   if (!ok)
     KALDI_ERR << "Bad initializer " << cfl->WholeLine();
 
-  is_gradient_ = false;  // not configurable; there's no reason you'd want this
-  max_change_ = 1.0;
 }
 
 void LmLinearComponent::Propagate(const SparseMatrix<BaseFloat> &sp,

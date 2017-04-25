@@ -121,7 +121,8 @@ class LmInputComponent {
 
   virtual LmInputComponent* Copy() const = 0;
 
-  LmInputComponent() {}
+  LmInputComponent(): learning_rate_(0.001), learning_rate_factor_(1.0),
+                        is_gradient_(false), max_change_(0.0) {}
 
   virtual void Add(BaseFloat alpha, const LmInputComponent &other) = 0;
   virtual void Scale(BaseFloat scale) = 0;
@@ -208,7 +209,8 @@ class LmOutputComponent {
   BaseFloat LearningRate() const { return learning_rate_; }
   BaseFloat MaxChange() const { return max_change_; }
 
-  LmOutputComponent() {}
+  LmOutputComponent(): learning_rate_(0.001), learning_rate_factor_(1.0),
+                        is_gradient_(false), max_change_(0.0) {}
 
   virtual void Add(BaseFloat alpha, const LmOutputComponent &other) = 0;
   virtual void Scale(BaseFloat scale) = 0;

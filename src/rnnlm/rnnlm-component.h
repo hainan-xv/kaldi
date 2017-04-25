@@ -229,6 +229,9 @@ class AffineImportanceSamplingComponent: public LmOutputComponent {
                  bool normalize,
                  CuMatrixBase<BaseFloat> *out) const;
 
+  BaseFloat ComputeLogprobOfWordGivenHistory(const CuVectorBase<BaseFloat> &hidden,
+                                             int32 word_index);
+
   virtual void Backprop(const vector<int> &indexes,
                         const CuMatrixBase<BaseFloat> &in_value,
                         const CuMatrixBase<BaseFloat> &, // out_value

@@ -101,19 +101,14 @@ void LmNnetSamplingTrainer::ProcessEgInputs(const NnetExample& eg,
                                             const LmInputComponent& a,
                                             const SparseMatrix<BaseFloat> **old_input,
                                             CuMatrix<BaseFloat> *new_input) {
-  for (size_t i = 0; i < eg.io.size(); i++) {
-    const NnetIo &io = eg.io[i];
+//  for (size_t i = 0; i < eg.io.size(); i++) {
+  const NnetIo &io = eg.io[0];
 
-    if (io.name == "input") {
-      KALDI_ASSERT(old_input != NULL && new_input != NULL);
-      new_input->Resize(io.features.NumRows(),
-                        a.OutputDim(),
-                        kSetZero);
+  KALDI_ASSERT (io.name == "input");
+  new_input->Resize(io.features.NumRows(), a.OutputDim(), kSetZero);
 
-      *old_input = &io.features.GetSparseMatrix();
-      a.Propagate(io.features.GetSparseMatrix(), new_input);
-    }
-  }
+  *old_input = &io.features.GetSparseMatrix();
+  a.Propagate(io.features.GetSparseMatrix(), new_input);
 }
 
 void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
@@ -493,21 +488,27 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   std::vector<int> outputs; // outputs[i] is the correct word for row i
                             // will be initialized with SparsMatrixToVector
                             // the size will be post.NumRows() = t * minibatch_size
+                            // words for the same *sentence* would be grouped together
+                            // not the same time-step
+
   std::set<int> outputs_set;
 
   SparseMatrixToVector(post, &outputs);
 
-  std::vector<double> selected_probs(num_samples * t);  // selected_probs[i * t + j] is the prob of
+  std::vector<double> selected_probs;  // selected_probs[i * t + j] is the prob of
                                                         // selecting samples[j][i]
+  // words for the same time step t would be grouped together TODO(hxu)
 
   int minibatch_size = (*old_output)->NumRows() / t;
   KALDI_ASSERT(outputs.size() == t * minibatch_size);
 
   CuMatrix<BaseFloat> out((*old_output)->NumRows(), num_samples, kSetZero);
+  // words for the same sentence would be grouped together
 
   if (num_samples == output_projection.OutputDim()) {
     output_projection.Propagate(**old_output, &out);
   } else {
+    selected_probs.resize(num_samples * t);
     // need to parallelize this loop
     for (int i = 0; i < t; i++) {
       CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
@@ -517,7 +518,8 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
         vector<int> indexes(num_samples);
         for (int j = 0; j < num_samples; j++) {
           indexes[j] = samples[i][j].first;
-          selected_probs[j + t * i] = samples[i][j].second;
+          selected_probs[j * t + i] = samples[i][j].second;
+//          selected_probs[j + t * i] = samples[i][j].second;
         }
         output_projection.Propagate(this_in, indexes, &this_out);
       }
@@ -528,13 +530,14 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   ComputeSamplingNonlinearity(out, &f_out);
 
   *tot_weight = post.NumRows();
-  vector<int32> correct_indexes(out.NumRows(), -1);
+  vector<int32> correct_indexes; //(out.NumRows(), -1);
+  SparseMatrix<BaseFloat> supervision_cpu;
+  // grouped same as output (words in a sentence group together)
 //
   if (num_samples == output_projection.OutputDim()) {
-    for (int j = 0; j < outputs.size(); j++) {
-      correct_indexes[j] = outputs[j];
-    }
+    VectorToSparseMatrix(outputs, out.NumCols(), &supervision_cpu);
   } else {
+    correct_indexes.resize(out.NumRows(), -1);
     // TODO(hxu) not tested it yet
     for (int j = 0; j < t; j++) {
       unordered_map<int32, int32> word2pos;
@@ -550,10 +553,9 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 //        KALDI_ASSERT(outputs[j + i * t] == samples[j][correct_indexes[j + i * t]].first);
       }
     }
+    VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
   }
 
-  SparseMatrix<BaseFloat> supervision_cpu;
-  VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
   CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
   *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf
   // (the objf regarding the positive reward for getting correct labels)
