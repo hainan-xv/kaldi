@@ -113,6 +113,8 @@ class LmInputComponent {
   ///  sets is_gradient_ to true and sets learning_rate_ to 1, ignoring
   ///  learning_rate_factor_.
   virtual void SetZero(bool treat_as_gradient) = 0;
+  virtual void SetAsGradient() { learning_rate_ = 1.0; is_gradient_ = true; }
+  virtual void PerturbParams(BaseFloat stddev) = 0;
 
   virtual int32 InputDim() const = 0;
   virtual int32 OutputDim() const = 0;
@@ -200,6 +202,8 @@ class LmOutputComponent {
   ///  sets is_gradient_ to true and sets learning_rate_ to 1, ignoring
   ///  learning_rate_factor_.
   virtual void SetZero(bool treat_as_gradient) = 0;
+  virtual void SetAsGradient() { learning_rate_ = 1.0; is_gradient_ = true; }
+  virtual void PerturbParams(BaseFloat stddev) = 0;
 
   virtual int32 InputDim() const = 0;
   virtual int32 OutputDim() const = 0;

@@ -8,6 +8,125 @@
 namespace kaldi {
 namespace rnnlm {
 
+void TestSimpleComponentDataDerivative(BaseFloat perturb_delta) {
+  for (int t = 0; t < 100; t++) {
+    int32 input_dim = rand() % 200 + 50,
+        output_dim = rand() % 200 + 50;
+
+    int32 num_rows = RandInt(1, 100);
+
+    NaturalGradientAffineImportanceSamplingComponent c;
+    c.Init(input_dim, output_dim, 0.1, 0.1);
+
+    CuMatrix<BaseFloat> input_data(num_rows, input_dim, kSetZero),
+        output_data(num_rows, output_dim, kSetZero),
+        output_deriv(num_rows, output_dim, kSetZero);
+    input_data.SetRandn();
+    output_deriv.SetRandn();
+
+//    ResetSeed(rand_seed, c);
+    c.Propagate(input_data, false, &output_data);
+
+    CuMatrix<BaseFloat> input_deriv(num_rows, input_dim, kSetZero),
+        empty_mat;
+    c.Backprop(input_data, empty_mat, output_deriv, NULL,
+                &input_deriv);
+
+    int32 test_dim = 3;
+    BaseFloat original_objf = TraceMatMat(output_deriv, output_data, kTrans);
+    Vector<BaseFloat> measured_objf_change(test_dim),
+        predicted_objf_change(test_dim);
+    for (int32 i = 0; i < test_dim; i++) {
+      CuMatrix<BaseFloat> perturbed_input_data(num_rows, input_dim,
+                                               kSetZero),
+          perturbed_output_data(num_rows, output_dim,
+                                kSetZero);
+      perturbed_input_data.SetRandn();
+      perturbed_input_data.Scale(perturb_delta);
+      // at this point, perturbed_input_data contains the offset at the input data.
+      predicted_objf_change(i) = TraceMatMat(perturbed_input_data, input_deriv,
+                                             kTrans);
+      perturbed_input_data.AddMat(1.0, input_data);
+
+//      ResetSeed(rand_seed, c);
+      c.Propagate(perturbed_input_data, false, &perturbed_output_data);
+      measured_objf_change(i) = TraceMatMat(output_deriv, perturbed_output_data,
+                                            kTrans) - original_objf;
+    }
+    KALDI_LOG << "Predicted objf-change = " << predicted_objf_change;
+    KALDI_LOG << "Measured objf-change = " << measured_objf_change;
+    BaseFloat threshold = 0.1;
+    bool ans = ApproxEqual(predicted_objf_change, measured_objf_change, threshold);
+    if (!ans)
+      KALDI_WARN << "Data-derivative test failed, component-type="
+                 << c.Type() << ", input-dim=" << input_dim
+                 << ", output-dim=" << output_dim;
+  }
+}
+
+void TestSimpleComponentModelDerivative(BaseFloat perturb_delta) {
+  for (int t = 0; t < 100; t++) {
+    int32 input_dim = rand() % 200 + 50,
+        output_dim = rand() % 200 + 50;
+
+    int32 num_rows = RandInt(1, 100);
+
+    NaturalGradientAffineImportanceSamplingComponent c;
+    c.Init(input_dim, output_dim, 0.1, 0.1);
+
+    CuMatrix<BaseFloat> input_data(num_rows, input_dim, kSetZero),
+        output_data(num_rows, output_dim, kSetZero),
+        output_deriv(num_rows, output_dim, kSetZero);
+    input_data.SetRandn();
+    output_deriv.SetRandn();
+
+    c.Propagate(input_data, false, &output_data);
+
+    BaseFloat original_objf = TraceMatMat(output_deriv, output_data, kTrans);
+
+    LmOutputComponent *c_copy = c.Copy();
+
+    c_copy->Scale(0.0);
+    c_copy->SetAsGradient();
+
+    CuMatrix<BaseFloat> input_deriv(num_rows, input_dim,
+                                    kSetZero),
+        empty_mat;
+    c.Backprop(input_data, empty_mat, output_deriv, c_copy,
+                &input_deriv);
+
+    // check that the model derivative is accurate.
+    int32 test_dim = 3;
+
+    Vector<BaseFloat> measured_objf_change(test_dim),
+        predicted_objf_change(test_dim);
+    for (int32 i = 0; i < test_dim; i++) {
+      CuMatrix<BaseFloat> perturbed_output_data(num_rows, output_dim,
+                                                kSetZero);
+      LmOutputComponent *c_perturbed = c.Copy();
+      c_perturbed->PerturbParams(perturb_delta);
+
+      predicted_objf_change(i) = c_copy->DotProduct(*c_perturbed) -
+          c_copy->DotProduct(c);
+      c_perturbed->Propagate(input_data, &perturbed_output_data);
+      measured_objf_change(i) = TraceMatMat(output_deriv, perturbed_output_data,
+                                            kTrans) - original_objf;
+      delete c_perturbed;
+    }
+    KALDI_LOG << "Predicted objf-change = " << predicted_objf_change;
+    KALDI_LOG << "Measured objf-change = " << measured_objf_change;
+    BaseFloat threshold = 0.1;
+
+    bool ans = ApproxEqual(predicted_objf_change, measured_objf_change,
+                           threshold);
+    if (!ans)
+      KALDI_WARN << "Model-derivative test failed, component-type="
+                 << c.Type() << ", input-dim=" << input_dim
+                 << ", output-dim=" << output_dim;
+    delete c_copy;
+  }
+}
+
 void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sample_set,
                    vector<double>* u, std::map<int, double> *bigrams) {
   u->resize(n, 0);
@@ -33,7 +152,7 @@ void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sa
   }
 
   for (std::map<int, double>::iterator iter = bigrams->begin();
-                                              iter != bigrams->end(); iter++) {
+                                       iter != bigrams->end(); iter++) {
     iter->second = iter->second / bigram_sum * bigram_total_sum;
   }
 
@@ -44,34 +163,6 @@ void PrepareVector(int n, int ones_size, int num_bigrams, std::set<int>* must_sa
 }
 
 void UnitTestCDFGrouping() {
-////  int dim = 16;
-////  vector<BaseFloat> u(dim);
-////  
-////  for (int i = 0; i < dim / 2; i++) {
-////    u[i] = 0.9 / dim * 2;
-////  }
-////  for (int i = dim / 2; i < dim; i++) {
-////    u[i] = 0.1 / dim * 2;
-////  }
-////
-////  vector<BaseFloat> cdf(u.size(), 0);
-////  cdf[0] = u[0];
-////  for (int i = 1; i < u.size(); i++) {
-////    cdf[i] = cdf[i - 1] + u[i];
-////  }
-////
-////  int k = 6;
-////
-////  std::set<int> must_sample;
-////  std::map<int, BaseFloat> bigrams;
-////
-////  for (int i = 3; i < dim; i += 2) {
-////    bigrams[i] = 2.0 / dim; 
-////  }
-////
-////  for (int i = 5; i < dim; i += 5) {
-////    must_sample.insert(i);
-////  }
   for (int t = 0; t < 100; t++) {
 
     int dim = rand() % 3000 + 2000;
@@ -95,13 +186,7 @@ void UnitTestCDFGrouping() {
     std::vector<interval> groups;
     DoGroupingCDF(u, cdf, k, must_sample, bigrams, &groups);
 
-//    for (int i = 0; i < groups.size(); i++) {
-//      KALDI_LOG << "group " << i << ": " << groups[i].L << " " << groups[i].R << " " << groups[i].selection_prob;
-//    }
-
-  //  CheckValidGrouping(groups, k);
-
-    CheckValidGrouping(u, must_sample, bigrams, k, groups);
+    CheckValidGrouping(u, cdf, must_sample, bigrams, k, groups);
   }
 }
 
@@ -114,7 +199,7 @@ void UnitTestSamplingNonlinearity() {
     CuMatrix<BaseFloat> in1(num_rows, num_cols);
     CuMatrix<BaseFloat> out1(num_rows, num_cols);
     in1.SetRandn();
-    in1.Add(-1.0);
+    in1.Add(-10.0);
     ComputeSamplingNonlinearity(in1, &out1);
 
     // testing the forward non-linearity
@@ -140,6 +225,7 @@ void UnitTestSamplingNonlinearity() {
     probs.Scale(0.5);
     probs.Add(0.5);
     probs.InvertElements();
+    probs.Set(1);
     probs.Scale(-1);
 
     BaseFloat objf = 0.0;
@@ -206,6 +292,9 @@ int main() {
   using namespace rnnlm;
 
   UnitTestCDFGrouping();
+  TestSimpleComponentModelDerivative(0.0001);
+  TestSimpleComponentDataDerivative(0.0001);
+//  UnitTestSamplingNonlinearity();
 
   return 0;
 

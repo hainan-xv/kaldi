@@ -497,7 +497,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 
   std::vector<double> selected_probs;  // selected_probs[i * t + j] is the prob of
                                                         // selecting samples[j][i]
-  // words for the same time step t would be grouped together TODO(hxu)
+  // words for the same sentence would be grouped together
 
   int minibatch_size = (*old_output)->NumRows() / t;
   KALDI_ASSERT(outputs.size() == t * minibatch_size);
@@ -514,14 +514,17 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
       CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
       CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
 
-      {
-        vector<int> indexes(num_samples);
-        for (int j = 0; j < num_samples; j++) {
-          indexes[j] = samples[i][j].first;
-          selected_probs[j * t + i] = samples[i][j].second;
-//          selected_probs[j + t * i] = samples[i][j].second;
-        }
-        output_projection.Propagate(this_in, indexes, &this_out);
+      vector<int> indexes(num_samples);
+      for (int j = 0; j < num_samples; j++) {
+        indexes[j] = samples[i][j].first;
+      }
+      output_projection.Propagate(this_in, indexes, &this_out);
+    }
+
+    // use a different loop to speed up with cache
+    for (int j = 0; j < num_samples; j++) {
+      for (int i = 0; i < t; i++) {
+        selected_probs[j * t + i] = samples[i][j].second;
       }
     }
   }
@@ -530,10 +533,10 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   ComputeSamplingNonlinearity(out, &f_out);
 
   *tot_weight = post.NumRows();
-  vector<int32> correct_indexes; //(out.NumRows(), -1);
+  vector<int32> correct_indexes;
   SparseMatrix<BaseFloat> supervision_cpu;
   // grouped same as output (words in a sentence group together)
-//
+
   if (num_samples == output_projection.OutputDim()) {
     VectorToSparseMatrix(outputs, out.NumCols(), &supervision_cpu);
   } else {
@@ -587,6 +590,9 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 
   // need to add 1 per row
   BaseFloat neg_term = f_out_div_probs.Sum() + f_out_div_probs.NumRows();
+
+  KALDI_LOG << "added term per eg is " << neg_term / f_out_div_probs.NumRows();
+
   *tot_objf += neg_term;
 
   if (supply_deriv && nnet_to_update != NULL) {

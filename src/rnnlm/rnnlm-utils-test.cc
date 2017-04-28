@@ -33,6 +33,13 @@ void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
 //  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<double> &u(selection_probs);
+
+  vector<double> cdf(u.size() + 1);
+  cdf[0] = 0;
+  for (int i = 1; i < cdf.size(); i++) {
+    cdf[i] = cdf[i - 1] + u[i - 1];
+  }
+
   // normalize the selection_probs
   double sum = 0;
   for (int i = 0; i < u.size(); i++) {
@@ -46,7 +53,7 @@ void UnitTestNChooseKSamplingConvergence(int n, int k, int ones_size) {
 //    KALDI_LOG << "count is " << count;
     count++;
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, std::set<int>(), std::map<int, double>(), &samples);
+    SampleWithoutReplacement(u, cdf, k, std::set<int>(), std::map<int, double>(), &samples);
     for (int j = 0; j < samples.size(); j++) {
       samples_counts[samples[j].first] += 1;
     }
@@ -117,11 +124,16 @@ void UnitTestSampleWithProbOne(int iters) {
 //  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<double> u(selection_probs);
+  vector<double> cdf(u.size() + 1);
+  cdf[0] = 0;
+  for (int i = 1; i < cdf.size(); i++) {
+    cdf[i] = cdf[i - 1] + u[i - 1];
+  }
 
   int N = iters;
   for (int i = 0; i < N; i++) {
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, must_sample_set, map<int, double>(), &samples);
+    SampleWithoutReplacement(u, cdf, k, must_sample_set, map<int, double>(), &samples);
     if (must_sample_set.size() > 0) {
       // assert every item in must_sample_set is sampled
       for (set<int>::iterator it = must_sample_set.begin(); it != must_sample_set.end(); ++it) {
@@ -147,6 +159,11 @@ void UnitTestSamplingTime(int iters) {
 //  NormalizeVec(k, must_sample_set, &selection_probs);
 
   vector<double> &u(selection_probs);
+  vector<double> cdf(u.size() + 1);
+  cdf[0] = 0;
+  for (int i = 1; i < cdf.size(); i++) {
+    cdf[i] = cdf[i - 1] + u[i - 1];
+  }
 
   int N = iters;
   Timer t;
@@ -154,7 +171,7 @@ void UnitTestSamplingTime(int iters) {
   double total_time;
   for (int i = 0; i < N; i++) {
     vector<std::pair<int, double> > samples;
-    SampleWithoutReplacement(u, k, set<int>(), map<int, double>(), &samples);
+    SampleWithoutReplacement(u, cdf, k, set<int>(), map<int, double>(), &samples);
   }
   total_time = t.Elapsed();
   KALDI_LOG << "Time test: Sampling " << k << " items from " << n <<
@@ -167,7 +184,7 @@ void UnitTestSamplingTime(int iters) {
 int main() {
   using namespace kaldi;
   using namespace rnnlm;
-  int N = 1000;
+  int N = 10000;
   UnitTestSamplingConvergence();
   UnitTestSampleWithProbOne(N);
   UnitTestSamplingTime(N);

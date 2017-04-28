@@ -6,6 +6,7 @@
 #include "rnnlm/nnet-parse.h"
 #include "rnnlm/rnnlm-component.h"
 #include "rnnlm/rnnlm-utils.h"
+#include "rnnlm/rnnlm-training.h"
 
 namespace kaldi {
 namespace rnnlm {
@@ -180,7 +181,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                                CuMatrixBase<BaseFloat> *input_deriv) const {
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-  CuMatrix<BaseFloat> tmp(out_value.NumRows(), out_value.NumCols());
+  CuMatrix<BaseFloat> tmp(output_deriv.NumRows(), output_deriv.NumCols());
   tmp.Row(0).CopyColFromMat(bias_params, 0);
   if (tmp.NumRows() > 1)
     tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
@@ -199,9 +200,9 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
   if (to_update != NULL) {
     // need to add natural gradient TODO(hxu)
     CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
-    delta.Row(0).AddRowSumMat(learning_rate_, output_deriv, 1.0);
+    delta.Row(0).AddRowSumMat(to_update->learning_rate_, output_deriv, 1.0);
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
-    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, output_deriv, kTrans,
+    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(to_update->learning_rate_, output_deriv, kTrans,
                                 in_value, kNoTrans, 1.0);
   }
 }
@@ -272,7 +273,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
       precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
 
-      BaseFloat local_lrate = scale * learning_rate_;
+      BaseFloat local_lrate = scale * to_update->learning_rate_;
       to_update->update_count_ += 1.0;
       delta_bias.Row(0).AddMatVec(local_lrate, out_deriv_temp, kTrans,
                            precon_ones, 1.0);
@@ -862,6 +863,11 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
   if (normalize) {
     out->ApplyLogSoftMaxPerRow(*out);
   }
+  // TODO(Hxu)
+  CuMatrix<BaseFloat> test_norm(*out);
+//  test_norm.ApplyExp();
+  ComputeSamplingNonlinearity(*out, &test_norm);
+  KALDI_LOG << "average normalization term is " << exp(test_norm.Sum() / test_norm.NumRows() - 1);
 }
 
 BaseFloat AffineImportanceSamplingComponent::ComputeLogprobOfWordGivenHistory(
@@ -890,50 +896,14 @@ void AffineImportanceSamplingComponent::Backprop(
              = dynamic_cast<AffineImportanceSamplingComponent*>(to_update_0);
 
   if (to_update != NULL) {
-//    linear_params.SetZero();  // clear the contents
-//    linear_params.AddMatMat(learning_rate_, new_out_deriv, kTrans,
-//                         in_value, kNoTrans, 1.0);
     CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
-    delta_bias.Row(0).AddRowSumMat(learning_rate_, new_out_deriv, kTrans);
+    delta_bias.Row(0).AddRowSumMat(to_update->learning_rate_, new_out_deriv, kTrans);
 
-//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMat(1.0, linear_params);
-    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, new_out_deriv, kTrans,
+    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(to_update->learning_rate_, new_out_deriv, kTrans,
                                 in_value, kNoTrans, 1.0);
-
-//    CuMatrix<BaseFloat> delta_bias_trans(output_deriv.NumCols(), 1, kSetZero);
-//    delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
 
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta_bias, kTrans);  // TODO(hxu)
   }
-//
-//  CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
-//  CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-//
-//  CuMatrix<BaseFloat> tmp(out_value);
-//  tmp.Set(0.0);
-//  tmp.Row(0).CopyColFromMat(bias_params, 0);
-//  if (tmp.NumRows() > 1)
-//    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
-//  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
-//
-//  // now tmp is the in_value for log-softmax
-//
-//  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
-//
-//  if (input_deriv != NULL)
-//    input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, linear_params, kNoTrans,
-//                           1.0);
-//
-//  AffineImportanceSamplingComponent* to_update
-//             = dynamic_cast<AffineImportanceSamplingComponent*>(to_update_0);
-//
-//  if (to_update != NULL) {
-//    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
-//    delta.Row(0).AddRowSumMat(learning_rate_, output_deriv, 1.0);
-//    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
-//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(learning_rate_, output_deriv, kTrans,
-//                                in_value, kNoTrans, 1.0);
-//  }
 }
 
 void AffineImportanceSamplingComponent::Backprop(
@@ -960,10 +930,10 @@ void AffineImportanceSamplingComponent::Backprop(
 
   if (to_update != NULL) {
     new_linear.SetZero();  // clear the contents
-    new_linear.AddMatMat(learning_rate_, new_out_deriv, kTrans,
+    new_linear.AddMatMat(to_update->learning_rate_, new_out_deriv, kTrans,
                          in_value, kNoTrans, 1.0);
     CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
-    delta_bias.Row(0).AddRowSumMat(learning_rate_, new_out_deriv, kTrans);
+    delta_bias.Row(0).AddRowSumMat(to_update->learning_rate_, new_out_deriv, kTrans);
 
     vector<int> indexes_2(bias_params.NumRows(), -1);
     for (int i = 0; i < indexes.size(); i++) {
