@@ -241,6 +241,9 @@ class LmOutputComponent {
 
   virtual ~LmOutputComponent() { }
 
+  virtual BaseFloat ComputeLogprobOfWordGivenHistory(const CuVectorBase<BaseFloat> &hidden,
+                                             int32 word_index) = 0;
+
   virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                  const vector<int> &indexes, // objf is computed on the chosen indexes
                  CuMatrixBase<BaseFloat> *out) const = 0;

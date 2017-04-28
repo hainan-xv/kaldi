@@ -166,9 +166,16 @@ void NaturalGradientAffineImportanceSamplingComponent::Propagate(const CuMatrixB
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
   out->Row(0).CopyColFromMat(bias_params, 0);
-  out->CopyRowsFromVec(out->Row(0));
+  if (out->NumRows() > 1)
+    out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
   if (normalize) {
+    // TODO(Hxu)
+  //  CuMatrix<BaseFloat> test_norm(*out);
+  //  test_norm.ApplyExp();
+    ComputeSamplingNonlinearity(*out, out);
+    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
+    out->ApplyLog();
     out->ApplyLogSoftMaxPerRow(*out);
   }
 }
@@ -861,13 +868,14 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
     out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
   if (normalize) {
+    // TODO(Hxu)
+  //  CuMatrix<BaseFloat> test_norm(*out);
+  //  test_norm.ApplyExp();
+    ComputeSamplingNonlinearity(*out, out);
+    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
+    out->ApplyLog();
     out->ApplyLogSoftMaxPerRow(*out);
   }
-  // TODO(Hxu)
-  CuMatrix<BaseFloat> test_norm(*out);
-//  test_norm.ApplyExp();
-  ComputeSamplingNonlinearity(*out, &test_norm);
-  KALDI_LOG << "average normalization term is " << exp(test_norm.Sum() / test_norm.NumRows() - 1);
 }
 
 BaseFloat AffineImportanceSamplingComponent::ComputeLogprobOfWordGivenHistory(
