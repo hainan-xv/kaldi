@@ -204,16 +204,21 @@ int main(int argc, char **argv) {
   mdl.TestReadingModel();
    
   Input k2(history_file, &binary);
-  mdl.ReadHistories(k2.Stream(), binary);
+  std::vector<HistType> histories;
+  histories = mdl.ReadHistories(k2.Stream(), binary);
+  unordered_map<int32, BaseFloat> pdf_hist_weight;
+  mdl.ComputeOutputWords(histories, &pdf_hist_weight);
   // command for running the test binary: ./test-binary arpa-file history-file
   // arpa-file is the ARPA-format language model
   // history-file has lines of histories, one history per line
 
   // this test can be slow
+  /*
   KALDI_LOG << "Start weighted histories test...";
   for (int i = 0; i < N / 100; i++) {
     mdl.TestPdfsEqual(); 
   }
   KALDI_LOG << "Successfuly pass the test.";
+  */
   return 0;
 }

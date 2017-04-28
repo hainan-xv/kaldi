@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include "lm/arpa-file-parser.h"
 #include "fst/fstlib.h"
+#include "util/common-utils.h"
 
 #include <stdlib.h>
 #include <math.h>
@@ -39,32 +40,16 @@ namespace kaldi {
 
 typedef int32_t int32;
 
-/// A hashing function-object for vectors of ints.
-struct IntVectorHasher {  // hashing function for vector<Int>.
-  size_t operator()(const std::vector<int32> &x) const {
-    size_t ans = 0;
-    typename std::vector<int32>::const_iterator iter = x.begin(), end = x.end();
-    for (; iter != end; ++iter) {
-      ans *= kPrime;
-      ans += *iter;
-    }
-    return ans;
-  }
- private:
-  static const int kPrime = 7853;
-};
-
-// Predefine some symbol values, because any integer is as good than any other.
 enum {
   kEps = 0,
-  // kDisambig,
+  kDisambig,
   kBos, kEos, kUnk
 };
 
 typedef std::vector<int32> HistType;
 typedef unordered_map<int32, std::pair<BaseFloat, BaseFloat> > WordToProbsMap; 
-typedef unordered_map<HistType, WordToProbsMap, IntVectorHasher> NgramType;
-typedef unordered_map<HistType, BaseFloat, IntVectorHasher> HistWeightsType;
+typedef unordered_map<HistType, WordToProbsMap, VectorHasher<int32> > NgramType;
+typedef unordered_map<HistType, BaseFloat, VectorHasher<int32> > HistWeightsType;
 
 class ArpaSampling : public ArpaFileParser {
  public:
@@ -77,32 +62,7 @@ class ArpaSampling : public ArpaFileParser {
        eos_symbol_ = "</s>";
        unk_symbol_ = "<unk>";
   }
-  // Compute the probability of a given sentence with ngram_order LM
-  BaseFloat ComputeSentenceProb(const std::vector<int32>& test_sentence);
   
-  // Test the read-in model by computing probs of all sentences with ngram_order LM
-  BaseFloat ComputeAllSentencesProb(const std::vector<std::vector<int32> >& test_sentences);
-  
-  void TestReadingModel();
-
-  void TestProbs(std::istream &is, bool binary);
-
-  void TestPdfsEqual();
-
-  // print history
-  void PrintHist(const HistType& h);
-  
-  void ReadHistories(std::istream &is, bool binary);
-
-  void ReadSentences(std::istream &is, std::vector<std::vector<int32> >* sentences);
-  
- protected:
-  // ArpaFileParser overrides.
-  virtual void HeaderAvailable(); 
-  virtual void ConsumeNGram(const NGram& ngram);
-  virtual void ReadComplete() {}
-
- private:
   // This function returns the log probability of a ngram term from the ARPA LM
   // if it is found; it backoffs to the lower order model when the ngram term 
   // does not exist.
@@ -110,19 +70,43 @@ class ArpaSampling : public ArpaFileParser {
 
   // Get the back-off weight of a ngram in the read-in model
   BaseFloat GetBackoffWeight(int32 order, int32 word, const HistType& history);
+
+  // Compute non-unigram output words and corresponding probs for given histories
+  void ComputeOutputWords(std::vector<HistType> histories,
+      unordered_map<int32, BaseFloat>* pdf_w);
   
+  // Compute weighted pdf given all histories
+  void ComputeWeightedPdf(HistWeightsType hists_weights, 
+      std::vector<std::pair<int32, BaseFloat> >* weighted_pdf);
+  
+  // Get ngram order 
+  int32 GetNgramOrder();
+
+  void TestReadingModel();
+
+  void TestProbs(std::istream &is, bool binary);
+
+  void TestPdfsEqual();
+
+  std::vector<HistType> ReadHistories(std::istream &is, bool binary);
+
+ protected:
+  // ArpaFileParser overrides.
+  virtual void HeaderAvailable(); 
+  virtual void ConsumeNGram(const NGram& ngram);
+  virtual void ReadComplete() {}
+
+ private:
   // For test: randomly generate histories
-  void RandomGenerateHistories();
+  std::vector<HistType> RandomGenerateHistories();
 
   // Compute a pdf of words in the vocab given a history
-  void ComputeWordPdf(const HistType& history, std::vector<std::pair<int32, BaseFloat> >* pdf);
+  void ComputeWordPdf(const HistType& history, 
+      std::vector<std::pair<int32, BaseFloat> >* pdf);
   
   // Compute weights of given histories
-  void ComputeHistoriesWeights();
+  HistWeightsType ComputeHistoriesWeights(std::vector<HistType> histories);
 
-  // Compute weighted pdf given all histories
-  void ComputeWeightedPdf(std::vector<std::pair<int32, BaseFloat> >* weighted_pdf);
-  
   // N-gram order of the read-in LM.
   int32 ngram_order_;
   
@@ -149,9 +133,6 @@ class ArpaSampling : public ArpaFileParser {
 
   // Histories' weights
   HistWeightsType hists_weights_;
-  
-  // The given N Histories
-  std::vector<HistType> histories_;
   
   // Test sentences 
   std::vector<std::vector<int32> > sentences_;
