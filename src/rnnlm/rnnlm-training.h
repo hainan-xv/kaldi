@@ -33,12 +33,26 @@ namespace rnnlm {
 
 using namespace nnet3;
 
+//  this function apply the following function to input and write to output:
+//  y = exp(x) if x < 0
+//  y = 1 + x if x >= 0
+//  this avoids the output to blow up
+void ComputeSamplingNonlinearity(const CuMatrixBase<BaseFloat> &in,
+                                 CuMatrixBase<BaseFloat> *out);
+
+//  the back-prop version w.r.t. ComputeSamplingNonlinearity()
+void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
+                                  CuMatrixBase<BaseFloat> *out_value,
+                                  CuMatrixBase<BaseFloat> *in_deriv);
+
 struct LmNnetTrainerOptions {
   bool zero_component_stats;
   bool store_component_stats;
   int32 print_interval;
   bool debug_computation;
   BaseFloat momentum;
+  BaseFloat adversarial_training_scale;
+  int32 adversarial_training_interval;
   std::string read_cache;
   std::string write_cache;
   bool binary_write_cache;
@@ -60,6 +74,8 @@ struct LmNnetTrainerOptions {
       print_interval(100),
       debug_computation(false),
       momentum(0.0),
+      adversarial_training_scale(0.0),
+      adversarial_training_interval(1),
       binary_write_cache(true),
       max_param_change(2.0),
       sample_size(256),
@@ -94,6 +110,13 @@ struct LmNnetTrainerOptions {
                    "so that the 'effective' learning rate is the same as "
                    "before (because momentum would normally increase the "
                    "effective learning rate by 1/(1-momentum))");
+    opts->Register("adversarial-training-scale", &adversarial_training_scale,
+                   "adversarial traning factor. "
+                   "if 0 then in the normal training mode.");
+    opts->Register("adversarial-training-interval",
+                   &adversarial_training_interval,
+                   "do adversarial training with the specified interval of "
+                   "minibatches.");
     opts->Register("read-cache", &read_cache, "the location where we can read "
                    "the cached computation from");
     opts->Register("write-cache", &write_cache, "the location where we want to "
@@ -174,9 +197,8 @@ class LmNnetSamplingTrainer {
    // do sampling;
    // do the forward prop for last layer compute the objective based on the samples
    // do back-prop of last layer
- static void ComputeObjectiveFunctionSample(
-                              int num_samples,
-                              const vector<BaseFloat>& unigram,
+ static void ComputeObjfAndDerivSample(
+                              const vector<vector<std::pair<int32, double> > > &sample,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,
@@ -201,20 +223,8 @@ class LmNnetSamplingTrainer {
                               CuMatrix<BaseFloat> *new_output,
                               LmNnet *delta_nnet = NULL);
 
- static void ComputeObjectiveFunctionNormalized(
-                              const GeneralMatrix &supervision,
-                              ObjectiveType objective_type,
-                              const std::string &output_name,
-                              bool supply_deriv,
-                              NnetComputer *computer,
-                              BaseFloat *tot_weight,
-                              BaseFloat *tot_objf,
-                              const LmOutputComponent &output_projection,
-                              const CuMatrixBase<BaseFloat> **new_output,
-                              LmNnet *delta_nnet = NULL);
-
   LmNnetSamplingTrainer(const LmNnetTrainerOptions &config,
-                        const vector<BaseFloat> &unigram,
+                        const vector<double> &unigram,
                         LmNnet *nnet);
 
   // train on one minibatch.
@@ -229,16 +239,19 @@ class LmNnetSamplingTrainer {
 
   ~LmNnetSamplingTrainer();
  private:
-  void UpdateParamsWithMaxChange();
+  void TrainInternal(const NnetExample &eg, const NnetComputation& computation,
+                     bool is_adversarial_step);
+  void UpdateParamsWithMaxChange(bool is_adversarial_step = false);
 
-  void ProcessOutputs(const NnetExample &eg,
+  void ProcessOutputs(bool is_adversarial_step,
+                      const NnetExample &eg,
                       NnetComputer *computer);
 
   const LmNnetTrainerOptions config_;
   CuMatrix<BaseFloat> new_input_;                 // the input to pass to nnet3
   const CuMatrixBase<BaseFloat> *old_output_;
 
-  vector<BaseFloat> unigram_;
+  vector<double> unigram_;
   // this pointer is not owned
   LmNnet *nnet_;
 

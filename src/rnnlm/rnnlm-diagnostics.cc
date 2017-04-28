@@ -77,7 +77,7 @@ void LmNnetComputeProb::Compute(const NnetExample &eg) {
   // give the inputs to the computer object.
   const SparseMatrix<BaseFloat> *old_in;
   CuMatrix<BaseFloat> new_in;
-  LmNnetSamplingTrainer::ProcessEgInputs(eg, *nnet_.I(), &old_in, &new_in);
+  LmNnetSamplingTrainer::ProcessEgInputs(eg, *nnet_.InputLayer(), &old_in, &new_in);
 
   computer.AcceptInput("input", &new_in);
   computer.Run();
@@ -88,7 +88,7 @@ void LmNnetComputeProb::Compute(const NnetExample &eg) {
 
     CuMatrix<BaseFloat> first_deriv(computer.GetOutput("input"));
     CuMatrix<BaseFloat> place_holder;
-    nnet_.I()->Backprop(*old_in, place_holder,
+    nnet_.InputLayer()->Backprop(*old_in, place_holder,
                      first_deriv, deriv_nnet_->input_projection_, NULL);
   }
 }
@@ -105,7 +105,7 @@ void LmNnetComputeProb::ProcessOutputs(const NnetExample &eg,
     ObjectiveType obj_type = nnet_.Nnet().GetNode(node_index).u.objective_type;
     if (nnet_.Nnet().IsOutputNode(node_index)) {
 //      const CuMatrixBase<BaseFloat> &output = computer->GetOutput(io.name);
-      CuMatrix<BaseFloat> output(io.features.NumRows(), nnet_.O()->OutputDim(), kSetZero);
+      CuMatrix<BaseFloat> output(io.features.NumRows(), nnet_.OutputLayer()->OutputDim(), kSetZero);
       // now they're not equal since we have an extra transform matrix
 //      if (output.NumCols() != io.features.NumCols()) {
 //        KALDI_ERR << "Nnet versus example output dimension (num-classes) "
@@ -119,7 +119,7 @@ void LmNnetComputeProb::ProcessOutputs(const NnetExample &eg,
                                  config_.normalize_probs,
                                  io.features, obj_type, io.name,
                                  supply_deriv, computer,
-                                 &tot_weight, &tot_objf, *nnet_.O(), &output
+                                 &tot_weight, &tot_objf, *nnet_.OutputLayer(), &output
                                  , supply_deriv? deriv_nnet_:NULL
                                  );
         SimpleObjectiveInfo &totals = objf_info_[io.name];

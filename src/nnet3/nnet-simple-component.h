@@ -87,11 +87,16 @@ class PnormComponent: public Component {
 // "Dropout: A Simple Way to Prevent Neural Networks from Overfitting".
 class DropoutComponent : public RandomComponent {
  public:
-  void Init(int32 dim, BaseFloat dropout_proportion = 0.0);
+  void Init(int32 dim, BaseFloat dropout_proportion = 0.0,
+            bool dropout_per_frame = false);
 
-  DropoutComponent(int32 dim, BaseFloat dropout = 0.0) { Init(dim, dropout); }
+  DropoutComponent(int32 dim, BaseFloat dropout = 0.0,
+                   bool dropout_per_frame = false) {
+    Init(dim, dropout, dropout_per_frame);
+  }
 
-  DropoutComponent(): dim_(0), dropout_proportion_(0.0) { }
+  DropoutComponent(): dim_(0), dropout_proportion_(0.0),
+                      dropout_per_frame_(false) { }
 
   virtual int32 Properties() const {
     return kLinearInInput|kBackpropInPlace|kSimpleComponent|kBackpropNeedsInput|kBackpropNeedsOutput;
@@ -120,17 +125,20 @@ class DropoutComponent : public RandomComponent {
                         Component *to_update,
                         CuMatrixBase<BaseFloat> *in_deriv) const;
   virtual Component* Copy() const { return new DropoutComponent(dim_,
-                                                                dropout_proportion_); }
+                                               dropout_proportion_,
+                                               dropout_per_frame_); }
   virtual std::string Info() const;
 
-  void SetDropoutProportion(BaseFloat dropout_proportion) { dropout_proportion_ = dropout_proportion; }
+  void SetDropoutProportion(BaseFloat dropout_proportion) {
+    dropout_proportion_ = dropout_proportion;
+  }
 
  private:
   int32 dim_;
   /// dropout-proportion is the proportion that is dropped out,
   /// e.g. if 0.1, we set 10% to zero value.
   BaseFloat dropout_proportion_;
-
+  bool dropout_per_frame_;
 };
 
 class ElementwiseProductComponent: public Component {
@@ -169,49 +177,6 @@ class ElementwiseProductComponent: public Component {
  protected:
   int32 input_dim_;
   int32 output_dim_;
-};
-
-class NormalizeOneComponent: public Component {
- public:
- void Init(int32 input_dim);
-  explicit NormalizeOneComponent(int32 input_dim) {
-    Init(input_dim);
-  }
-  explicit NormalizeOneComponent(const NormalizeOneComponent &other);
-  // note: there is some special code in NonlinerComponent::Info() that
-  // specifically caters to this class.
-  virtual int32 Properties() const {
-    return (
-            kSimpleComponent|kBackpropNeedsInput|kPropagateInPlace|
-            kBackpropAdds);
-  }
-  NormalizeOneComponent() { }
-  virtual std::string Type() const { return "NormalizeOneComponent"; }
-  virtual void InitFromConfig(ConfigLine *cfl);
-  virtual Component* Copy() const { return new NormalizeOneComponent(*this); }
-  virtual void Propagate(const ComponentPrecomputedIndexes *indexes,
-                         const CuMatrixBase<BaseFloat> &in,
-                         CuMatrixBase<BaseFloat> *out) const;
-  virtual void Backprop(const std::string &debug_info,
-                        const ComponentPrecomputedIndexes *indexes,
-                        const CuMatrixBase<BaseFloat> &in_value,
-                        const CuMatrixBase<BaseFloat> &, // out_value
-                        const CuMatrixBase<BaseFloat> &out_deriv,
-                        Component *to_update,
-                        CuMatrixBase<BaseFloat> *in_deriv) const;
-
-  virtual void Read(std::istream &is, bool binary);
-  virtual void Write(std::ostream &os, bool binary) const;
-  virtual int32 InputDim() const { return input_dim_; }
-  virtual int32 OutputDim() const {
-    return input_dim_;
-  }
-  virtual std::string Info() const;
- private:
-  NormalizeOneComponent &operator = (const NormalizeOneComponent &other); // Disallow.
-  enum { kExpSquaredNormFloor = -66 };
-  static const BaseFloat kSquaredNormFloor;
-  int32 input_dim_;
 };
 
 class NormalizeComponent: public Component {
@@ -942,6 +907,7 @@ class NaturalGradientAffineComponent: public AffineComponent {
   virtual Component* Copy() const;
   virtual void Scale(BaseFloat scale);
   virtual void Add(BaseFloat alpha, const Component &other);
+  virtual void FreezeNaturalGradient(bool freeze);
   // copy constructor
   explicit NaturalGradientAffineComponent(
       const NaturalGradientAffineComponent &other);
@@ -1618,6 +1584,7 @@ class NaturalGradientPerElementScaleComponent: public PerElementScaleComponent {
 
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
+  virtual void FreezeNaturalGradient(bool freeze);
 
   virtual Component* Copy() const;
 
@@ -1955,6 +1922,7 @@ class LstmNonlinearityComponent: public UpdatableComponent {
   virtual void Vectorize(VectorBase<BaseFloat> *params) const;
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);
   virtual void ZeroStats();
+  virtual void FreezeNaturalGradient(bool freeze);
 
   // Some functions that are specific to this class:
   explicit LstmNonlinearityComponent(
@@ -2212,6 +2180,7 @@ class CompositeComponent: public UpdatableComponent {
   virtual int32 NumParameters() const;
   virtual void Vectorize(VectorBase<BaseFloat> *params) const;
   virtual void UnVectorize(const VectorBase<BaseFloat> &params);
+  virtual void FreezeNaturalGradient(bool freeze);
 
   // note: we dont implement the StoreStats function as it would be quite
   // expensive; instead, by default we call StoreStats() for any components that

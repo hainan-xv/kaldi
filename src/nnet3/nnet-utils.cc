@@ -392,6 +392,21 @@ int32 NumUpdatableComponents(const Nnet &dest) {
   return ans;
 }
 
+void FreezeNaturalGradient(bool freeze, Nnet *nnet) {
+  for (int32 c = 0; c < nnet->NumComponents(); c++) {
+    Component *comp = nnet->GetComponent(c);
+    if (comp->Properties() & kUpdatableComponent) {
+      // For now all updatable components inherit from class UpdatableComponent.
+      // If that changes in future, we will change this code.
+      UpdatableComponent *uc = dynamic_cast<UpdatableComponent*>(comp);
+      if (uc == NULL)
+        KALDI_ERR << "Updatable component does not inherit from class "
+            "UpdatableComponent; change this code.";
+      uc->FreezeNaturalGradient(freeze);
+    }
+  }
+}
+
 void ConvertRepeatedToBlockAffine(CompositeComponent *c_component) {
   for(int32 i = 0; i < c_component->NumComponents(); i++) {
     const Component *c = c_component->GetComponent(i);
@@ -619,6 +634,31 @@ void ReadEditConfig(std::istream &edit_config_is, Nnet *nnet) {
       if (outputs_remaining == 0)
         KALDI_ERR << "All outputs were removed.";
       nnet->RemoveSomeNodes(nodes_to_remove);
+    } else if (directive == "set-dropout-proportion") {
+      std::string name_pattern = "*";
+      // name_pattern defaults to '*' if none is given.  This pattern
+      // matches names of components, not nodes.
+      config_line.GetValue("name", &name_pattern);
+      BaseFloat proportion = -1;
+      if (!config_line.GetValue("proportion", &proportion)) {
+        KALDI_ERR << "In edits-config, expected proportion to be set in line: "
+                  << config_line.WholeLine();
+      }
+      DropoutComponent *dropout_component = NULL;
+      int32 num_dropout_proportions_set = 0;
+      for (int32 c = 0; c < nnet->NumComponents(); c++) {
+        if (NameMatchesPattern(nnet->GetComponentName(c).c_str(),
+                               name_pattern.c_str()) &&
+            (dropout_component =
+             dynamic_cast<DropoutComponent*>(nnet->GetComponent(c)))) {
+          if (dropout_component != NULL) {
+            dropout_component->SetDropoutProportion(proportion);
+            num_dropout_proportions_set++;
+          }
+        }
+      }
+      KALDI_LOG << "Set dropout proportions for "
+                << num_dropout_proportions_set << " components.";
     } else {
       KALDI_ERR << "Directive '" << directive << "' is not currently "
           "supported (reading edit-config).";

@@ -77,8 +77,8 @@ void RnnlmEval(NnetComputeProb &computer, // can't make this const it seems
 
     }
 
-    NnetExample egs = GetEgsFromSent(word_ids_in, input_dim,
-                                     word_ids_out, output_dim);
+    NnetExample egs;
+    GetEgsFromSent(word_ids_in, input_dim, word_ids_out, output_dim, &egs);
     computer.Compute(egs);
     const SimpleObjectiveInfo *info = computer.GetObjective("output");
     ofile << info->tot_objective + oos_cost * num_oovs << std::endl;
@@ -119,8 +119,9 @@ int main(int argc, char *argv[]) {
 
   NnetComputeProb prob_computer(opts, nnet);
 
-  unordered_map<string, int> in_wlist = ReadWordlist(in_wlist_file);
-  unordered_map<string, int> out_wlist = ReadWordlist(out_wlist_file);
+  unordered_map<string, int> in_wlist, out_wlist;
+  ReadWordlist(in_wlist_file, &in_wlist);
+  ReadWordlist(out_wlist_file, &out_wlist);
 
   std::cout << "sizes are " << in_wlist.size() << " " << out_wlist.size() << std::endl;
 

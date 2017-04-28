@@ -53,17 +53,6 @@ int32 NumOutputNodes(const Nnet &nnet);
 /// returns the number of input nodes of this nnet.
 int32 NumInputNodes(const Nnet &nnet);
 
-/// Calls SetZero (with the given is_gradient parameter) on all updatable
-/// components of the nnet; calls ZeroComponentStats on all other components
-/// that inherit from NonlinearComponent; and (just in case) calls Scale(0.0) on
-/// all other components.
-/// It's the same as ScaleNnet(0.0, nnet) except that if is_gradient is true it
-/// can set the is_gradient_ flag on updatable components [to force simple
-/// update]; and unlike ScaleNnet(0.0, nnet) it will get rid of NaNs that have
-/// crept into the parameters or stats.
-void SetZero(bool is_gradient,
-             Nnet *nnet);
-
 /// Calls PerturbParams (with the given stddev) on all updatable components of
 /// the nnet.
 void PerturbParams(BaseFloat stddev,
@@ -91,7 +80,7 @@ std::string PrintVectorPerUpdatableComponent(const Nnet &nnet,
                                              const VectorBase<BaseFloat> &vec);
 
 /// This function returns true if the nnet has the following properties:
-///  It has an called "output" (other outputs are allowed but may be
+///  It has an output called "output" (other outputs are allowed but may be
 ///          ignored).
 ///  It has an input called "input", and possibly an extra input called
 ///    "ivector", but no other inputs.
@@ -160,6 +149,9 @@ void UnVectorizeNnet(const VectorBase<BaseFloat> &params,
 /// Returns the number of updatable components in the nnet.
 int32 NumUpdatableComponents(const Nnet &dest);
 
+/// Controls if natural gradient will be updated
+void FreezeNaturalGradient(bool freeze, Nnet *nnet);
+
 /// Convert all components of type RepeatedAffineComponent or
 /// NaturalGradientRepeatedAffineComponent to BlockAffineComponent in nnet.
 void ConvertRepeatedToBlockAffine(Nnet *nnet);
@@ -190,7 +182,9 @@ void FindOrphanNodes(const Nnet &nnet, std::vector<int32> *nodes);
    ReadEditConfig() reads a file with a similar-looking format to the config file
    read by Nnet::ReadConfig(), but this consists of a sequence of operations to
    perform on an existing network, mostly modifying components.  It's one
-   "directive" (i.e. command) per line.
+   "directive" (i.e. command) per line, but if supplying the options via
+   the --edits option to programs like nnet3-am-copy, you can use a semicolon
+   in place of the newline to separate commands.
 
    The following describes the allowed commands.  Note: all patterns are like
    UNIX globbing patterns where the only metacharacter is '*', representing zero
@@ -224,6 +218,9 @@ void FindOrphanNodes(const Nnet &nnet, std::vector<int32> *nodes);
        remove internal nodes directly; instead you should use the command
        'remove-orphans'.
 
+    set-dropout-proportion [name=<name-pattern>] proportion=<dropout-proportion>
+       Sets the dropout rates for any components of type DropoutComponent whose
+       names match the given <name-pattern> (e.g. lstm*).  <name-pattern> defaults to "*".
    \endverbatim
 */
 void ReadEditConfig(std::istream &config_file, Nnet *nnet);

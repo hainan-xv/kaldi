@@ -387,6 +387,20 @@ static void _max(Real* mat, const Real* A, MatrixDim dst_d, int src_stride) {
 
 template<typename Real>
 __global__
+static void _min(Real* mat, const Real* other, MatrixDim mat_d,
+                 int other_stride) {
+  int32_cuda j = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_cuda i = blockIdx.y * blockDim.y + threadIdx.y;
+  int32_cuda mat_index = i * mat_d.stride + j;
+  int32_cuda other_index = i * other_stride + j;
+  if (j < mat_d.cols && i < mat_d.rows) {
+    Real a = mat[mat_index], b = other[other_index];
+    mat[mat_index] = fmin(a, b);
+  }
+}
+
+template<typename Real>
+__global__
 static void _vec_mul_elements(Real* v, const Real* a, int dim) {
   int32_cuda i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i < dim)
@@ -742,6 +756,18 @@ static void _copy_rows_from_vec(Real* m_out, MatrixDim d, const Real* v_in) {
   if (i < d.cols && j < d.rows) {
     int index = i + j * d.stride;
     m_out[index] = v_in[i];
+  }
+}
+
+// This kernel writes a copy of the vector "v_in" to each col of the matrix
+// "m_out".  the dimension of v_in should be equal to the #row of m_out.
+template<typename Real>
+__global__
+static void _copy_cols_from_vec(Real* m_out, MatrixDim d, const Real* v_in) {
+  int i = blockIdx.y * blockDim.y + threadIdx.y; // row id
+  int j = blockIdx.x * blockDim.x + threadIdx.x; // col id
+  if (i < d.rows && j < d.cols) {
+    m_out[i * d.stride + j] = v_in[i];
   }
 }
 
@@ -2266,7 +2292,7 @@ static void _normalize_per_row(Real *y, int y_stride, const Real *x,
     }
   }
 
-  const Real kSquaredNormFloor = 1.35525271560688e-20; // 2^-66
+  const Real kSquaredNormFloor = 1.3552527156068805425e-20; // 2^-66
   if (tid == 0) {
     ssum[0] = sqrt(
         fmax(ssum[0] / (target_rms * target_rms * x_d.cols), kSquaredNormFloor));
@@ -2288,6 +2314,87 @@ static void _normalize_per_row(Real *y, int y_stride, const Real *x,
   }
 }
 
+
+template<typename Real>
+__global__
+static void _diff_normalize_per_row(Real *id, int id_stride, const Real *iv,
+                                    MatrixDim iv_dim, const Real* od,
+                                    int od_stride, Real target_rms,
+                                    bool add_log_stddev) {
+
+  const Real kSquaredNormFloor = 1.3552527156068805425e-20; // 2^-66
+  const Real kInvNormFloor = 8589934592.0;
+
+  const int tid = threadIdx.x;
+  const int i = blockIdx.x;
+  const Real* iv_row = iv + i * iv_dim.stride;
+  const Real* od_row = od + i * od_stride;
+
+  // reduce to CU1DBLOCK elements per row
+  Real dot_products = Real(0);
+  Real in_norm = Real(0);
+  for (int j = tid; j < iv_dim.cols; j += CU1DBLOCK) {
+    const Real iv_ij = iv_row[j];
+    dot_products += iv_ij * od_row[j];
+    in_norm += iv_ij * iv_ij;
+  }
+  __shared__ Real sprod[CU1DBLOCK];
+  __shared__ Real snorm[CU1DBLOCK];
+  sprod[tid] = dot_products;
+  snorm[tid] = in_norm;
+  __syncthreads();
+
+  // reduce to 2x warpSize elements per row
+# pragma unroll
+  for (int shift = CU1DBLOCK / 2; shift > warpSize; shift >>= 1) {
+    if (tid < shift) {
+      sprod[tid] += sprod[tid + shift];
+      snorm[tid] += snorm[tid + shift];
+    }
+    __syncthreads();
+  }
+
+  // reduce to 1 element per row
+  if (tid < warpSize) {
+#   pragma unroll
+    for (int shift = warpSize; shift > 0; shift >>= 1) {
+      sprod[tid] += sprod[tid + shift];
+      snorm[tid] += snorm[tid + shift];
+    }
+  }
+
+  // broadcast the sum results
+  __syncthreads();
+  dot_products = sprod[0];
+  in_norm = snorm[0];
+
+  Real log_stddev_deriv;
+  if (add_log_stddev) {
+    log_stddev_deriv = Real(1) / max(in_norm, iv_dim.cols * kSquaredNormFloor)
+        * od_row[iv_dim.cols];
+  }
+
+  const Real inv_d_scaled = Real(1) / (iv_dim.cols * target_rms * target_rms);
+  in_norm = Real(1) / sqrt(max(in_norm * inv_d_scaled, kSquaredNormFloor));
+
+  const Real f = in_norm == kInvNormFloor ? Real(0) : in_norm;
+  dot_products *= f * f * f * inv_d_scaled;
+
+  for (int j = tid; j < iv_dim.cols; j += CU1DBLOCK) {
+    const Real iv_ij = iv_row[j];
+    Real id_ij = id[i * id_stride + j];
+    if (add_log_stddev) {
+      id_ij += log_stddev_deriv * iv_ij;
+    }
+    if (id != od) {
+      id_ij += in_norm * od_row[j];
+    } else {
+      id_ij *= in_norm;
+    }
+    id_ij -= dot_products * iv_ij;
+    id[i * id_stride + j] = id_ij;
+  }
+}
 
 // Per-row log-softmax operation on 'x', with writing to 'y'.
 // note, x and y may point to the same memory.  This is equivalent to setting
@@ -2897,8 +3004,8 @@ static void _diff_lstm_nonlinearity(const int cell_dim, const int num_rows,
     const Real* sr_config = self_repair_config;
 #   pragma unroll
     for (int i = 0; i < 5; i++) {
-      update_sr[i] = deriv_sum_in[i * deriv_sum_in_stride + j] / count
-          < sr_config[i];
+      update_sr[i] =
+          deriv_sum_in[i * deriv_sum_in_stride + j] < sr_config[i] * count;
     }
     const Real i_t_self_repair = (update_sr[0] ? sr_config[5] : 0);
     const Real f_t_self_repair = (update_sr[1] ? sr_config[6] : 0);
@@ -3372,6 +3479,11 @@ void cudaF_div_elements(dim3 Gr, dim3 Bl, float* mat, const float* A,
 void cudaF_max(dim3 Gr, dim3 Bl, float* mat, const float* A, MatrixDim dst_d,
                int src_stride) {
   _max<<<Gr,Bl>>>(mat,A,dst_d,src_stride);
+}
+
+void cudaF_min(dim3 Gr, dim3 Bl, float* mat, const float* other,
+               MatrixDim mat_d, int other_stride) {
+  _min<<<Gr,Bl>>>(mat,other,mat_d,other_stride);
 }
 
 void cudaF_mul_cols_vec(dim3 Gr, dim3 Bl, float* mat, const float* scale,
@@ -4021,6 +4133,11 @@ void cudaD_div_elements(dim3 Gr, dim3 Bl, double* mat, const double* A,
 void cudaD_max(dim3 Gr, dim3 Bl, double* mat, const double* A, MatrixDim dst_d,
                int src_stride) {
   _max<<<Gr,Bl>>>(mat,A,dst_d,src_stride);
+}
+
+void cudaD_min(dim3 Gr, dim3 Bl, double* mat, const double* other, MatrixDim mat_d,
+               int other_stride) {
+  _min<<<Gr,Bl>>>(mat,other,mat_d,other_stride);
 }
 
 void cudaD_mul_cols_vec(dim3 Gr, dim3 Bl, double* mat, const double* scale,
@@ -4680,6 +4797,7 @@ void cudaF_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
       value_sum_out_stride, deriv_sum_out, deriv_sum_out_stride,
       self_repair_sum_out, self_repair_sum_out_stride);
 }
+
 void cudaD_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
                             const int params_stride,
                             const MatrixIndexT_cuda* reorder,
@@ -4715,3 +4833,30 @@ void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
                                               params_stride, params);
 }
 
+
+
+void cudaD_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
+                              MatrixDim d_out, const double *v_in) {
+  _copy_cols_from_vec<<<Gr, Bl>>>(mat_out, d_out, v_in);
+}
+void cudaF_copy_cols_from_vec(dim3 Gr, dim3 Bl, float *mat_out, MatrixDim d_out,
+                              const float *v_in) {
+  _copy_cols_from_vec<<<Gr, Bl>>>(mat_out, d_out, v_in);
+}
+
+void cudaF_diff_normalize_per_row(size_t Gr, size_t Bl, float *id,
+                                  int id_stride, const float *iv,
+                                  MatrixDim iv_dim, const float* od,
+                                  int od_stride, float target_rms,
+                                  bool add_log_stddev) {
+  _diff_normalize_per_row<<<Gr, Bl>>>(id, id_stride, iv, iv_dim, od, od_stride,
+                                      target_rms, add_log_stddev);
+}
+void cudaD_diff_normalize_per_row(size_t Gr, size_t Bl, double *id,
+                                  int id_stride, const double *iv,
+                                  MatrixDim iv_dim, const double* od,
+                                  int od_stride, double target_rms,
+                                  bool add_log_stddev) {
+  _diff_normalize_per_row<<<Gr, Bl>>>(id, id_stride, iv, iv_dim, od, od_stride,
+                                      target_rms, add_log_stddev);
+}

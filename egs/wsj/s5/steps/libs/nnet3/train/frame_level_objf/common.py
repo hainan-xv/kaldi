@@ -26,7 +26,9 @@ def train_new_models(dir, iter, srand, num_jobs,
                      num_archives_processed, num_archives,
                      raw_model_string, egs_dir,
                      left_context, right_context,
-                     momentum, max_param_change,
+                     momentum,
+                     adversarial_training_scale, adversarial_training_interval,
+                     max_param_change,
                      shuffle_buffer_size, minibatch_size_str,
                      cache_read_opt, run_opts,
                      frames_per_eg=-1,
@@ -71,7 +73,7 @@ def train_new_models(dir, iter, srand, num_jobs,
         archive_index = (k % num_archives) + 1
 
         if not chunk_level_training:
-            frame = (k / num_archives) % frames_per_eg
+            frame = (k / num_archives + archive_index) % frames_per_eg
 
         cache_write_opt = ""
         if job == 1:
@@ -85,6 +87,8 @@ def train_new_models(dir, iter, srand, num_jobs,
                     nnet3-train {parallel_train_opts} {cache_read_opt} \
                     {cache_write_opt} --print-interval=10 \
                     --momentum={momentum} \
+                    --adversarial-training-scale={adversarial_training_scale} \
+                    --adversarial-training-interval={adversarial_training_interval} \
                     --max-param-change={max_param_change} \
                     {deriv_time_opts} "{raw_model}" \
                     "ark,bg:nnet3-copy-egs {frame_opts} {context_opts} """
@@ -106,7 +110,10 @@ def train_new_models(dir, iter, srand, num_jobs,
                         frame_opts=(""
                                     if chunk_level_training
                                     else "--frame={0}".format(frame)),
-                        momentum=momentum, max_param_change=max_param_change,
+                        momentum=momentum,
+                        adversarial_training_scale=adversarial_training_scale,
+                        adversarial_training_interval=adversarial_training_interval,
+                        max_param_change=max_param_change,
                         deriv_time_opts=" ".join(deriv_time_opts),
                         raw_model=raw_model_string, context_opts=context_opts,
                         egs_dir=egs_dir, archive_index=archive_index,
@@ -133,10 +140,12 @@ def train_one_iteration(dir, iter, srand, egs_dir,
                         learning_rate, minibatch_size_str,
                         num_hidden_layers, add_layers_period,
                         left_context, right_context,
-                        momentum, max_param_change, shuffle_buffer_size,
+                        momentum,
+                        adversarial_training_scale, adversarial_training_interval,
+                        max_param_change, shuffle_buffer_size,
                         run_opts, frames_per_eg=-1,
                         min_deriv_time=None, max_deriv_time_relative=None,
-                        shrinkage_value=1.0,
+                        shrinkage_value=1.0, dropout_edit_string="",
                         get_raw_nnet_from_am=True,
                         background_process_handler=None):
     """ Called from steps/nnet3/train_*.py scripts for one iteration of neural
@@ -239,6 +248,8 @@ def train_one_iteration(dir, iter, srand, egs_dir,
                                 "{dir}/{iter}.raw - |".format(
                                     lr=learning_rate, dir=dir, iter=iter))
 
+    raw_model_string = raw_model_string + dropout_edit_string
+
     if do_average:
         cur_minibatch_size_str = minibatch_size_str
         cur_max_param_change = max_param_change
@@ -256,12 +267,24 @@ def train_one_iteration(dir, iter, srand, egs_dir,
     except OSError:
         pass
 
+    shrink_info_str = ''
+    if shrinkage_value != 1.0:
+        shrink_info_str = ' and shrink value is {0}'.format(shrinkage_value)
+
+    logger.info("On iteration {0}, learning rate is {1}"
+                "{shrink_info}.".format(
+                    iter, learning_rate,
+                    shrink_info=shrink_info_str))
+
     train_new_models(dir=dir, iter=iter, srand=srand, num_jobs=num_jobs,
                      num_archives_processed=num_archives_processed,
                      num_archives=num_archives,
                      raw_model_string=raw_model_string, egs_dir=egs_dir,
                      left_context=left_context, right_context=right_context,
-                     momentum=momentum, max_param_change=cur_max_param_change,
+                     momentum=momentum,
+                     adversarial_training_scale=adversarial_training_scale,
+                     adversarial_training_interval=adversarial_training_interval,
+                     max_param_change=cur_max_param_change,
                      shuffle_buffer_size=shuffle_buffer_size,
                      minibatch_size_str=cur_minibatch_size_str,
                      cache_read_opt=cache_read_opt, run_opts=run_opts,
@@ -440,8 +463,10 @@ def compute_progress(dir, iter, egs_dir, left_context, right_context,
 
 def combine_models(dir, num_iters, models_to_combine, egs_dir,
                    left_context, right_context,
+                   minibatch_size_str,
                    run_opts, background_process_handler=None,
-                   chunk_width=None, get_raw_nnet_from_am=True):
+                   chunk_width=None, get_raw_nnet_from_am=True,
+                   sum_to_one_penalty=0.0):
     """ Function to do model combination
 
     In the nnet3 setup, the logic
@@ -454,7 +479,7 @@ def combine_models(dir, num_iters, models_to_combine, egs_dir,
 
     models_to_combine.add(num_iters)
 
-    for iter in models_to_combine:
+    for iter in sorted(models_to_combine):
         if get_raw_nnet_from_am:
             model_file = '{0}/{1}.mdl'.format(dir, iter)
             if not os.path.exists(model_file):
@@ -467,12 +492,6 @@ def combine_models(dir, num_iters, models_to_combine, egs_dir,
                 raise Exception('Model file {0} missing'.format(model_file))
             raw_model_strings.append(model_file)
 
-    if chunk_width is not None:
-        # this is an RNN model
-        mbsize = int(1024.0/(common_train_lib.principal_chunk_width(chunk_width)))
-    else:
-        mbsize = 1024
-
     if get_raw_nnet_from_am:
         out_model = ("| nnet3-am-copy --set-raw-nnet=- {dir}/{num_iters}.mdl "
                      "{dir}/combined.mdl".format(dir=dir, num_iters=num_iters))
@@ -484,8 +503,10 @@ def combine_models(dir, num_iters, models_to_combine, egs_dir,
 
     common_lib.run_job(
         """{command} {combine_queue_opt} {dir}/log/combine.log \
-                nnet3-combine --num-iters=40 \
-                --enforce-sum-to-one=true --enforce-positive-weights=true \
+                nnet3-combine --num-iters=80 \
+                --enforce-sum-to-one={hard_enforce} \
+                --sum-to-one-penalty={penalty} \
+                --enforce-positive-weights=true \
                 --verbose=3 {raw_models} \
                 "ark,bg:nnet3-copy-egs {context_opts} \
                     ark:{egs_dir}/combine.egs ark:- | \
@@ -495,8 +516,10 @@ def combine_models(dir, num_iters, models_to_combine, egs_dir,
         """.format(command=run_opts.command,
                    combine_queue_opt=run_opts.combine_queue_opt,
                    dir=dir, raw_models=" ".join(raw_model_strings),
+                   hard_enforce=(sum_to_one_penalty <= 0),
+                   penalty=sum_to_one_penalty,
                    context_opts=context_opts,
-                   mbsize=mbsize,
+                   mbsize=minibatch_size_str,
                    out_model=out_model,
                    egs_dir=egs_dir))
 

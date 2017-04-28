@@ -17,12 +17,14 @@ import re
 import shutil
 
 import libs.common as common_lib
+import libs.nnet3.train.dropout_schedule as dropout_schedule
+from dropout_schedule import *
 
 logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 
-class RunOpts:
+class RunOpts(object):
     """A structure to store run options.
 
     Run options like queue.pl and run.pl, along with their memory
@@ -55,7 +57,7 @@ def get_successful_models(num_models, log_file_pattern,
         for line_num in range(1, len(lines) + 1):
             # we search from the end as this would result in
             # lesser number of regex searches. Python regex is slow !
-            mat_obj = parse_regex.search(lines[-1*line_num])
+            mat_obj = parse_regex.search(lines[-1 * line_num])
             if mat_obj is not None:
                 this_objf = float(mat_obj.groups()[0])
                 break
@@ -64,7 +66,7 @@ def get_successful_models(num_models, log_file_pattern,
     accepted_models = []
     for i in range(num_models):
         if (objf[max_index] - objf[i]) <= difference_threshold:
-            accepted_models.append(i+1)
+            accepted_models.append(i + 1)
 
     if len(accepted_models) != num_models:
         logger.warn("Only {0}/{1} of the models have been accepted "
@@ -72,7 +74,7 @@ def get_successful_models(num_models, log_file_pattern,
                         len(accepted_models),
                         num_models, log_file_pattern))
 
-    return [accepted_models, max_index+1]
+    return [accepted_models, max_index + 1]
 
 
 def get_average_nnet_model(dir, iter, nnets_list, run_opts,
@@ -141,7 +143,7 @@ def validate_chunk_width(chunk_width):
     or a comma-separated list of integers like '20,30,16'"""
     if not isinstance(chunk_width, str):
         return False
-    a = chunk_width.split(",");
+    a = chunk_width.split(",")
     assert len(a) != 0  # would be code error
     for elem in a:
         try:
@@ -173,7 +175,7 @@ def validate_range_str(range_str):
     for r in ranges:
         # a range may be either e.g. '64', or '128-256'
         try:
-            c = [ int(x) for x in r.split(":") ]
+            c = [int(x) for x in r.split(":")]
         except:
             return False
         # c should be either e.g. [ 128 ], or  [64,128].
@@ -186,7 +188,6 @@ def validate_range_str(range_str):
         else:
             return False
     return True
-
 
 
 def validate_minibatch_size_str(minibatch_size_str):
@@ -240,7 +241,7 @@ def halve_range_str(range_str):
     halved_ranges = []
     for r in ranges:
         # a range may be either e.g. '64', or '128:256'
-        c = [ str(max(1, int(x)/2)) for x in r.split(":") ]
+        c = [str(max(1, int(x)/2)) for x in r.split(":")]
         halved_ranges.append(":".join(c))
     return ','.join(halved_ranges)
 
@@ -269,7 +270,7 @@ def halve_minibatch_size_str(minibatch_size_str):
 
 def copy_egs_properties_to_exp_dir(egs_dir, dir):
     try:
-        for file in ['cmvn_opts', 'splice_opts', 'final.mat']:
+        for file in ['cmvn_opts', 'splice_opts', 'info/final.ie.id', 'final.mat']:
             file_name = '{dir}/{file}'.format(dir=egs_dir, file=file)
             if os.path.isfile(file_name):
                 shutil.copy2(file_name, dir)
@@ -303,12 +304,23 @@ def parse_generic_config_vars_file(var_file):
     raise Exception('Error while parsing the file {0}'.format(var_file))
 
 
-def verify_egs_dir(egs_dir, feat_dim, ivector_dim,
+def verify_egs_dir(egs_dir, feat_dim, ivector_dim, ivector_extractor_id,
                    left_context, right_context,
                    left_context_initial=-1, right_context_final=-1):
     try:
         egs_feat_dim = int(open('{0}/info/feat_dim'.format(
                                     egs_dir)).readline())
+
+        egs_ivector_id = None
+        try:
+            egs_ivector_id = open('{0}/info/final.ie.id'.format(
+                                        egs_dir)).readline().strip()
+        except:
+            # it could actually happen that the file is not there
+            # for example in cases where the egs were dumped by
+            # an older version of the script
+            pass
+
         egs_ivector_dim = int(open('{0}/info/ivector_dim'.format(
                                     egs_dir)).readline())
         egs_left_context = int(open('{0}/info/left_context'.format(
@@ -331,12 +343,26 @@ def verify_egs_dir(egs_dir, feat_dim, ivector_dim,
                             "the current experiment and the provided "
                             "egs directory")
 
+        if (((egs_ivector_id is None) and (ivector_extractor_id is not None)) or
+            ((egs_ivector_id is not None) and (ivector_extractor_id is None))):
+            logger.warning("The ivector ids are inconsistently used. It's your "
+                          "responsibility to make sure the ivector extractor "
+                          "has been used consistently")
+        elif (((egs_ivector_id is None) and (ivector_extractor_id is None))):
+            logger.warning("The ivector ids are not used. It's your "
+                          "responsibility to make sure the ivector extractor "
+                          "has been used consistently")
+        elif (ivector_extractor_id != egs_ivector_id):
+            raise Exception("The egs were generated using a different ivector "
+                            "extractor. id1 = {0}, id2={1}".format(
+                                ivector_extractor_id, egs_ivector_id));
+
         if (egs_left_context < left_context or
                 egs_right_context < right_context):
             raise Exception('The egs have insufficient (l,r) context ({0},{1}) '
                             'versus expected ({2},{3})'.format(
-                    egs_left_context, egs_right_context,
-                    left_context, right_context))
+                            egs_left_context, egs_right_context,
+                            left_context, right_context))
 
         # the condition on the initial/final context is an equality condition,
         # not an inequality condition, as there is no mechanism to 'correct' the
@@ -418,12 +444,20 @@ def smooth_presoftmax_prior_scale_vector(pdf_counts,
 
 
 def prepare_initial_network(dir, run_opts, srand=-3):
-    common_lib.run_job(
-        """{command} {dir}/log/add_first_layer.log \
-                nnet3-init --srand={srand} {dir}/init.raw \
-                {dir}/configs/layer1.config {dir}/0.raw""".format(
-                    command=run_opts.command, srand=srand,
-                    dir=dir))
+    if os.path.exists(dir+"/configs/init.config"):
+        common_lib.run_job(
+            """{command} {dir}/log/add_first_layer.log \
+                    nnet3-init --srand={srand} {dir}/init.raw \
+                    {dir}/configs/layer1.config {dir}/0.raw""".format(
+                        command=run_opts.command, srand=srand,
+                        dir=dir))
+    else:
+        common_lib.run_job(
+            """{command} {dir}/log/add_first_layer.log \
+                    nnet3-init --srand={srand} \
+                    {dir}/configs/layer1.config {dir}/0.raw""".format(
+                        command=run_opts.command, srand=srand,
+                        dir=dir))
 
 
 def verify_iterations(num_iters, num_epochs, num_hidden_layers,
@@ -440,16 +474,24 @@ def verify_iterations(num_iters, num_epochs, num_hidden_layers,
                         "layer-wise discriminatory training.")
 
     approx_iters_per_epoch_final = num_archives/num_jobs_final
+    # Note: it used to be that we would combine over an entire epoch,
+    # but in practice we very rarely would use any weights from towards
+    # the end of that range, so we are changing it to use not
+    # approx_iters_per_epoch_final, but instead:
+    # approx_iters_per_epoch_final/2 + 1,
+    # dividing by 2 to use half an epoch, and adding 1 just to make sure
+    # it's not zero.
+
     # First work out how many iterations we want to combine over in the final
     # nnet3-combine-fast invocation.
     # The number we use is:
-    # min(max(max_models_combine, approx_iters_per_epoch_final),
+    # min(max(max_models_combine, approx_iters_per_epoch_final/2+1),
     #     1/2 * iters_after_last_layer_added)
     # But if this value is > max_models_combine, then the models
     # are subsampled to get these many models to combine.
     half_iters_after_add_layers = (num_iters - finish_add_layers_iter)/2
 
-    num_iters_combine_initial = min(approx_iters_per_epoch_final,
+    num_iters_combine_initial = min(approx_iters_per_epoch_final/2 + 1,
                                     half_iters_after_add_layers)
 
     if num_iters_combine_initial > max_models_combine:
@@ -559,6 +601,7 @@ def self_test():
     assert validate_chunk_width('64')
     assert validate_chunk_width('64,25,128')
 
+
 class CommonParser:
     """Parser for parsing common options related to nnet3 training.
 
@@ -649,8 +692,8 @@ class CommonParser:
                                  other random seeds used in other stages of the
                                  experiment like data preparation (e.g. volume
                                  perturbation).""")
-        self.parser.add_argument("--trainer.num-epochs", type=int,
-                                 dest='num_epochs', default=8,
+        self.parser.add_argument("--trainer.num-epochs", type=float,
+                                 dest='num_epochs', default=8.0,
                                  help="Number of epochs to train the model")
         self.parser.add_argument("--trainer.shuffle-buffer-size", type=int,
                                  dest='shuffle_buffer_size', default=5000,
@@ -719,12 +762,50 @@ class CommonParser:
                                  the final model combination stage.  These
                                  models will themselves be averages of
                                  iteration-number ranges""")
+        self.parser.add_argument("--trainer.optimization.combine-sum-to-one-penalty",
+                                 type=float, dest='combine_sum_to_one_penalty', default=0.0,
+                                 help="""If > 0, activates 'soft' enforcement of the
+                                 sum-to-one penalty in combination (may be helpful
+                                 if using dropout).  E.g. 1.0e-03.""")
         self.parser.add_argument("--trainer.optimization.momentum", type=float,
                                  dest='momentum', default=0.0,
                                  help="""Momentum used in update computation.
                                  Note: we implemented it in such a way that it
                                  doesn't increase the effective learning
                                  rate.""")
+        self.parser.add_argument("--trainer.dropout-schedule", type=str,
+                                 action=common_lib.NullstrToNoneAction,
+                                 dest='dropout_schedule', default=None,
+                                 help="""Use this to specify the dropout
+                                 schedule.  You specify a piecewise linear
+                                 function on the domain [0,1], where 0 is the
+                                 start and 1 is the end of training; the
+                                 function-argument (x) rises linearly with the
+                                 amount of data you have seen, not iteration
+                                 number (this improves invariance to
+                                 num-jobs-{initial-final}).  E.g. '0,0.2,0'
+                                 means 0 at the start; 0.2 after seeing half
+                                 the data; and 0 at the end.  You may specify
+                                 the x-value of selected points, e.g.
+                                 '0,0.2@0.25,0' means that the 0.2
+                                 dropout-proportion is reached a quarter of the
+                                 way through the data.   The start/end x-values
+                                 are at x=0/x=1, and other unspecified x-values
+                                 are interpolated between known x-values.  You
+                                 may specify different rules for different
+                                 component-name patterns using 'pattern1=func1
+                                 pattern2=func2', e.g. 'relu*=0,0.1,0
+                                 lstm*=0,0.2,0'.  More general should precede
+                                 less general patterns, as they are applied
+                                 sequentially.""")
+        self.parser.add_argument("--trainer.optimization.adversarial-training-scale",
+                                 type=float, dest='adversarial_training_scale',
+                                 default=0.0, help="""scale of parameters changes 
+                                 used in adversarial training step.""")
+        self.parser.add_argument("--trainer.optimization.adversarial-training-interval",
+                                 type=int, dest='adversarial_training_interval',
+                                 default=1, help="""the interval of minibatches
+                                 that adversarial training is applied on.""")
 
         # General options
         self.parser.add_argument("--stage", type=int, default=-4,

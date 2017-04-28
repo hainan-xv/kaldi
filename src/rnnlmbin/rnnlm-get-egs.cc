@@ -73,7 +73,8 @@ void GenerateEgs(string text_file, const unordered_map<string, int>& wlist_in,
       }
     }
 
-    NnetExample eg = GetEgsFromSent(word_ids_in, input_dim, word_ids_out, output_dim);
+    NnetExample eg;
+    GetEgsFromSent(word_ids_in, input_dim, word_ids_out, output_dim, &eg);
     std::ostringstream os;
     os << "line-" << cur_line;
 
@@ -150,8 +151,9 @@ int main(int argc, char *argv[]) {
   string examples_wspecifier = po.GetArg(i++);
 
   NnetExampleWriter example_writer(examples_wspecifier);
-  unordered_map<string, int> in_wlist = ReadWordlist(in_wlist_file);
-  unordered_map<string, int> out_wlist = ReadWordlist(out_wlist_file);
+  unordered_map<string, int> in_wlist, out_wlist;
+  ReadWordlist(in_wlist_file, &in_wlist);
+  ReadWordlist(out_wlist_file, &out_wlist);
 
   GenerateEgs(text_file, in_wlist, out_wlist, history, &example_writer);
 

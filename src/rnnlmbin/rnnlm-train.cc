@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     LmNnet nnet;
     ReadKaldiObject(nnet_rxfilename, &nnet);
 
-    vector<BaseFloat> unigram;
+    vector<double> unigram;
     ReadUnigram(unigram_file, &unigram);
 
     LmNnetSamplingTrainer trainer(train_config, unigram, &nnet);

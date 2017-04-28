@@ -25,8 +25,8 @@ minibatch_size=1:128
 
 hidden_dim=200
 initial_learning_rate=0.01
-final_learning_rate=0.0001
-learning_rate_decline_factor=1.04
+final_learning_rate=0.001
+learning_rate_decline_factor=1.01
 
 # LSTM parameters
 num_lstm_layers=1
@@ -41,18 +41,15 @@ splice_indexes=0
 use_gpu=yes
 num_samples=-1
 
-type=rnn  # or lstm
+type=rnn-natural  # or lstm
 
 id=
-
 . cmd.sh
 . path.sh
 . parse_options.sh || exit 1;
 
-outdir=rnnlm_sampling_${hidden_dim}_2
-#outdir=sample
+outdir=rnnlm_sampling_${num_archives}_${hidden_dim}_${initial_learning_rate}_${final_learning_rate}_${learning_rate_decline_factor}_$type
 srcdir=data/local/dict
-
 set -e
 
 mkdir -p $outdir
@@ -91,11 +88,6 @@ if [ $stage -le -4 ]; then
         {if(($1 in v) && (v[$1]!=1)){print(v[$1]);}else{printf("1\n");}}' | sort | uniq -c | awk '{print$2,$1}' | sort -k1 -n > $outdir/uni_counts.txt
 
   cat $outdir/uni_counts.txt | awk '{print NR-1, 1}' > $outdir/uniform.txt
-
-#  cat $outdir/out.words $outdir/train.txt | awk '{for(i=1;i<=NF;i++) print $i}' | grep -v "<s>" \
-#     | awk -v w=$outdir/wordlist.out \
-#      'BEGIN{while((getline<w)>0) {v[$1]=$2;}}
-#        {if(($1 in v) && (v[$1]!=1)){print(v[$1]);}else{printf("1\n");}}' | sort | uniq -c | awk '{print$2,$1}' | sort -k1 -n > $outdir/uni_counts.txt
 fi
 
 num_words_in=`wc -l $outdir/wordlist.in | awk '{print $1}'`
@@ -104,30 +96,20 @@ num_words_total=`wc -l $outdir/unigramcounts.txt  | awk '{print $1}'`
 
 if [ $stage -le -3 ]; then
   echo Get Examples
-  $cmd $outdir/log/get-egs.train.txt \
+  $cmd $outdir/log/get-egs.train.log \
     rnnlm-get-egs $outdir/train.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/train.egs" &
-  $cmd $outdir/log/get-egs.dev.txt \
+  $cmd $outdir/log/get-egs.dev.log \
     rnnlm-get-egs $outdir/dev.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/dev.egs"
 
-  (
-    echo Do split
-    [ -d $outdir/splitted-text ] && rm $outdir/splitted-text -r
-    [ -d $outdir/egs ] && rm $outdir/egs -r
-    mkdir -p $outdir/splitted-text
-    mkdir -p $outdir/egs
-    split --number=l/$num_archives --numeric-suffixes=1 $outdir/train.txt $outdir/splitted-text/train.
-
-    for i in `seq 1 $num_archives`; do
-      j=$i
-      while [ ! -f $outdir/splitted-text/train.$i ]; do
-        i=0$i
-      done
-      [ "$i" != "$j" ] && mv $outdir/splitted-text/train.$i $outdir/splitted-text/train.$j.txt
-      rnnlm-get-egs $outdir/splitted-text/train.$j.txt $outdir/wordlist.in $outdir/wordlist.out ark,t:"$outdir/egs/train.$j.egs"
-    done
-  )
-
   wait
+
+  mkdir -p $outdir/egs
+  egs_str=
+  for i in `seq 1 $num_archives`; do
+    egs_str="$egs_str ark:$outdir/egs/train.$i.egs"
+  done
+
+  nnet3-copy-egs ark:$outdir/train.egs $egs_str
 
   $cmd $outdir/log/create_train_subset_combine.log \
      nnet3-subset-egs --n=$num_train_frames_combine ark:$outdir/train.egs \
@@ -148,18 +130,39 @@ ppl_oos_penalty=`echo $num_words_out $num_words_total $oos_ratio | awk '{print (
 echo dev oos ratio is $oos_ratio
 echo dev oos penalty is $ppl_oos_penalty
 
+unigram=$outdir/uni_counts.txt
+
 if [ $stage -le -2 ]; then
   echo Create nnet configs
 
+  if [ "$type" == "rnn-natural" ]; then
+  cat > $outdir/config <<EOF
+  LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=1
+  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1
+
+#  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1 unigram=$unigram
+  input-node name=input dim=$hidden_dim
+  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
+#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
+  component name=hidden_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=1
+
+#Component nodes
+  component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
+#  component-node name=first_renorm component=first_renorm  input=first_nonlin
+  component-node name=hidden_affine component=hidden_affine  input=IfDefined(Offset(first_nonlin, -1))
+  output-node    name=output input=first_nonlin objective=linear
+EOF
+  fi
+
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
-  LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=10
-  AffineSampleLogSoftmaxComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=10
+  LmLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=1
+  AffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=1
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
 #  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
-  component name=hidden_affine type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=10
+  component name=hidden_affine type=AffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=1
 
 #Component nodes
   component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
@@ -242,7 +245,7 @@ if [ $stage -le $num_iters ]; then
           this_cmd=$cuda_cmd
         fi
 
-        $this_cmd $outdir/log/train_rnnlm.$n.log rnnlm-train --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
+        $this_cmd $outdir/log/train_rnnlm.$n.log rnnlm-train --verbose=2 --sample-size=$num_samples --use-gpu=$use_gpu --binary=false \
         --max-param-change=$max_param_change "rnnlm-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$outdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- |" $outdir/$n.mdl $unigram
 
@@ -253,10 +256,10 @@ if [ $stage -le $num_iters ]; then
             rnnlm-info $outdir/$n.mdl &
         fi
 
-      t=`grep "^# Accounting" $outdir/log/train_rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
-      w=`wc -w $outdir/splitted-text/train.$this_archive.txt | awk '{print $1}'`
-      speed=`echo $w $t | awk '{print $1/$2}'`
-      echo Processing speed: $speed words per second \($w words in $t seconds\)
+#      t=`grep "^# Accounting" $outdir/log/train_rnnlm.$n.log | sed "s/=/ /g" | awk '{print $4}'`
+#      w=`wc -w $outdir/splitted-text/train.$this_archive.txt | awk '{print $1}'`
+#      speed=`echo $w $t | awk '{print $1/$2}'`
+#      echo Processing speed: $speed words per second \($w words in $t seconds\)
 
       grep parse $outdir/log/train_rnnlm.$n.log | awk -F '-' '{print "Training PPL is " exp($NF)}'
 
@@ -295,7 +298,7 @@ if [ $stage -le $num_iters ]; then
       ppl2=`echo $ppl $ppl_oos_penalty | awk '{print $1 * $2}'`
       echo UNNORMALIZED DEV PPL on model $n.mdl is $ppl w/o OOS penalty, $ppl2 w OOS penalty
     ) &
-wait
+
   done
   cp $outdir/$num_iters.mdl $outdir/rnnlm
 fi

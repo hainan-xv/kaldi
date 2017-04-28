@@ -91,8 +91,8 @@ class LmNnet {
 
   void Add(const LmNnet &other, BaseFloat scale) {
     nnet3::AddNnet(other.Nnet(), scale, nnet_);
-    input_projection_->Add(scale, *other.I());
-    output_projection_->Add(scale, *other.O());
+    input_projection_->Add(scale, *other.InputLayer());
+    output_projection_->Add(scale, *other.OutputLayer());
     
   }
 
@@ -101,6 +101,12 @@ class LmNnet {
     input_projection_->Scale(scale);
     output_projection_->Scale(scale);
     
+  }
+
+  void FreezeNaturalGradient(bool freeze) {
+    nnet3::FreezeNaturalGradient(freeze, nnet_);
+    input_projection_->FreezeNaturalGradient(freeze);
+    output_projection_->FreezeNaturalGradient(freeze);
   }
 
   void ZeroStats() {
@@ -115,33 +121,30 @@ class LmNnet {
       SetNnetAsGradient(nnet_);
     }
     LmInputComponent* p;
-    if ((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL) {
-      p->SetZero(is_gradient);
-    }
+    KALDI_ASSERT((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL);
+    p->SetZero(is_gradient);
 
     LmOutputComponent* p2;
-    if ((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL) {
-      p2->SetZero(is_gradient);
-    }
+    KALDI_ASSERT((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL);
+    p2->SetZero(is_gradient);
   }
 
   void SetLearningRate(BaseFloat learning_rate) {
     nnet3::SetLearningRate(learning_rate, nnet_);
     LmInputComponent* p;
-    if ((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL) {
-      p->SetUnderlyingLearningRate(learning_rate);
-    }
+    KALDI_ASSERT((p = dynamic_cast<LmInputComponent*>(input_projection_)) != NULL);
+    p->SetUnderlyingLearningRate(learning_rate);
+
     LmOutputComponent* p2;
-    if ((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL) {
-      p2->SetUnderlyingLearningRate(learning_rate);
-    }
+    KALDI_ASSERT((p2 = dynamic_cast<LmOutputComponent*>(output_projection_)) != NULL);
+    p2->SetUnderlyingLearningRate(learning_rate);
   }
 
-  const LmInputComponent* I() const {
+  const LmInputComponent* InputLayer() const {
     return input_projection_;
   }
 
-  const LmOutputComponent* O() const {
+  const LmOutputComponent* OutputLayer() const {
     return output_projection_;
   }
 
