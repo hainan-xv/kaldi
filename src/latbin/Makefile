@@ -21,6 +21,7 @@ BINFILES = lattice-best-path lattice-prune lattice-equivalent lattice-to-nbest \
            lattice-confidence lattice-determinize-phone-pruned \
            lattice-determinize-phone-pruned-parallel lattice-expand-ngram \
            lattice-lmrescore-const-arpa lattice-lmrescore-rnnlm nbest-to-prons \
+           lattice-lmrescore-nnet3-rnnlm \
            lattice-arc-post lattice-determinize-non-compact
 
 OBJFILES =
@@ -32,6 +33,7 @@ TESTFILES =
 ADDLIBS = ../lat/kaldi-lat.a ../lm/kaldi-lm.a ../fstext/kaldi-fstext.a \
           ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a ../util/kaldi-util.a \
           ../thread/kaldi-thread.a ../matrix/kaldi-matrix.a \
-          ../base/kaldi-base.a
+          ../cudamatrix/kaldi-cudamatrix.a ../nnet3/kaldi-nnet3.a \
+          ../base/kaldi-base.a ../rnnlm/kaldi-rnnlm.a
 
 include ../makefiles/default_rules.mk
