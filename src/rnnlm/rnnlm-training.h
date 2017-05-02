@@ -224,7 +224,6 @@ class LmNnetSamplingTrainer {
                               LmNnet *delta_nnet = NULL);
 
   LmNnetSamplingTrainer(const LmNnetTrainerOptions &config,
-                        const vector<double> &unigram,
                         LmNnet *nnet);
 
   // train on one minibatch.
@@ -251,7 +250,6 @@ class LmNnetSamplingTrainer {
   CuMatrix<BaseFloat> new_input_;                 // the input to pass to nnet3
   const CuMatrixBase<BaseFloat> *old_output_;
 
-  vector<double> unigram_;
   // this pointer is not owned
   LmNnet *nnet_;
 

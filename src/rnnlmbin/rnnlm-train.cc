@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 4) {
+    if (po.NumArgs() != 3) {
       po.PrintUsage();
       exit(1);
     }
@@ -68,16 +68,12 @@ int main(int argc, char *argv[]) {
 
     std::string nnet_rxfilename = po.GetArg(1),
                 examples_rspecifier = po.GetArg(2),
-                nnet_wxfilename = po.GetArg(3),
-                unigram_file = po.GetArg(4);
+                nnet_wxfilename = po.GetArg(3);
 
     LmNnet nnet;
     ReadKaldiObject(nnet_rxfilename, &nnet);
 
-    vector<double> unigram;
-    ReadUnigram(unigram_file, &unigram);
-
-    LmNnetSamplingTrainer trainer(train_config, unigram, &nnet);
+    LmNnetSamplingTrainer trainer(train_config, &nnet);
 
     SequentialNnetExampleReader example_reader(examples_rspecifier);
 

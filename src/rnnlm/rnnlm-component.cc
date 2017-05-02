@@ -12,6 +12,7 @@ namespace kaldi {
 namespace rnnlm {
 
 void NaturalGradientAffineImportanceSamplingComponent::Scale(BaseFloat scale) {
+  if (scale == 0.0) params_.Set(0.0); else
   params_.Scale(scale);
 }
 
@@ -33,10 +34,21 @@ void NaturalGradientAffineImportanceSamplingComponent::Add(BaseFloat alpha, cons
 }
 
 NaturalGradientAffineImportanceSamplingComponent::NaturalGradientAffineImportanceSamplingComponent(
-                            const NaturalGradientAffineImportanceSamplingComponent &component):
-    AffineImportanceSamplingComponent(component)
-//    params_(component.params_)
-    { }
+                            const NaturalGradientAffineImportanceSamplingComponent &other):
+    AffineImportanceSamplingComponent(other),
+    rank_in_(other.rank_in_),
+    rank_out_(other.rank_out_),
+    update_period_(other.update_period_),
+    num_samples_history_(other.num_samples_history_),
+    alpha_(other.alpha_),
+    preconditioner_in_(other.preconditioner_in_),
+    preconditioner_out_(other.preconditioner_out_),
+    max_change_per_sample_(other.max_change_per_sample_),
+    update_count_(other.update_count_),
+    active_scaling_count_(other.active_scaling_count_),
+    max_change_scale_stats_(other.max_change_scale_stats_) {
+  SetNaturalGradientConfigs();
+}
 
 void NaturalGradientAffineImportanceSamplingComponent::SetZero(bool treat_as_gradient) {
   if (treat_as_gradient) {
@@ -83,20 +95,94 @@ void NaturalGradientAffineImportanceSamplingComponent::Init(int32 input_dim, int
   params_.SetRandn(); // sets to random normally distributed noise.
   params_.ColRange(0, input_dim).Scale(param_stddev);
   params_.ColRange(input_dim, 1).Scale(bias_stddev);
+  KALDI_ASSERT(false);
+}
+
+void NaturalGradientAffineImportanceSamplingComponent::Init(
+    int32 input_dim, int32 output_dim,
+    BaseFloat param_stddev, BaseFloat bias_stddev,
+    int32 rank_in, int32 rank_out, int32 update_period,
+    BaseFloat num_samples_history, BaseFloat alpha,
+    BaseFloat max_change_per_sample) {
+//  linear_params_.Resize(output_dim, input_dim);
+//  KALDI_ASSERT(output_dim > 0 && input_dim > 0 && param_stddev >= 0.0);
+//  linear_params_.SetRandn(); // sets to random normally distributed noise.
+//  linear_params_.Scale(param_stddev);
+
+  params_.Resize(output_dim, input_dim + 1);
+  KALDI_ASSERT(output_dim > 0 && input_dim > 0 && param_stddev >= 0.0);
+  params_.SetRandn(); // sets to random normally distributed noise.
+  params_.ColRange(0, input_dim).Scale(param_stddev);
+  params_.ColRange(input_dim, 1).Scale(bias_stddev);
+
+  rank_in_ = rank_in;
+  rank_out_ = rank_out;
+  update_period_ = update_period;
+  num_samples_history_ = num_samples_history;
+  alpha_ = alpha;
+  SetNaturalGradientConfigs();
+  if (max_change_per_sample > 0.0)
+    KALDI_WARN << "You are setting a positive max_change_per_sample for "
+               << "LmNaturalGradientLinearComponent. But it has been deprecated. "
+               << "Please use max_change for all updatable components instead "
+               << "to activate the per-component max change mechanism.";
+  KALDI_ASSERT(max_change_per_sample >= 0.0);
+  max_change_per_sample_ = max_change_per_sample;
+  update_count_ = 0.0;
+  active_scaling_count_ = 0.0;
+  max_change_scale_stats_ = 0.0;
+  max_change_ = 1.0;
 }
 
 void NaturalGradientAffineImportanceSamplingComponent::Init(std::string matrix_filename) {
   ReadKaldiObject(matrix_filename, &params_); // will abort on failure.
+  KALDI_ASSERT(false);
+}
+
+void NaturalGradientAffineImportanceSamplingComponent::Init(
+    int32 rank_in, int32 rank_out,
+    int32 update_period, BaseFloat num_samples_history, BaseFloat alpha,
+    BaseFloat max_change_per_sample,
+    std::string matrix_filename) {
+  rank_in_ = rank_in;
+  rank_out_ = rank_out;
+  update_period_ = update_period;
+  num_samples_history_ = num_samples_history;
+  alpha_ = alpha;
+  SetNaturalGradientConfigs();
+  KALDI_ASSERT(max_change_per_sample >= 0.0);
+  max_change_per_sample_ = max_change_per_sample;
+  
+  ReadKaldiObject(matrix_filename, &params_); // will abort on failure.
+
+  update_count_ = 0.0;
+  active_scaling_count_ = 0.0;
+  max_change_scale_stats_ = 0.0;
+  max_change_ = 1.0;
 }
 
 void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine *cfl) {
   bool ok = true;
   std::string matrix_filename;
   std::string unigram_filename;
-  int32 input_dim = -1, output_dim = -1;
+  BaseFloat num_samples_history = 2000.0, alpha = 4.0,
+      max_change_per_sample = 0.0;
+  int32 input_dim = -1, output_dim = -1, rank_in = 20, rank_out = 80,
+      update_period = 4;
   InitLearningRatesFromConfig(cfl);
+
+  cfl->GetValue("num-samples-history", &num_samples_history);
+  cfl->GetValue("alpha", &alpha);
+  cfl->GetValue("max-change-per-sample", &max_change_per_sample);
+  cfl->GetValue("rank-in", &rank_in);
+  cfl->GetValue("rank-out", &rank_out);
+  cfl->GetValue("update-period", &update_period);
+
   if (cfl->GetValue("matrix", &matrix_filename)) {
-    Init(matrix_filename);
+    // Init(matrix_filename);
+    Init(rank_in, rank_out, update_period,
+         num_samples_history, alpha, max_change_per_sample,
+         matrix_filename);
     if (cfl->GetValue("input-dim", &input_dim))
       KALDI_ASSERT(input_dim == InputDim() &&
                    "input-dim mismatch vs. matrix.");
@@ -114,7 +200,10 @@ void NaturalGradientAffineImportanceSamplingComponent::InitFromConfig(ConfigLine
 
     bias_stddev = log(1.0 / output_dim);
 
-    Init(input_dim, output_dim, param_stddev, bias_stddev);
+    // Init(input_dim, output_dim, param_stddev, bias_stddev);
+    Init(input_dim, output_dim, param_stddev, bias_stddev,
+         rank_in, rank_out, update_period,
+         num_samples_history, alpha, max_change_per_sample);
 
     params_.ColRange(params_.NumCols() - 1, 1).Set(bias_stddev);
 
@@ -186,16 +275,19 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                                const CuMatrixBase<BaseFloat> &output_deriv,
                                LmOutputComponent *to_update_0,
                                CuMatrixBase<BaseFloat> *input_deriv) const {
+  KALDI_LOG << "Natural gradient backprop";  // TODO(hxu)
+
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-  CuMatrix<BaseFloat> tmp(output_deriv.NumRows(), output_deriv.NumCols());
-  tmp.Row(0).CopyColFromMat(bias_params, 0);
-  if (tmp.NumRows() > 1)
-    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
 
-  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
-  // now tmp is the in_value for log-softmax
-  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
+//  CuMatrix<BaseFloat> tmp(output_deriv.NumRows(), output_deriv.NumCols());
+//  tmp.Row(0).CopyColFromMat(bias_params, 0);
+//  if (tmp.NumRows() > 1)
+//    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
+//
+//  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
+//  // now tmp is the in_value for log-softmax
+//  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
 
   if (input_deriv != NULL)
     input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, linear_params, kNoTrans,
@@ -206,11 +298,68 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
   if (to_update != NULL) {
     // need to add natural gradient TODO(hxu)
-    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
-    delta.Row(0).AddRowSumMat(to_update->learning_rate_, output_deriv, 1.0);
-    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
-    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(to_update->learning_rate_, output_deriv, kTrans,
-                                in_value, kNoTrans, 1.0);
+//    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
+//    delta.Row(0).AddRowSumMat(to_update->learning_rate_, output_deriv, 1.0);
+//    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
+//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(to_update->learning_rate_, output_deriv, kTrans,
+//                                in_value, kNoTrans, 1.0);
+
+//    CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
+//    new_linear.SetZero();  // clear the contents
+
+    CuSubMatrix<BaseFloat> bias(to_update->params_.ColRange(params_.NumCols() - 1, 1));
+    CuSubMatrix<BaseFloat> linear(to_update->params_.ColRange(0, params_.NumCols() - 1));
+
+    {
+      CuMatrix<BaseFloat> in_value_temp;
+      in_value_temp.Resize(in_value.NumRows(),
+                           in_value.NumCols() + 1, kUndefined);
+      in_value_temp.Range(0, in_value.NumRows(),
+                          0, in_value.NumCols()).CopyFromMat(in_value);
+
+      // Add the 1.0 at the end of each row "in_value_temp"
+      in_value_temp.Range(0, in_value.NumRows(),
+                          in_value.NumCols(), 1).Set(1.0);
+
+      CuMatrix<BaseFloat> out_deriv_temp(output_deriv);
+
+      CuMatrix<BaseFloat> row_products(2, in_value.NumRows());
+      CuSubVector<BaseFloat> in_row_products(row_products, 0),
+          out_row_products(row_products, 1);
+
+      // These "scale" values get will get multiplied into the learning rate (faster
+      // than having the matrices scaled inside the preconditioning code).
+      BaseFloat in_scale, out_scale;
+
+      to_update->preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
+                                                &in_scale);
+      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
+                                                 &out_scale);
+
+      // "scale" is a scaling factor coming from the PreconditionDirections calls
+      // (it's faster to have them output a scaling factor than to have them scale
+      // their outputs).
+      BaseFloat scale = in_scale * out_scale;
+
+      CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
+                                                  0, in_value_temp.NumRows(),
+                                                  0, in_value_temp.NumCols() - 1);
+      // this "precon_ones" is what happens to the vector of 1's representing
+      // offsets, after multiplication by the preconditioner.
+      CuVector<BaseFloat> precon_ones(in_value_temp.NumRows());
+
+      precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
+
+      BaseFloat local_lrate = scale * to_update->learning_rate_;
+      to_update->update_count_ += 1.0;
+
+      CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
+      delta_bias.Row(0).AddMatVec(local_lrate, out_deriv_temp, kTrans,
+                           precon_ones, 1.0);
+      linear.AddMatMat(local_lrate, out_deriv_temp, kTrans,
+                              in_value_precon_part, kNoTrans, 1.0);
+      bias.AddMat(1.0, delta_bias, kTrans);
+    }
   }
 }
 
@@ -288,10 +437,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                            in_value_precon_part, kNoTrans, 1.0);
     }
 
-//    new_linear.AddMatMat(learning_rate_, new_out_deriv, kTrans,
-//                         in_value, kNoTrans, 1.0);
-//    delta_bias.Row(0).AddRowSumMat(learning_rate_, new_out_deriv, kTrans);
-
     vector<int> indexes_2(bias_params.NumRows(), -1);
     for (int i = 0; i < indexes.size(); i++) {
       indexes_2[indexes[i]] = i;
@@ -304,29 +449,91 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
     delta_bias_trans.AddMat(1.0, delta_bias, kTrans);
 
     to_update->params_.ColRange(params_.NumCols() - 1, 1).AddRows(1.0, delta_bias_trans, idx2);  // TODO(hxu)
-
-//    BaseFloat t = TraceMatMat(to_update->params_, to_update->params_, kTrans);
-
-//    KALDI_LOG << "tracematmat on to_update out is " << t;
-
   }
 }
 
+void NaturalGradientAffineImportanceSamplingComponent::SetNaturalGradientConfigs() {
+  preconditioner_in_.SetRank(rank_in_);
+  preconditioner_in_.SetNumSamplesHistory(num_samples_history_);
+  preconditioner_in_.SetAlpha(alpha_);
+  preconditioner_in_.SetUpdatePeriod(update_period_);
+  preconditioner_out_.SetRank(rank_out_);
+  preconditioner_out_.SetNumSamplesHistory(num_samples_history_);
+  preconditioner_out_.SetAlpha(alpha_);
+  preconditioner_out_.SetUpdatePeriod(update_period_);
+}
+
 void NaturalGradientAffineImportanceSamplingComponent::Read(std::istream &is, bool binary) {
-  ReadUpdatableCommon(is, binary);  // read opening tag and learning rate.
+//  ReadUpdatableCommon(is, binary);  // read opening tag and learning rate.
+//  ExpectToken(is, binary, "<Params>");
+//  params_.Read(is, binary);
+//  ExpectToken(is, binary, "<IsGradient>");
+//  ReadBasicType(is, binary, &is_gradient_);
+//  ExpectToken(is, binary, "</NaturalGradientAffineImportanceSamplingComponent>");
+  ReadUpdatableCommon(is, binary);  // Read the opening tag and learning rate
   ExpectToken(is, binary, "<Params>");
   params_.Read(is, binary);
+  ExpectToken(is, binary, "<RankIn>");
+  ReadBasicType(is, binary, &rank_in_);
+  ExpectToken(is, binary, "<RankOut>");
+  ReadBasicType(is, binary, &rank_out_);
+  ExpectToken(is, binary, "<UpdatePeriod>");
+  ReadBasicType(is, binary, &update_period_);
+  ExpectToken(is, binary, "<NumSamplesHistory>");
+  ReadBasicType(is, binary, &num_samples_history_);
+  ExpectToken(is, binary, "<Alpha>");
+  ReadBasicType(is, binary, &alpha_);
+  ExpectToken(is, binary, "<MaxChangePerSample>");
+  ReadBasicType(is, binary, &max_change_per_sample_);
   ExpectToken(is, binary, "<IsGradient>");
   ReadBasicType(is, binary, &is_gradient_);
-  ExpectToken(is, binary, "</NaturalGradientAffineImportanceSamplingComponent>");
+  std::string token;
+  ReadToken(is, binary, &token);
+  if (token == "<UpdateCount>") {
+    ReadBasicType(is, binary, &update_count_);
+    ExpectToken(is, binary, "<ActiveScalingCount>");
+    ReadBasicType(is, binary, &active_scaling_count_);
+    ExpectToken(is, binary, "<MaxChangeScaleStats>");
+    ReadBasicType(is, binary, &max_change_scale_stats_);
+    ReadToken(is, binary, &token);
+  }
+  if (token != "<NaturalGradientAffineImportanceSamplingComponent>" &&
+      token != "</NaturalGradientAffineImportanceSamplingComponent>")
+    KALDI_ERR << "Expected <NaturalGradientAffineImportanceSamplingComponent> or "
+              << "</NaturalGradientAffineImportanceSamplingComponent>, got " << token;
+  SetNaturalGradientConfigs();
 }
 
 void NaturalGradientAffineImportanceSamplingComponent::Write(std::ostream &os, bool binary) const {
-  WriteUpdatableCommon(os, binary);  // Write opening tag and learning rate
+//  WriteUpdatableCommon(os, binary);  // Write opening tag and learning rate
+//  WriteToken(os, binary, "<Params>");
+//  params_.Write(os, binary);
+//  WriteToken(os, binary, "<IsGradient>");
+//  WriteBasicType(os, binary, is_gradient_);
+//  WriteToken(os, binary, "</NaturalGradientAffineImportanceSamplingComponent>");
+  WriteUpdatableCommon(os, binary);  // Write the opening tag and learning rate
   WriteToken(os, binary, "<Params>");
   params_.Write(os, binary);
+  WriteToken(os, binary, "<RankIn>");
+  WriteBasicType(os, binary, rank_in_);
+  WriteToken(os, binary, "<RankOut>");
+  WriteBasicType(os, binary, rank_out_);
+  WriteToken(os, binary, "<UpdatePeriod>");
+  WriteBasicType(os, binary, update_period_);
+  WriteToken(os, binary, "<NumSamplesHistory>");
+  WriteBasicType(os, binary, num_samples_history_);
+  WriteToken(os, binary, "<Alpha>");
+  WriteBasicType(os, binary, alpha_);
+  WriteToken(os, binary, "<MaxChangePerSample>");
+  WriteBasicType(os, binary, max_change_per_sample_);
   WriteToken(os, binary, "<IsGradient>");
   WriteBasicType(os, binary, is_gradient_);
+  WriteToken(os, binary, "<UpdateCount>");
+  WriteBasicType(os, binary, update_count_);
+  WriteToken(os, binary, "<ActiveScalingCount>");
+  WriteBasicType(os, binary, active_scaling_count_);
+  WriteToken(os, binary, "<MaxChangeScaleStats>");
+  WriteBasicType(os, binary, max_change_scale_stats_);
   WriteToken(os, binary, "</NaturalGradientAffineImportanceSamplingComponent>");
 }
 
@@ -464,9 +671,17 @@ void LmNaturalGradientLinearComponent::ZeroStats()  {
 }
 
 void LmNaturalGradientLinearComponent::Scale(BaseFloat scale) {
+  if (scale == 0.0) {
+    update_count_ = 0;
+    max_change_scale_stats_ = 0;
+    active_scaling_count_  = 0;
+  }
+
   update_count_ *= scale;
   max_change_scale_stats_ *= scale;
   active_scaling_count_ *= scale;
+
+  if (scale == 0.0) linear_params_.Set(0.0); else
   linear_params_.Scale(scale);
 }
 
@@ -701,6 +916,7 @@ void LmNaturalGradientLinearComponent::FreezeNaturalGradient(bool freeze) {
 }
 
 void AffineImportanceSamplingComponent::Scale(BaseFloat scale) {
+  if (scale == 0.0) params_.Set(0.0); else
   params_.Scale(scale);
 }
 
@@ -992,6 +1208,7 @@ void AffineImportanceSamplingComponent::UnVectorize(const VectorBase<BaseFloat> 
 }
 
 void LmLinearComponent::Scale(BaseFloat scale) {
+  if (scale == 0.0) linear_params_.Set(0.0); else
   linear_params_.Scale(scale);
 }
 

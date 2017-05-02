@@ -225,9 +225,9 @@ class AffineImportanceSamplingComponent: public LmOutputComponent {
   virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
                          CuMatrixBase<BaseFloat> *out) const;
 
-  void Propagate(const CuMatrixBase<BaseFloat> &in,
-                 bool normalize,
-                 CuMatrixBase<BaseFloat> *out) const;
+  virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
+                         bool normalize,
+                         CuMatrixBase<BaseFloat> *out) const;
 
   virtual BaseFloat ComputeLogprobOfWordGivenHistory(const CuVectorBase<BaseFloat> &hidden,
                                              int32 word_index);
@@ -312,9 +312,9 @@ class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceS
                          const vector<int> &indexes,
                          CuMatrixBase<BaseFloat> *out) const;
 
-  void Propagate(const CuMatrixBase<BaseFloat> &in,
-                 bool normalize,
-                 CuMatrixBase<BaseFloat> *out) const;
+  virtual void Propagate(const CuMatrixBase<BaseFloat> &in,
+                         bool normalize,
+                         CuMatrixBase<BaseFloat> *out) const;
 
   virtual void Backprop(const vector<int> &indexes,
                         const CuMatrixBase<BaseFloat> &in_value,
@@ -332,6 +332,8 @@ class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceS
 
   virtual void Read(std::istream &is, bool binary);
   virtual void Write(std::ostream &os, bool binary) const;
+
+  void SetNaturalGradientConfigs();
 
   virtual LmOutputComponent* Copy() const;
 
@@ -357,6 +359,16 @@ class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceS
   void Init(int32 input_dim, int32 output_dim,
             BaseFloat param_stddev, BaseFloat bias_stddev);
   void Init(std::string matrix_filename);
+  void Init(int32 rank_in, int32 rank_out, int32 update_period,
+            BaseFloat num_samples_history,
+            BaseFloat alpha, BaseFloat max_change_per_sample,
+            std::string matrix_filename);
+
+  void Init(int32 input_dim, int32 output_dim,
+            BaseFloat param_stddev, BaseFloat bias_stddev,
+            int32 rank_in, int32 rank_out, int32 update_period,
+            BaseFloat num_samples_history, BaseFloat alpha,
+            BaseFloat max_change_per_sample);
 
   // This function resizes the dimensions of the component, setting the
   // parameters to zero, while leaving any other configuration values the same.

@@ -194,7 +194,6 @@ int main(int argc, char **argv) {
   UnitTestSamplingConvergence();
   UnitTestSampleWithProbOne(N);
   UnitTestSamplingTime(N);
-}
 
   const char *usage = "";
   ParseOptions po(usage);

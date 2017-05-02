@@ -59,14 +59,11 @@ void BackpropSamplingNonlinearity(const CuVectorBase<BaseFloat> &probs_inv,
 
 LmNnetSamplingTrainer::LmNnetSamplingTrainer(
                           const LmNnetTrainerOptions &config,
-                          const vector<double> &unigram,
                           LmNnet *nnet):
                           config_(config),
-                          unigram_(unigram),
                           nnet_(nnet),
                           compiler_(*nnet->GetNnet(), config_.optimize_config),
                           num_minibatches_processed_(0) {
-  KALDI_ASSERT(unigram_.size() == nnet_->OutputLayer()->OutputDim());
 
   if (config.zero_component_stats)
     nnet->ZeroStats();
@@ -126,6 +123,7 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
   if (config_.adversarial_training_scale > 0.0 &&
       num_minibatches_processed_ % config_.adversarial_training_interval == 0) {
     // adversarial training is incompatible with momentum > 0
+    KALDI_ASSERT(false); // TODO(hxu) turn this off first
     KALDI_ASSERT(config_.momentum == 0.0);
     delta_nnet_->FreezeNaturalGradient(true);
     bool is_adversarial_step = true;
@@ -145,9 +143,9 @@ void LmNnetSamplingTrainer::TrainInternal(const NnetExample &eg,
                                           bool is_adversarial_step) {
   const SparseMatrix<BaseFloat> *old_input;
 
+  KALDI_ASSERT(delta_nnet_ != NULL);
   NnetComputer computer(config_.compute_config, computation, *nnet_->GetNnet(),
-                        (delta_nnet_ == NULL ? nnet_->GetNnet() :
-                               delta_nnet_->GetNnet()));
+                               delta_nnet_->GetNnet());
 
   ProcessEgInputs(eg, *nnet_->input_projection_, &old_input, &new_input_);
 
@@ -263,7 +261,7 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange(bool is_adversarial_step) 
 
     if (scale_f_out < min_scale) {
       min_scale = scale_f_out;
-      component_name_with_min_scale = "rnnlm-input";
+      component_name_with_min_scale = "rnnlm-output";
       max_change_with_min_scale = max_change_per;
     }
     param_delta_squared += std::pow(scale_f_out, 
@@ -283,7 +281,7 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange(bool is_adversarial_step) 
     if (param_delta > config_.max_param_change) {
       if (param_delta - param_delta != 0.0) {
         KALDI_WARN << "Infinite parameter change, will not apply.";
-        delta_nnet_->SetZero(false);
+        delta_nnet_->Scale(0.0);
       } else {
         scale *= config_.max_param_change / param_delta;
         num_max_change_global_applied_++;
@@ -311,35 +309,41 @@ void LmNnetSamplingTrainer::UpdateParamsWithMaxChange(bool is_adversarial_step) 
   // and updates parameters
 
   if (config_.adversarial_training_scale > 0.0) {
-      KALDI_ASSERT(config_.momentum == 0.0);
-      BaseFloat scale_adversarial =
-          (is_adversarial_step ? -config_.adversarial_training_scale :
-          (1 + config_.adversarial_training_scale));
+    KALDI_ASSERT(config_.momentum == 0.0);
+    BaseFloat scale_adversarial =
+        (is_adversarial_step ? -config_.adversarial_training_scale :
+        (1 + config_.adversarial_training_scale));
 
-      scale_factors.Scale(scale * scale_adversarial);
+    scale_factors.Scale(scale * scale_adversarial);
+    scale_f_in *= scale * scale_adversarial;
+    scale_f_out *= scale * scale_adversarial;
 
-      AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale * scale_adversarial,
-                        nnet_->nnet_);
+    AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale * scale_adversarial,
+                      nnet_->nnet_);
 
-      nnet_->input_projection_->Add(scale_f_in * scale_adversarial,
-                                    *delta_nnet_->input_projection_);
-      nnet_->output_projection_->Add(scale_f_out * scale_adversarial,
-                                     *delta_nnet_->output_projection_);
+    nnet_->input_projection_->Add(scale_f_in,
+                                  *delta_nnet_->input_projection_);
+    nnet_->output_projection_->Add(scale_f_out,
+                                   *delta_nnet_->output_projection_);
+//    nnet_->input_projection_->Add(scale_f_in * scale_adversarial,
+//                                  *delta_nnet_->input_projection_);
+//    nnet_->output_projection_->Add(scale_f_out * scale_adversarial,
+//                                   *delta_nnet_->output_projection_);
 
 //      ScaleNnet(0.0, delta_nnet_);
-      delta_nnet_->Scale(0.0);
-    } else {
+    delta_nnet_->Scale(0.0);
+  } else {
 //      scale_factors.Scale(scale);
 //      AddNnetComponents(*delta_nnet_, scale_factors, scale, nnet_);
 //      ScaleNnet(config_.momentum, delta_nnet_);
-      scale_factors.Scale(scale);
-      AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale, nnet_->nnet_);
-      nnet_->input_projection_->Add(scale_f_in, *delta_nnet_->input_projection_);
-      nnet_->output_projection_->Add(scale_f_out, *delta_nnet_->output_projection_);
-    //  ScaleNnet(config_.momentum, delta_nnet_);
-      delta_nnet_->Scale(config_.momentum);
-    }
+    scale_factors.Scale(scale);
+    AddNnetComponents(delta_nnet_->Nnet(), scale_factors, scale, nnet_->nnet_);
+    nnet_->input_projection_->Add(scale_f_in * scale, *delta_nnet_->input_projection_);
+    nnet_->output_projection_->Add(scale_f_out * scale, *delta_nnet_->output_projection_);
+  //  ScaleNnet(config_.momentum, delta_nnet_);
+    delta_nnet_->Scale(config_.momentum);
   }
+}
 //}
 
 void LmNnetSamplingTrainer::ProcessOutputs(bool is_adversarial_step,
@@ -474,10 +478,14 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
                   const LmOutputComponent &output_projection,
                   const CuMatrixBase<BaseFloat> **old_output,
                   LmNnet *nnet_to_update) {
-  int t = samples.size();
-  KALDI_ASSERT(t > 0);
   *old_output = &computer->GetOutput(output_name);
-  int num_samples = samples[0].size();
+
+  int t = samples.size();
+  int num_samples;
+
+  KALDI_ASSERT(t > 0);
+  num_samples = samples[0].size();
+
   if (num_samples == 0) {
     num_samples = output_projection.OutputDim();
   }
@@ -489,7 +497,6 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
                             // will be initialized with SparsMatrixToVector
                             // the size will be post.NumRows() = t * minibatch_size
                             // words for the same *sentence* would be grouped together
-                            // not the same time-step
 
   std::set<int> outputs_set;
 
@@ -538,7 +545,8 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   // grouped same as output (words in a sentence group together)
 
   if (num_samples == output_projection.OutputDim()) {
-    VectorToSparseMatrix(outputs, out.NumCols(), &supervision_cpu);
+//    VectorToSparseMatrix(outputs, out.NumCols(), &supervision_cpu);
+    // no need to generate a new struct - just use post
   } else {
     correct_indexes.resize(out.NumRows(), -1);
     // TODO(hxu) not tested it yet
@@ -559,7 +567,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
   }
 
-  CuSparseMatrix<BaseFloat> supervision_gpu(supervision_cpu);
+  CuSparseMatrix<BaseFloat> supervision_gpu(num_samples == output_projection.OutputDim()? post: supervision_cpu);
   *tot_objf = TraceMatSmat(out, supervision_gpu, kTrans); // first part of the objf
   // (the objf regarding the positive reward for getting correct labels)
   // now for each row the objf is y_i where i is the correct label
@@ -598,6 +606,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   if (supply_deriv && nnet_to_update != NULL) {
     CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), out.NumCols());
     BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
+    // now f_out_div_probs_deriv has  1 / (- selection-prob(y)) * d f(y) / dy
 
     CuMatrix<BaseFloat> derivatives;
     derivatives.Swap(&f_out); // re-use the mem so that no need to malloc again
@@ -607,10 +616,26 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     derivatives.AddMat(1.0, f_out_div_probs_deriv);
 
     CuMatrix<BaseFloat> input_deriv((*old_output)->NumRows(),
-                                    (*old_output)->NumCols(),
-                                    kSetZero);
+                                    (*old_output)->NumCols());
 
     if (num_samples == output_projection.OutputDim()) {
+
+// test code for derivatives
+//      {
+//        CuMatrix<BaseFloat> deriv2(derivatives.NumRows(), derivatives.NumCols());
+//        for (int i = 0; i < deriv2.NumRows(); i++) {
+//          deriv2(i, outputs[i]) = 1;
+//          for (int j = 0; j < deriv2.NumCols(); j++) {
+//            deriv2(i, j) =  deriv2(i, j) - std::min(1.0, exp(out(i, j)));
+//          }
+//        }
+//
+//        deriv2.AddMat(-1, derivatives);
+////        KALDI_ASSERT(ApproxEqual(deriv2.FrobeniusNorm(), 0));
+//        KALDI_ASSERT(deriv2.FrobeniusNorm() < 0.000001);
+//      }
+//
+
       output_projection.Backprop(**old_output, out,
                                  derivatives, nnet_to_update->output_projection_,
                                  &input_deriv);
