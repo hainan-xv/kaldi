@@ -505,6 +505,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   std::vector<double> selected_probs;  // selected_probs[i * t + j] is the prob of
                                                         // selecting samples[j][i]
   // words for the same sentence would be grouped together
+  // TODO(hxu) actually this is not true any more
 
   int minibatch_size = (*old_output)->NumRows() / t;
   KALDI_ASSERT(outputs.size() == t * minibatch_size);
@@ -524,16 +525,19 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
       vector<int> indexes(num_samples);
       for (int j = 0; j < num_samples; j++) {
         indexes[j] = samples[i][j].first;
+        selected_probs[j + i * minibatch_size] = samples[i][j].second;
       }
+//        selected_probs[j * t + i] = samples[i][j].second;
       output_projection.Propagate(this_in, indexes, &this_out);
     }
 
     // use a different loop to speed up with cache
-    for (int j = 0; j < num_samples; j++) {
-      for (int i = 0; i < t; i++) {
-        selected_probs[j * t + i] = samples[i][j].second;
-      }
-    }
+//    for (int j = 0; j < num_samples; j++) {
+//      for (int i = 0; i < t; i++) {
+//        selected_probs[j * t + i] = samples[i][j].second;
+////        KALDI_ASSERT(outputs[j * t + i] == samples[i][j].first);
+//      }
+//    }
   }
 
   CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
