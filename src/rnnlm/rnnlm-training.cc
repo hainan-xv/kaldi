@@ -520,27 +520,18 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     // need to parallelize this loop
     for (int i = 0; i < t; i++) {
       CuSubMatrix<BaseFloat> this_in((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
-      CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
+      CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, num_samples, out.Stride() * t);
 
       vector<int> indexes(num_samples);
       for (int j = 0; j < num_samples; j++) {
         indexes[j] = samples[i][j].first;
-        selected_probs[j + i * minibatch_size] = samples[i][j].second;
+        selected_probs[j + i * num_samples] = samples[i][j].second;
       }
-//        selected_probs[j * t + i] = samples[i][j].second;
       output_projection.Propagate(this_in, indexes, &this_out);
     }
-
-    // use a different loop to speed up with cache
-//    for (int j = 0; j < num_samples; j++) {
-//      for (int i = 0; i < t; i++) {
-//        selected_probs[j * t + i] = samples[i][j].second;
-////        KALDI_ASSERT(outputs[j * t + i] == samples[i][j].first);
-//      }
-//    }
   }
 
-  CuMatrix<BaseFloat> f_out(out.NumRows(), out.NumCols());
+  CuMatrix<BaseFloat> f_out(out.NumRows(), num_samples);
   ComputeSamplingNonlinearity(out, &f_out);
 
   *tot_weight = post.NumRows();
@@ -549,7 +540,6 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   // grouped same as output (words in a sentence group together)
 
   if (num_samples == output_projection.OutputDim()) {
-//    VectorToSparseMatrix(outputs, out.NumCols(), &supervision_cpu);
     // no need to generate a new struct - just use post
   } else {
     correct_indexes.resize(out.NumRows(), -1);
@@ -568,7 +558,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 //        KALDI_ASSERT(outputs[j + i * t] == samples[j][correct_indexes[j + i * t]].first);
       }
     }
-    VectorToSparseMatrix(correct_indexes, out.NumCols(), &supervision_cpu);
+    VectorToSparseMatrix(correct_indexes, num_samples, &supervision_cpu);
   }
 
   CuSparseMatrix<BaseFloat> supervision_gpu(num_samples == output_projection.OutputDim()? post: supervision_cpu);
@@ -579,17 +569,22 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   // or in the sampling case, y_i - (\sum_j f(y_j)/prob(j))
 
   // the adjusted output by multiplying by -1/prob(sampling)
-  CuMatrix<BaseFloat> f_out_div_probs(out.NumRows(), out.NumCols());
-  CuVector<BaseFloat> selection_probs_inv(out.NumCols());
+  CuMatrix<BaseFloat> f_out_div_probs(out.NumRows(), num_samples);
+  CuMatrix<BaseFloat> selection_probs_inv(t, num_samples);
 
   // first fill in the -1/probs
   if (num_samples != output_projection.OutputDim()) {
-    Vector<BaseFloat> v(out.NumCols(), kSetZero);
-    for (int i = 0; i < out.NumCols(); i++) {
-      v(i) = -1.0 / selected_probs[i];
+    Vector<BaseFloat> v(num_samples, kSetZero);
+    for (int j = 0; j < t; j++) {
+      for (int i = 0; i < num_samples; i++) {
+        v(i) = -1.0 / selected_probs[i + j * num_samples];
+      }
+      selection_probs_inv.Row(j).CopyFromVec(v);
+      CuSubMatrix<BaseFloat> this_fout_dp(f_out_div_probs.Data() + j * f_out_div_probs.Stride(),
+                                          minibatch_size, num_samples, f_out_div_probs.Stride() * t);
+
+      this_fout_dp.CopyRowsFromVec(selection_probs_inv.Row(j));
     }
-    selection_probs_inv.CopyFromVec(v);
-    f_out_div_probs.CopyRowsFromVec(selection_probs_inv);
   } else {
     f_out_div_probs.Set(-1.0);
     selection_probs_inv.Set(-1.0);
@@ -608,8 +603,17 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   *tot_objf += neg_term;
 
   if (supply_deriv && nnet_to_update != NULL) {
-    CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), out.NumCols());
-    BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
+    CuMatrix<BaseFloat> f_out_div_probs_deriv(out.NumRows(), num_samples);
+
+    for (int i = 0; i < t; i++) {
+      CuSubMatrix<BaseFloat> this_fout(f_out.Data() + i * f_out.Stride(), minibatch_size,
+                                       num_samples, f_out.Stride() * t);
+      CuSubMatrix<BaseFloat> this_deriv(f_out_div_probs_deriv.Data() + i * f_out_div_probs_deriv.Stride(), minibatch_size,
+                                       num_samples, f_out_div_probs_deriv.Stride() * t);
+      BackpropSamplingNonlinearity(selection_probs_inv.Row(i), &this_fout, &this_deriv);
+//      BackpropSamplingNonlinearity(selection_probs_inv, &f_out, &f_out_div_probs_deriv);
+    }
+
     // now f_out_div_probs_deriv has  1 / (- selection-prob(y)) * d f(y) / dy
 
     CuMatrix<BaseFloat> derivatives;
@@ -647,7 +651,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
       for (int i = 0; i < t; i++) {
         CuSubMatrix<BaseFloat> this_in_value((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
         CuSubMatrix<BaseFloat> this_in_deriv(input_deriv.Data() + i * input_deriv.Stride(), minibatch_size, input_deriv.NumCols(), input_deriv.Stride() * t);
-        CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, out.NumCols(), out.Stride() * t);
+        CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, num_samples, out.Stride() * t);
         CuSubMatrix<BaseFloat> this_deriv(derivatives.Data() + i * derivatives.Stride(), minibatch_size, derivatives.NumCols(), derivatives.Stride() * t);
 
         {
