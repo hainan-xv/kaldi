@@ -173,7 +173,7 @@ class DecodableRnnlmSimpleLooped {
   Matrix<BaseFloat> current_nnet_output_;
 
   // The time-offset of the current log-posteriors, equals
-  // -1 when initialized, or 0 when AdvanceChunk() was called
+  // -1 when initialized, or 0 once AdvanceChunk() was called
   int32 current_log_post_offset_;
 };
 

@@ -59,7 +59,7 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
     std::ifstream ifile(rnn_wordlist.c_str());
     int32 id;
     string word;
-    int32 i = 0;
+    int32 i = 1;
     while (ifile >> id >> word) { // TODO(hxu) ugly fix for cued-rnnlm's bug
                                   // will implement a better fix later
       if (word == "[UNK]") {
@@ -68,7 +68,7 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
         continue;
       }
       i++;
-      assert(i == id + 1);
+      assert(i == id + 2);
       rnn_label_to_word_.push_back(word);
 
       int fst_label = fst_word_symbols->Find(rnn_label_to_word_[i]);
