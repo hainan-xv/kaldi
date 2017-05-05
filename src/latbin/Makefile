@@ -4,6 +4,10 @@ all:
 EXTRA_CXXFLAGS = -Wno-sign-compare
 include ../kaldi.mk
 
+LDFLAGS += $(CUDA_LDFLAGS)
+LDLIBS += $(CUDA_LDLIBS)
+
+
 BINFILES = lattice-best-path lattice-prune lattice-equivalent lattice-to-nbest \
            lattice-lmrescore lattice-scale lattice-union lattice-to-post \
            lattice-determinize lattice-oracle lattice-rmali \
@@ -30,10 +34,10 @@ OBJFILES =
 
 TESTFILES =
 
-ADDLIBS = ../lat/kaldi-lat.a ../lm/kaldi-lm.a ../fstext/kaldi-fstext.a \
-          ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a ../util/kaldi-util.a \
-          ../thread/kaldi-thread.a ../matrix/kaldi-matrix.a \
-          ../cudamatrix/kaldi-cudamatrix.a ../nnet3/kaldi-nnet3.a \
-          ../base/kaldi-base.a ../rnnlm/kaldi-rnnlm.a
+ADDLIBS = ../rnnlm/kaldi-rnnlm.a ../lat/kaldi-lat.a ../lm/kaldi-lm.a \
+          ../fstext/kaldi-fstext.a ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a \
+          ../util/kaldi-util.a ../thread/kaldi-thread.a \
+          ../cudamatrix/kaldi-cudamatrix.a ../matrix/kaldi-matrix.a \
+          ../nnet3/kaldi-nnet3.a ../base/kaldi-base.a
 
 include ../makefiles/default_rules.mk
