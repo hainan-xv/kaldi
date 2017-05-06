@@ -598,7 +598,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
   // need to add 1 per row
   BaseFloat neg_term = f_out_div_probs.Sum() + f_out_div_probs.NumRows();
 
-  KALDI_LOG << "added term per eg is " << neg_term / f_out_div_probs.NumRows();
+//  KALDI_LOG << "added term per eg is " << neg_term / f_out_div_probs.NumRows();
 
   *tot_objf += neg_term;
 
@@ -693,9 +693,8 @@ void LmNnetSamplingTrainer::ComputeObjectiveFunctionExact(
   {
     const AffineImportanceSamplingComponent* output_project =
       dynamic_cast<const AffineImportanceSamplingComponent*>(&output_projection);
-    if (output_project != NULL) {
-      output_project->Propagate(old_output, normalize, new_output);
-    }
+    KALDI_ASSERT(output_project != NULL);
+    output_project->Propagate(old_output, normalize, new_output);
   }
 
   *tot_weight = post.Sum();

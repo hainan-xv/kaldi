@@ -163,7 +163,7 @@ class LmNaturalGradientLinearComponent: public LmLinearComponent {
   BaseFloat num_samples_history_;
   BaseFloat alpha_;
 
-  nnet3::OnlineNaturalGradient preconditioner_in_;
+//  nnet3::OnlineNaturalGradient preconditioner_in_;
 
   nnet3::OnlineNaturalGradient preconditioner_out_;
 
@@ -391,7 +391,7 @@ class NaturalGradientAffineImportanceSamplingComponent: public AffineImportanceS
   BaseFloat alpha_;
   nnet3::OnlineNaturalGradient preconditioner_in_;
 
-  nnet3::OnlineNaturalGradient preconditioner_out_;
+//  nnet3::OnlineNaturalGradient preconditioner_out_;
 
   BaseFloat max_change_per_sample_;
 

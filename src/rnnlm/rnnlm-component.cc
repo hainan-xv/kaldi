@@ -18,7 +18,7 @@ void NaturalGradientAffineImportanceSamplingComponent::Scale(BaseFloat scale) {
 
 void NaturalGradientAffineImportanceSamplingComponent::FreezeNaturalGradient(bool freeze) {
   preconditioner_in_.Freeze(freeze);
-  preconditioner_out_.Freeze(freeze);
+//  preconditioner_out_.Freeze(freeze);
 }
 
 void NaturalGradientAffineImportanceSamplingComponent::Resize(int32 input_dim, int32 output_dim) {
@@ -42,7 +42,7 @@ NaturalGradientAffineImportanceSamplingComponent::NaturalGradientAffineImportanc
     num_samples_history_(other.num_samples_history_),
     alpha_(other.alpha_),
     preconditioner_in_(other.preconditioner_in_),
-    preconditioner_out_(other.preconditioner_out_),
+//    preconditioner_out_(other.preconditioner_out_),
     max_change_per_sample_(other.max_change_per_sample_),
     update_count_(other.update_count_),
     active_scaling_count_(other.active_scaling_count_),
@@ -258,13 +258,12 @@ void NaturalGradientAffineImportanceSamplingComponent::Propagate(const CuMatrixB
   if (out->NumRows() > 1)
     out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
+  out->ApplyCeiling(0.0);
   if (normalize) {
-    // TODO(Hxu)
-  //  CuMatrix<BaseFloat> test_norm(*out);
-  //  test_norm.ApplyExp();
-    ComputeSamplingNonlinearity(*out, out);
-    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
-    out->ApplyLog();
+//    ComputeSamplingNonlinearity(*out, out);
+////    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
+//    out->ApplyLog();
+//    KALDI_LOG << "Sum is " << out->Sum();
     out->ApplyLogSoftMaxPerRow(*out);
   }
 }
@@ -333,13 +332,14 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
       to_update->preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
                                                 &in_scale);
-      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
-                                                 &out_scale);
+//      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
+//                                                 &out_scale);
 
       // "scale" is a scaling factor coming from the PreconditionDirections calls
       // (it's faster to have them output a scaling factor than to have them scale
       // their outputs).
-      BaseFloat scale = in_scale * out_scale;
+      BaseFloat scale = in_scale;
+//      BaseFloat scale = in_scale * out_scale;
 
       CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
                                                   0, in_value_temp.NumRows(),
@@ -412,13 +412,14 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
       to_update->preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
                                                 &in_scale);
-      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
-                                                 &out_scale);
+//      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
+//                                                 &out_scale);
 
       // "scale" is a scaling factor coming from the PreconditionDirections calls
       // (it's faster to have them output a scaling factor than to have them scale
       // their outputs).
-      BaseFloat scale = in_scale * out_scale;
+      BaseFloat scale = in_scale;
+//      BaseFloat scale = in_scale * out_scale;
 
       CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
                                                   0, in_value_temp.NumRows(),
@@ -457,10 +458,10 @@ void NaturalGradientAffineImportanceSamplingComponent::SetNaturalGradientConfigs
   preconditioner_in_.SetNumSamplesHistory(num_samples_history_);
   preconditioner_in_.SetAlpha(alpha_);
   preconditioner_in_.SetUpdatePeriod(update_period_);
-  preconditioner_out_.SetRank(rank_out_);
-  preconditioner_out_.SetNumSamplesHistory(num_samples_history_);
-  preconditioner_out_.SetAlpha(alpha_);
-  preconditioner_out_.SetUpdatePeriod(update_period_);
+//  preconditioner_out_.SetRank(rank_out_);
+//  preconditioner_out_.SetNumSamplesHistory(num_samples_history_);
+//  preconditioner_out_.SetAlpha(alpha_);
+//  preconditioner_out_.SetUpdatePeriod(update_period_);
 }
 
 void NaturalGradientAffineImportanceSamplingComponent::Read(std::istream &is, bool binary) {
@@ -558,7 +559,7 @@ LmNaturalGradientLinearComponent::LmNaturalGradientLinearComponent(
     update_period_(other.update_period_),
     num_samples_history_(other.num_samples_history_),
     alpha_(other.alpha_),
-    preconditioner_in_(other.preconditioner_in_),
+//    preconditioner_in_(other.preconditioner_in_),
     preconditioner_out_(other.preconditioner_out_),
     max_change_per_sample_(other.max_change_per_sample_),
     update_count_(other.update_count_),
@@ -635,10 +636,10 @@ void LmNaturalGradientLinearComponent::Update(
 
   // These "scale" values get will get multiplied into the learning rate (faster
   // than having the matrices scaled inside the preconditioning code).
-  BaseFloat in_scale, out_scale;
+  BaseFloat in_scale = 1.0, out_scale;
 
-  preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
-                                            &in_scale);
+//  preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
+//                                            &in_scale);
   preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
                                              &out_scale);
 
@@ -708,7 +709,7 @@ void LmNaturalGradientLinearComponent::Resize(
   if (rank_out_ >= output_dim) rank_out_ = output_dim - 1;
   linear_params_.Resize(output_dim, input_dim);
   nnet3::OnlineNaturalGradient temp;
-  preconditioner_in_ = temp;
+//  preconditioner_in_ = temp;
   preconditioner_out_ = temp;
   SetNaturalGradientConfigs();
 }
@@ -796,10 +797,10 @@ void LmNaturalGradientLinearComponent::InitFromConfig(ConfigLine *cfl) {
 }
 
 void LmNaturalGradientLinearComponent::SetNaturalGradientConfigs() {
-  preconditioner_in_.SetRank(rank_in_);
-  preconditioner_in_.SetNumSamplesHistory(num_samples_history_);
-  preconditioner_in_.SetAlpha(alpha_);
-  preconditioner_in_.SetUpdatePeriod(update_period_);
+//  preconditioner_in_.SetRank(rank_in_);
+//  preconditioner_in_.SetNumSamplesHistory(num_samples_history_);
+//  preconditioner_in_.SetAlpha(alpha_);
+//  preconditioner_in_.SetUpdatePeriod(update_period_);
   preconditioner_out_.SetRank(rank_out_);
   preconditioner_out_.SetNumSamplesHistory(num_samples_history_);
   preconditioner_out_.SetAlpha(alpha_);
@@ -911,7 +912,7 @@ LmInputComponent* LmNaturalGradientLinearComponent::Copy() const {
 }
 
 void LmNaturalGradientLinearComponent::FreezeNaturalGradient(bool freeze) {
-  preconditioner_in_.Freeze(freeze);
+//  preconditioner_in_.Freeze(freeze);
   preconditioner_out_.Freeze(freeze);
 }
 
@@ -1083,14 +1084,13 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
   if (out->NumRows() > 1)
     out->RowRange(1, out->NumRows() - 1).CopyRowsFromVec(out->Row(0));
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
+  out->ApplyCeiling(0.0);
   if (normalize) {
-    // TODO(Hxu)
-  //  CuMatrix<BaseFloat> test_norm(*out);
-  //  test_norm.ApplyExp();
-    ComputeSamplingNonlinearity(*out, out);
-    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
-    out->ApplyLog();
+//    ComputeSamplingNonlinearity(*out, out);
+////    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
+//    out->ApplyLog();
     out->ApplyLogSoftMaxPerRow(*out);
+//    KALDI_LOG << "Sum is " << out->Sum();
   }
 }
 
