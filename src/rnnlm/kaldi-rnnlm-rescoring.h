@@ -43,7 +43,7 @@ class KaldiRnnlmDeterministicFst
   KaldiRnnlmDeterministicFst(int32 max_ngram_order,
       const std::string &rnn_wordlist,
       const std::string &word_symbol_table_rxfilename,
-      const rnnlm::LmNnet &lm_nnet);
+      const DecodableRnnlmSimpleLoopedInfo &info);
 
   // We cannot use "const" because the pure virtual function in the interface is
   // not const.

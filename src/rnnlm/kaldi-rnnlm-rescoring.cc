@@ -87,7 +87,7 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
 KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
     const std::string &rnn_wordlist,
     const std::string &word_symbol_table_rxfilename,
-    const rnnlm::LmNnet &lm_nnet) {
+    const DecodableRnnlmSimpleLoopedInfo &info) {
   max_ngram_order_ = max_ngram_order;
   ReadFstWordSymbolTableAndRnnWordlist(rnn_wordlist,
                                        word_symbol_table_rxfilename);
@@ -95,8 +95,6 @@ KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
   std::vector<Label> bos;
   bos.push_back(0); // 0 for <s>
   state_to_wseq_.push_back(bos);
-  DecodableRnnlmSimpleLoopedComputationOptions opts;
-  DecodableRnnlmSimpleLoopedInfo info(opts, lm_nnet);
   DecodableRnnlmSimpleLooped decodable_rnnlm(info);
   state_to_decodable_rnnlm_.push_back(decodable_rnnlm);
   wseq_to_state_[bos] = 0;

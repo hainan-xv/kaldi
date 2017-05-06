@@ -49,7 +49,7 @@ void DecodableRnnlmSimpleLoopedInfo::Init(
   nnet_output_dim = lm_nnet.Nnet().OutputDim("output");
   KALDI_ASSERT(nnet_output_dim > 0);
 
-  int32 ivector_period = 0;
+  int32 ivector_period = frames_per_chunk;
   int32 extra_right_context = 0;
   int32 num_sequences = 1;  // we're processing one utterance at a time.
   CreateLoopedComputationRequestSimple(lm_nnet.Nnet(), frames_per_chunk,

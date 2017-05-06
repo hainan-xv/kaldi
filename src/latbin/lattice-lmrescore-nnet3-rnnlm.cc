@@ -75,6 +75,9 @@ int main(int argc, char *argv[]) {
     rnnlm::LmNnet lm_nnet;
     ReadKaldiObject(rnnlm_rxfilename, &lm_nnet);
 
+    const nnet3::DecodableRnnlmSimpleLoopedComputationOptions opts;
+    const nnet3::DecodableRnnlmSimpleLoopedInfo info(opts, lm_nnet);
+
     // Reads and writes as compact lattice.
     SequentialCompactLatticeReader compact_lattice_reader(lats_rspecifier);
     CompactLatticeWriter compact_lattice_writer(lats_wspecifier);
@@ -99,7 +102,7 @@ int main(int argc, char *argv[]) {
         nnet3::KaldiRnnlmDeterministicFst rnnlm_fst(max_ngram_order,
                                                     rnn_wordlist,
                                                     word_symbols_rxfilename,
-                                                    lm_nnet);
+                                                    info);
 
         // Composes lattice with language model.
         CompactLattice composed_clat;
