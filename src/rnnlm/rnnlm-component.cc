@@ -1097,8 +1097,9 @@ void AffineImportanceSamplingComponent::Propagate(const CuMatrixBase<BaseFloat> 
 BaseFloat AffineImportanceSamplingComponent::ComputeLogprobOfWordGivenHistory(
                                              const CuVectorBase<BaseFloat> &hidden,
                                              int32 word_index) const {
+  int32 dim = hidden.Dim();
   CuSubVector<BaseFloat> param = params_.Row(word_index);
-  BaseFloat ans = VecVec(hidden, param);
+  BaseFloat ans = param(dim) + VecVec(hidden, param.Range(0, dim));
   return ans;
 }
 
