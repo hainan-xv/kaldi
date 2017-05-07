@@ -151,13 +151,10 @@ void DecodableRnnlmSimpleLooped::AdvanceChunk() {
   computer_.Run();
 
   {
-    // Note: it's possible in theory that if you had weird recurrence that went
-    // directly from the output, the call to GetOutputDestructive() would cause
-    // a crash on the next chunk.  If that happens, GetOutput() should be used
-    // instead of GetOutputDestructive().  But we don't anticipate this will
-    // happen in practice.
-    CuMatrix<BaseFloat> output;
-    computer_.GetOutputDestructive("output", &output);
+    // Note: here GetOutput() is used instead of GetOutputDestructive(), since
+    // here we have recurrence that goes directly from the output, and the call
+    // to GetOutputDestructive() would cause a crash on the next chunk.
+    CuMatrix<BaseFloat> output(computer_.GetOutput("output"));
 
     current_nnet_output_.Resize(0, 0);
     current_nnet_output_.Swap(&output);
