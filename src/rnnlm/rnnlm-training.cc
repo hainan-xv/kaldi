@@ -648,22 +648,77 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
                                  derivatives, nnet_to_update->output_projection_,
                                  &input_deriv);
     } else {
+      vector<int32> all_indexes;
+      unordered_map<int32, int32> new_index_to_id;
+      vector<vector<int32> > old_index_to_new(t, vector<int32>(num_samples, -1));
+
+      // an example of the above three maps is
+      // suppose t = 2, and smaples are [11 22 33] and [ 11 33 55 ] respectively
+      // all_indexes would be [11 22 33 55]
+      // new_index_to_id would be [11->0 22->1 33->2 55->3]
+      // old_index_to_new[0] would be [0->0 1->1 2->2]
+      // old_index_to_new[1] would be [0->0 1->2 2->3]
+
+//      t = 0;
       for (int i = 0; i < t; i++) {
-        CuSubMatrix<BaseFloat> this_in_value((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
-        CuSubMatrix<BaseFloat> this_in_deriv(input_deriv.Data() + i * input_deriv.Stride(), minibatch_size, input_deriv.NumCols(), input_deriv.Stride() * t);
-        CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, num_samples, out.Stride() * t);
+        for (int j = 0; j < num_samples; j++) {
+          int32 index = samples[i][j].first;
+          unordered_map<int32, int32>::iterator iter = new_index_to_id.find(index);
+          if (iter == new_index_to_id.end()) {
+            all_indexes.push_back(index);
+            new_index_to_id[index] = all_indexes.size() - 1;
+            old_index_to_new[i][j] = all_indexes.size() - 1;
+          } else {
+            old_index_to_new[i][j] = iter->second;
+          }
+        }
+//        if (i == 0) {
+//          KALDI_ASSERT(samples[0].size() == all_indexes.size());
+//          for (int j = 0; j < samples[0].size(); j++) {
+//            KALDI_ASSERT(samples[0][j].first == all_indexes[j]);
+//          }
+//        }
+      }
+
+      int32 total_samples = all_indexes.size();
+      CuMatrix<BaseFloat> merged_deriv(out.NumRows(), total_samples);
+
+      for (int i = 0; i < t; i++) {
+        vector<int32> indexes(total_samples, -1);
+        for (int j = 0; j < old_index_to_new[i].size(); j++) {
+//          KALDI_ASSERT(old_index_to_new[i][j] < total_samples);
+          indexes[old_index_to_new[i][j]] = j;
+        }
+        CuArray<int> idx(indexes);
+
         CuSubMatrix<BaseFloat> this_deriv(derivatives.Data() + i * derivatives.Stride(), minibatch_size, derivatives.NumCols(), derivatives.Stride() * t);
 
-        {
-          vector<int> indexes(num_samples);
-          for (int j = 0; j < num_samples; j++) {
-            indexes[j] = samples[i][j].first;
-          }
-          output_projection.Backprop(indexes, this_in_value, this_out,
-                                     this_deriv, nnet_to_update->output_projection_,
-                                     &this_in_deriv);
-        }
+        CuSubMatrix<BaseFloat> this_merged_deriv(merged_deriv.Data() + i * merged_deriv.Stride(), minibatch_size, merged_deriv.NumCols(), merged_deriv.Stride() * t);
+
+        this_merged_deriv.AddCols(this_deriv, idx);
+//        merged_deriv.AddCols(derivatives, idx);
       }
+
+      output_projection.Backprop(all_indexes, **old_output, CuMatrix<BaseFloat>(),
+                                 merged_deriv, nnet_to_update->output_projection_,
+                                 &input_deriv);
+
+//      for (int i = 0; i < t; i++) {
+//        CuSubMatrix<BaseFloat> this_in_value((**old_output).Data() + i * (**old_output).Stride(), minibatch_size, (**old_output).NumCols(), (**old_output).Stride() * t);
+//        CuSubMatrix<BaseFloat> this_in_deriv(input_deriv.Data() + i * input_deriv.Stride(), minibatch_size, input_deriv.NumCols(), input_deriv.Stride() * t);
+//        CuSubMatrix<BaseFloat> this_out(out.Data() + i * out.Stride(), minibatch_size, num_samples, out.Stride() * t);
+//        CuSubMatrix<BaseFloat> this_deriv(derivatives.Data() + i * derivatives.Stride(), minibatch_size, derivatives.NumCols(), derivatives.Stride() * t);
+//
+//        {
+//          vector<int> indexes(num_samples);
+//          for (int j = 0; j < num_samples; j++) {
+//            indexes[j] = samples[i][j].first;
+//          }
+//          output_projection.Backprop(indexes, this_in_value, this_out,
+//                                     this_deriv, nnet_to_update->output_projection_,
+//                                     &this_in_deriv);
+//        }
+//      }
     }
 
     computer->AcceptInput(output_name, &input_deriv);
