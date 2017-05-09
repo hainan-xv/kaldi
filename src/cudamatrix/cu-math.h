@@ -241,6 +241,17 @@ void CpuBackpropLstmNonlinearity(const MatrixBase<Real> &input,
                                  MatrixBase<double> *deriv_sum_out,
                                  MatrixBase<Real> *self_repair_sum_out);
 
+
+template<typename Real>
+void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
+                           const SparseMatrix<Real> &sp,
+                           CuMatrixBase<Real> *output);
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(Real alpha, 
+                                const CuMatrixBase<Real> &out_deriv,
+                                const SparseMatrix<Real> &sp,
+                                CuMatrixBase<Real> *params);
 /// Normalize nonlinearity modifies the vector of activations
 /// by scaling it so that the root-mean-square equals 1.0.
 ///
@@ -282,7 +293,6 @@ void DiffNormalizePerRow(const CuMatrixBase<Real> &in_value,
                          const CuMatrixBase<Real> &out_deriv,
                          const Real target_rms, const bool add_log_stddev,
                          CuMatrixBase<Real>* in_deriv);
-
 
 } // namespace cu
 } // namespace kaldi

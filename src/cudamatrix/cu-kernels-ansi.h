@@ -640,6 +640,7 @@ void cudaD_trace_mat_smat_trans(dim3 Gr, dim3 Bl, const double* mat_in,
                                 const MatrixElement<double>* smat_in,
                                 MatrixDim mat_d_in, MatrixIndexT_cuda smat_d_in,
                                 double* trace_vec_out);
+
 void cudaF_trace_mat_smat_trans(dim3 Gr, dim3 Bl, const float* mat_in,
                                 const MatrixElement<float>* smat_in,
                                 MatrixDim mat_d_in, MatrixIndexT_cuda smat_d_in,
@@ -675,6 +676,123 @@ void cudaD_vec_soft_max(int Gr, int Bl, double* v, int dim);
 void cudaF_vec_soft_max(int Gr, int Bl, float* v, int dim);
 void cudaD_vec_sum(int Gr, int Bl, double* v, double* value, int dim, int inc);
 void cudaF_vec_sum(int Gr, int Bl, float* v, float* value, int dim, int inc);
+
+void cudaD_matrix_add_elements(dim3 Gr, dim3 Bl, double *data, MatrixDim dim,
+                               double alpha, MatrixElement<double>* x,
+                               int num_elements);
+void cudaD_matrix_add_indexed_values(dim3 Gr, dim3 Bl, MatrixDim dim,
+                                     double alpha, const Int32Pair* indices,
+                                     const double* x, int s, double* data);
+void cudaD_comp_obj_deriv(dim3 Gr, dim3 Bl, MatrixElement<double>* x, int s,
+                          const double* z, MatrixDim d, double* z2,
+                          MatrixDim d2, double* t);
+
+void cudaD_sy_add_tr2(dim3 Gr, dim3 Bl, double alpha, double beta,
+                      const double* T, MatrixDim tdim, double *S,
+                      MatrixDim sdim);
+void cudaD_sum_column_ranges(dim3 Gr, dim3 Bl, double *data, MatrixDim dim,
+                             const double *src_data, MatrixDim src_dim,
+                             const Int32Pair *indices);
+void cudaD_add_row_ranges(dim3 Gr, dim3 Bl, double *data, MatrixDim dim,
+                          const double *src_data, MatrixDim src_dim,
+                          const Int32Pair *indexes);
+void cudaD_matrix_lookup(dim3 Gr, dim3 Bl, const double *data, MatrixDim dim,
+                         const Int32Pair *indices, int indices_size,
+                         double *output);
+
+void cudaD_equal_element_mask(dim3 Gr, dim3 Bl, const double *mat1,
+                              const double *mat2, double *mask,
+                              MatrixDim mat1_dim, int mat2_stride,
+                              int mask_stride);
+
+//void cudaD_lstm_nonlinearity(dim3 Gr, dim3 Bl, const double* in,
+//                             const int in_stride, const double* params,
+//                             const int params_stride, const int out_stride,
+//                             const int cell_dim, const int num_rows,
+//                             double* out);
+//void cudaF_lstm_nonlinearity(dim3 Gr, dim3 Bl, const float* in,
+//                             const int in_stride, const float* params,
+//                             const int params_stride, const int out_stride,
+//                             const int cell_dim, const int num_rows,
+//                             float* out);
+//void cudaD_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
+//                                  const int num_rows, const double* input,
+//                                  const int in_stride, const double* params,
+//                                  const int params_stride,
+//                                  const double* output_deriv,
+//                                  const int output_deriv_stride,
+//                                  const double* deriv_sum_in,
+//                                  const int deriv_sum_in_stride,
+//                                  const double* self_repair_config,
+//                                  double count, double* input_deriv,
+//                                  const int input_deriv_stride,
+//                                  double* params_deriv,
+//                                  const int params_deriv_stride,
+//                                  double* value_sum_out,
+//                                  const int value_sum_out_stride,
+//                                  double* deriv_sum_out,
+//                                  const int deriv_sum_out_stride,
+//                                  double* self_repair_sum_out,
+//                                  const int self_repair_sum_out_stride);
+//void cudaF_diff_lstm_nonlinearity(dim3 Gr, dim3 Bl, const int cell_dim,
+//                                  const int num_rows, const float* input,
+//                                  const int in_stride, const float* params,
+//                                  const int params_stride,
+//                                  const float* output_deriv,
+//                                  const int output_deriv_stride,
+//                                  const double* deriv_sum_in,
+//                                  const int deriv_sum_in_stride,
+//                                  const float* self_repair_config, double count,
+//                                  float* input_deriv,
+//                                  const int input_deriv_stride,
+//                                  float* params_deriv,
+//                                  const int params_deriv_stride,
+//                                  double* value_sum_out,
+//                                  const int value_sum_out_stride,
+//                                  double* deriv_sum_out,
+//                                  const int deriv_sum_out_stride,
+//                                  float* self_repair_sum_out,
+//                                  const int self_repair_sum_out_stride);
+
+
+void cudaD_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, double* output);
+void cudaF_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                            const int params_stride,
+                            const MatrixIndexT_cuda* reorder,
+                            MatrixDim output_dim, float* output);
+void cudaD_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          double alpha,
+                                          const double* out_deriv,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          double* params);
+void cudaF_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                          float alpha,
+                                          const float* out_deriv,
+                                          const MatrixIndexT_cuda* indices,
+                                          MatrixDim out_deriv_dim,
+                                          const int params_stride,
+                                          float* params);
+void cudaD_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
+                              MatrixDim d_out, const double *v_in);
+void cudaF_copy_cols_from_vec(dim3 Gr, dim3 Bl, float *mat_out, MatrixDim d_out,
+                              const float *v_in);
+
+void cudaF_diff_normalize_per_row(size_t Gr, size_t Bl, float *id,
+                                  int id_stride, const float *iv,
+                                  MatrixDim iv_dim, const float* od,
+                                  int od_stride, float target_rms,
+                                  bool add_log_stddev);
+void cudaD_diff_normalize_per_row(size_t Gr, size_t Bl, double *id,
+                                  int id_stride, const double *iv,
+                                  MatrixDim iv_dim, const double* od,
+                                  int od_stride, double target_rms,
+                                  bool add_log_stddev);
+
 
 } // extern "C"
 

@@ -1262,9 +1262,6 @@ void AffineComponent::InitFromConfig(ConfigLine *cfl) {
     KALDI_ERR << "Bad initializer " << cfl->WholeLine();
 }
 
-
-
-
 void AffineComponent::Propagate(const ComponentPrecomputedIndexes *indexes,
                                 const CuMatrixBase<BaseFloat> &in,
                                  CuMatrixBase<BaseFloat> *out) const {
@@ -1345,6 +1342,182 @@ void AffineComponent::UnVectorize(const VectorBase<BaseFloat> &params) {
   linear_params_.CopyRowsFromVec(params.Range(0, InputDim() * OutputDim()));
   bias_params_.CopyFromVec(params.Range(InputDim() * OutputDim(),
                                         OutputDim()));
+}
+
+void LinearComponent::Scale(BaseFloat scale) {
+  if (scale == 0.0) {
+    // If scale == 0.0 we call SetZero() which will get rid of NaN's and inf's.
+    linear_params_.SetZero();
+  } else {
+    linear_params_.Scale(scale);
+  }
+}
+
+void LinearComponent::Resize(int32 input_dim, int32 output_dim) {
+  KALDI_ASSERT(input_dim > 0 && output_dim > 0);
+  linear_params_.Resize(output_dim, input_dim);
+}
+
+void LinearComponent::Add(BaseFloat alpha, const Component &other_in) {
+  const LinearComponent *other =
+      dynamic_cast<const LinearComponent*>(&other_in);
+  KALDI_ASSERT(other != NULL);
+  linear_params_.AddMat(alpha, other->linear_params_);
+}
+
+LinearComponent::LinearComponent(const LinearComponent &component):
+    UpdatableComponent(component),
+    linear_params_(component.linear_params_) { }
+
+LinearComponent::LinearComponent(const CuMatrixBase<BaseFloat> &linear_params,
+                                 BaseFloat learning_rate):
+    linear_params_(linear_params) {
+  SetUnderlyingLearningRate(learning_rate);
+}
+
+void LinearComponent::SetParams(
+                                const MatrixBase<BaseFloat> &linear) {
+  linear_params_ = linear;
+}
+
+void LinearComponent::PerturbParams(BaseFloat stddev) {
+  CuMatrix<BaseFloat> temp_linear_params(linear_params_);
+  temp_linear_params.SetRandn();
+  linear_params_.AddMat(stddev, temp_linear_params);
+}
+
+std::string LinearComponent::Info() const {
+  std::ostringstream stream;
+  stream << UpdatableComponent::Info();
+  PrintParameterStats(stream, "linear-params", linear_params_);
+  return stream.str();
+}
+
+Component* LinearComponent::Copy() const {
+  LinearComponent *ans = new LinearComponent(*this);
+  return ans;
+}
+
+BaseFloat LinearComponent::DotProduct(const UpdatableComponent &other_in) const {
+  const LinearComponent *other =
+      dynamic_cast<const LinearComponent*>(&other_in);
+  return TraceMatMat(linear_params_, other->linear_params_, kTrans);
+}
+
+void LinearComponent::Init(int32 input_dim, int32 output_dim,
+                           BaseFloat param_stddev) {
+  linear_params_.Resize(output_dim, input_dim);
+  KALDI_ASSERT(output_dim > 0 && input_dim > 0 && param_stddev >= 0.0);
+  linear_params_.SetRandn(); // sets to random normally distributed noise.
+  linear_params_.Scale(param_stddev);
+}
+
+void LinearComponent::Init(std::string matrix_filename) {
+  CuMatrix<BaseFloat> mat;
+  ReadKaldiObject(matrix_filename, &mat); // will abort on failure.
+  KALDI_ASSERT(mat.NumCols() >= 1);
+  int32 input_dim = mat.NumCols(), output_dim = mat.NumRows();
+  linear_params_.Resize(output_dim, input_dim);
+  linear_params_.CopyFromMat(mat.Range(0, output_dim, 0, input_dim));
+}
+
+void LinearComponent::InitFromConfig(ConfigLine *cfl) {
+  bool ok = true;
+  std::string matrix_filename;
+  int32 input_dim = -1, output_dim = -1;
+  InitLearningRatesFromConfig(cfl);
+  if (cfl->GetValue("matrix", &matrix_filename)) {
+    Init(matrix_filename);
+    if (cfl->GetValue("input-dim", &input_dim))
+      KALDI_ASSERT(input_dim == InputDim() &&
+                   "input-dim mismatch vs. matrix.");
+    if (cfl->GetValue("output-dim", &output_dim))
+      KALDI_ASSERT(output_dim == OutputDim() &&
+                   "output-dim mismatch vs. matrix.");
+  } else {
+    ok = ok && cfl->GetValue("input-dim", &input_dim);
+    ok = ok && cfl->GetValue("output-dim", &output_dim);
+    BaseFloat param_stddev = 1.0 / std::sqrt(input_dim);
+    cfl->GetValue("param-stddev", &param_stddev);
+    Init(input_dim, output_dim,
+         param_stddev);
+  }
+  if (cfl->HasUnusedValues())
+    KALDI_ERR << "Could not process these elements in initializer: "
+              << cfl->UnusedValues();
+  if (!ok)
+    KALDI_ERR << "Bad initializer " << cfl->WholeLine();
+}
+
+void LinearComponent::Propagate(const ComponentPrecomputedIndexes *indexes,
+                                const CuMatrixBase<BaseFloat> &in,
+                                 CuMatrixBase<BaseFloat> *out) const {
+
+  // of *out.
+  out->AddMatMat(1.0, in, kNoTrans, linear_params_, kTrans, 0.0);
+}
+
+void LinearComponent::UpdateSimple(const CuMatrixBase<BaseFloat> &in_value,
+                                   const CuMatrixBase<BaseFloat> &out_deriv) {
+  linear_params_.AddMatMat(learning_rate_, out_deriv, kTrans,
+                           in_value, kNoTrans, 1.0);
+}
+
+void LinearComponent::Backprop(const std::string &debug_info,
+                               const ComponentPrecomputedIndexes *indexes,
+                               const CuMatrixBase<BaseFloat> &in_value,
+                               const CuMatrixBase<BaseFloat> &, // out_value
+                               const CuMatrixBase<BaseFloat> &out_deriv,
+                               Component *to_update_in,
+                               CuMatrixBase<BaseFloat> *in_deriv) const {
+  LinearComponent *to_update = dynamic_cast<LinearComponent*>(to_update_in);
+
+  // Propagate the derivative back to the input.
+  // add with coefficient 1.0 since property kBackpropAdds is true.
+  // If we wanted to add with coefficient 0.0 we'd need to zero the
+  // in_deriv, in case of infinities.
+  if (in_deriv)
+    in_deriv->AddMatMat(1.0, out_deriv, kNoTrans, linear_params_, kNoTrans,
+                        1.0);
+
+  if (to_update != NULL) {
+    // Next update the model (must do this 2nd so the derivatives we propagate
+    // are accurate, in case this == to_update_in.)
+    if (to_update->is_gradient_)
+      to_update->UpdateSimple(in_value, out_deriv);
+    else  // the call below is to a virtual function that may be re-implemented
+      to_update->Update(debug_info, in_value, out_deriv);  // by child classes.
+  }
+}
+
+void LinearComponent::Read(std::istream &is, bool binary) {
+  ReadUpdatableCommon(is, binary);  // read opening tag and learning rate.
+  ExpectToken(is, binary, "<LinearParams>");
+  linear_params_.Read(is, binary);
+  ExpectToken(is, binary, "<IsGradient>");
+  ReadBasicType(is, binary, &is_gradient_);
+  ExpectToken(is, binary, "</LinearComponent>");
+}
+
+void LinearComponent::Write(std::ostream &os, bool binary) const {
+  WriteUpdatableCommon(os, binary);  // Write opening tag and learning rate
+  WriteToken(os, binary, "<LinearParams>");
+  linear_params_.Write(os, binary);
+  WriteToken(os, binary, "<IsGradient>");
+  WriteBasicType(os, binary, is_gradient_);
+  WriteToken(os, binary, "</LinearComponent>");
+}
+
+int32 LinearComponent::NumParameters() const {
+  return InputDim() * OutputDim();
+}
+void LinearComponent::Vectorize(VectorBase<BaseFloat> *params) const {
+  KALDI_ASSERT(params->Dim() == this->NumParameters());
+  params->Range(0, InputDim() * OutputDim()).CopyRowsFromMat(linear_params_);
+}
+void LinearComponent::UnVectorize(const VectorBase<BaseFloat> &params) {
+  KALDI_ASSERT(params.Dim() == this->NumParameters());
+  linear_params_.CopyRowsFromVec(params.Range(0, InputDim() * OutputDim()));
 }
 
 Component *AffineComponent::CollapseWithNext(
@@ -2492,7 +2665,6 @@ void ConstantFunctionComponent::UnVectorize(const VectorBase<BaseFloat> &params)
   output_.CopyFromVec(params);
 }
 
-
 NaturalGradientAffineComponent::NaturalGradientAffineComponent():
     max_change_per_sample_(0.0),
     update_count_(0.0), active_scaling_count_(0.0),
@@ -2822,6 +2994,320 @@ void NaturalGradientAffineComponent::Add(BaseFloat alpha, const Component &other
   active_scaling_count_ += alpha * other->active_scaling_count_;
   linear_params_.AddMat(alpha, other->linear_params_);
   bias_params_.AddVec(alpha, other->bias_params_);
+}
+
+/// virtual
+void NaturalGradientAffineComponent::FreezeNaturalGradient(bool freeze) {
+  preconditioner_in_.Freeze(freeze);
+  preconditioner_out_.Freeze(freeze);
+}
+
+NaturalGradientLinearComponent::NaturalGradientLinearComponent(
+    const NaturalGradientLinearComponent &other):
+    LinearComponent(other),
+    rank_in_(other.rank_in_),
+    rank_out_(other.rank_out_),
+    update_period_(other.update_period_),
+    num_samples_history_(other.num_samples_history_),
+    alpha_(other.alpha_),
+    preconditioner_in_(other.preconditioner_in_),
+    preconditioner_out_(other.preconditioner_out_),
+    max_change_per_sample_(other.max_change_per_sample_),
+    update_count_(other.update_count_),
+    active_scaling_count_(other.active_scaling_count_),
+    max_change_scale_stats_(other.max_change_scale_stats_) {
+  SetNaturalGradientConfigs();
+}
+
+void NaturalGradientLinearComponent::Update(
+    const std::string &debug_info,
+    const CuMatrixBase<BaseFloat> &in_value,
+    const CuMatrixBase<BaseFloat> &out_deriv) {
+  CuMatrix<BaseFloat> in_value_temp;
+
+  in_value_temp.Resize(in_value.NumRows(),
+                       in_value.NumCols() + 1, kUndefined);
+  in_value_temp.Range(0, in_value.NumRows(),
+                      0, in_value.NumCols()).CopyFromMat(in_value);
+
+  // Add the 1.0 at the end of each row "in_value_temp"
+  in_value_temp.Range(0, in_value.NumRows(),
+                      in_value.NumCols(), 1).Set(1.0);
+
+  CuMatrix<BaseFloat> out_deriv_temp(out_deriv);
+
+  CuMatrix<BaseFloat> row_products(2,
+                                   in_value.NumRows());
+  CuSubVector<BaseFloat> in_row_products(row_products, 0),
+      out_row_products(row_products, 1);
+
+  // These "scale" values get will get multiplied into the learning rate (faster
+  // than having the matrices scaled inside the preconditioning code).
+  BaseFloat in_scale, out_scale;
+
+  preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
+                                            &in_scale);
+  preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
+                                             &out_scale);
+
+  // "scale" is a scaling factor coming from the PreconditionDirections calls
+  // (it's faster to have them output a scaling factor than to have them scale
+  // their outputs).
+  BaseFloat scale = in_scale * out_scale;
+
+  CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
+                                              0, in_value_temp.NumRows(),
+                                              0, in_value_temp.NumCols() - 1);
+  // this "precon_ones" is what happens to the vector of 1's representing
+  // offsets, after multiplication by the preconditioner.
+  CuVector<BaseFloat> precon_ones(in_value_temp.NumRows());
+
+  precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
+
+  BaseFloat local_lrate = scale * learning_rate_;
+  update_count_ += 1.0;
+//  bias_params_.AddMatVec(local_lrate, out_deriv_temp, kTrans,
+//                         precon_ones, 1.0);
+  linear_params_.AddMatMat(local_lrate, out_deriv_temp, kTrans,
+                           in_value_precon_part, kNoTrans, 1.0);
+}
+
+void NaturalGradientLinearComponent::ZeroStats()  {
+  update_count_ = 0.0;
+  max_change_scale_stats_ = 0.0;
+  active_scaling_count_ = 0.0;
+}
+
+void NaturalGradientLinearComponent::Scale(BaseFloat scale) {
+  update_count_ *= scale;
+  max_change_scale_stats_ *= scale;
+  active_scaling_count_ *= scale;
+  linear_params_.Scale(scale);
+}
+
+void NaturalGradientLinearComponent::Add(BaseFloat alpha, const Component &other_in) {
+  const NaturalGradientLinearComponent *other =
+      dynamic_cast<const NaturalGradientLinearComponent*>(&other_in);
+  KALDI_ASSERT(other != NULL);
+  update_count_ += alpha * other->update_count_;
+  max_change_scale_stats_ += alpha * other->max_change_scale_stats_;
+  active_scaling_count_ += alpha * other->active_scaling_count_;
+  linear_params_.AddMat(alpha, other->linear_params_);
+}
+
+NaturalGradientLinearComponent::NaturalGradientLinearComponent():
+    max_change_per_sample_(0.0),
+    update_count_(0.0), active_scaling_count_(0.0),
+    max_change_scale_stats_(0.0) { }
+
+// virtual
+void NaturalGradientLinearComponent::Resize(
+    int32 input_dim, int32 output_dim) {
+  KALDI_ASSERT(input_dim > 1 && output_dim > 1);
+  if (rank_in_ >= input_dim) rank_in_ = input_dim - 1;
+  if (rank_out_ >= output_dim) rank_out_ = output_dim - 1;
+  linear_params_.Resize(output_dim, input_dim);
+  OnlineNaturalGradient temp;
+  preconditioner_in_ = temp;
+  preconditioner_out_ = temp;
+  SetNaturalGradientConfigs();
+}
+
+
+void NaturalGradientLinearComponent::Read(std::istream &is, bool binary) {
+  ReadUpdatableCommon(is, binary);  // Read the opening tag and learning rate
+  ExpectToken(is, binary, "<LinearParams>");
+  linear_params_.Read(is, binary);
+  ExpectToken(is, binary, "<RankIn>");
+  ReadBasicType(is, binary, &rank_in_);
+  ExpectToken(is, binary, "<RankOut>");
+  ReadBasicType(is, binary, &rank_out_);
+  ExpectToken(is, binary, "<UpdatePeriod>");
+  ReadBasicType(is, binary, &update_period_);
+  ExpectToken(is, binary, "<NumSamplesHistory>");
+  ReadBasicType(is, binary, &num_samples_history_);
+  ExpectToken(is, binary, "<Alpha>");
+  ReadBasicType(is, binary, &alpha_);
+  ExpectToken(is, binary, "<MaxChangePerSample>");
+  ReadBasicType(is, binary, &max_change_per_sample_);
+  ExpectToken(is, binary, "<IsGradient>");
+  ReadBasicType(is, binary, &is_gradient_);
+  std::string token;
+  ReadToken(is, binary, &token);
+  if (token == "<UpdateCount>") {
+    ReadBasicType(is, binary, &update_count_);
+    ExpectToken(is, binary, "<ActiveScalingCount>");
+    ReadBasicType(is, binary, &active_scaling_count_);
+    ExpectToken(is, binary, "<MaxChangeScaleStats>");
+    ReadBasicType(is, binary, &max_change_scale_stats_);
+    ReadToken(is, binary, &token);
+  }
+  if (token != "<NaturalGradientLinearComponent>" &&
+      token != "</NaturalGradientLinearComponent>")
+    KALDI_ERR << "Expected <NaturalGradientLinearComponent> or "
+              << "</NaturalGradientLinearComponent>, got " << token;
+  SetNaturalGradientConfigs();
+}
+
+void NaturalGradientLinearComponent::InitFromConfig(ConfigLine *cfl) {
+  bool ok = true;
+  std::string matrix_filename;
+  BaseFloat num_samples_history = 2000.0, alpha = 4.0,
+      max_change_per_sample = 0.0;
+  int32 input_dim = -1, output_dim = -1, rank_in = 20, rank_out = 80,
+      update_period = 4;
+  InitLearningRatesFromConfig(cfl);
+  cfl->GetValue("num-samples-history", &num_samples_history);
+  cfl->GetValue("alpha", &alpha);
+  cfl->GetValue("max-change-per-sample", &max_change_per_sample);
+  cfl->GetValue("rank-in", &rank_in);
+  cfl->GetValue("rank-out", &rank_out);
+  cfl->GetValue("update-period", &update_period);
+
+  if (cfl->GetValue("matrix", &matrix_filename)) {
+    Init(rank_in, rank_out, update_period,
+         num_samples_history, alpha, max_change_per_sample,
+         matrix_filename);
+    if (cfl->GetValue("input-dim", &input_dim))
+      KALDI_ASSERT(input_dim == InputDim() &&
+                   "input-dim mismatch vs. matrix.");
+    if (cfl->GetValue("output-dim", &output_dim))
+      KALDI_ASSERT(output_dim == OutputDim() &&
+                   "output-dim mismatch vs. matrix.");
+  } else {
+    ok = ok && cfl->GetValue("input-dim", &input_dim);
+    ok = ok && cfl->GetValue("output-dim", &output_dim);
+    if (!ok)
+      KALDI_ERR << "Bad initializer " << cfl->WholeLine();
+    BaseFloat param_stddev = 1.0 / std::sqrt(input_dim),
+        bias_stddev = 1.0, bias_mean = 0.0;
+    cfl->GetValue("param-stddev", &param_stddev);
+    cfl->GetValue("bias-stddev", &bias_stddev);
+    cfl->GetValue("bias-mean", &bias_mean);
+    Init(input_dim, output_dim, param_stddev,
+         rank_in, rank_out, update_period,
+         num_samples_history, alpha, max_change_per_sample);
+  }
+  if (cfl->HasUnusedValues())
+    KALDI_ERR << "Could not process these elements in initializer: "
+              << cfl->UnusedValues();
+  if (!ok)
+    KALDI_ERR << "Bad initializer " << cfl->WholeLine();
+}
+
+void NaturalGradientLinearComponent::SetNaturalGradientConfigs() {
+  preconditioner_in_.SetRank(rank_in_);
+  preconditioner_in_.SetNumSamplesHistory(num_samples_history_);
+  preconditioner_in_.SetAlpha(alpha_);
+  preconditioner_in_.SetUpdatePeriod(update_period_);
+  preconditioner_out_.SetRank(rank_out_);
+  preconditioner_out_.SetNumSamplesHistory(num_samples_history_);
+  preconditioner_out_.SetAlpha(alpha_);
+  preconditioner_out_.SetUpdatePeriod(update_period_);
+}
+
+void NaturalGradientLinearComponent::Init(
+    int32 rank_in, int32 rank_out,
+    int32 update_period, BaseFloat num_samples_history, BaseFloat alpha,
+    BaseFloat max_change_per_sample,
+    std::string matrix_filename) {
+  rank_in_ = rank_in;
+  rank_out_ = rank_out;
+  update_period_ = update_period;
+  num_samples_history_ = num_samples_history;
+  alpha_ = alpha;
+  SetNaturalGradientConfigs();
+  KALDI_ASSERT(max_change_per_sample >= 0.0);
+  max_change_per_sample_ = max_change_per_sample;
+  CuMatrix<BaseFloat> mat;
+  ReadKaldiObject(matrix_filename, &mat); // will abort on failure.
+  KALDI_ASSERT(mat.NumCols() >= 2);
+  int32 input_dim = mat.NumCols() - 1, output_dim = mat.NumRows();
+  linear_params_.Resize(output_dim, input_dim);
+  linear_params_.CopyFromMat(mat.Range(0, output_dim, 0, input_dim));
+  is_gradient_ = false;  // not configurable; there's no reason you'd want this
+  update_count_ = 0.0;
+  active_scaling_count_ = 0.0;
+  max_change_scale_stats_ = 0.0;
+}
+
+void NaturalGradientLinearComponent::Init(
+    int32 input_dim, int32 output_dim,
+    BaseFloat param_stddev,
+    int32 rank_in, int32 rank_out, int32 update_period,
+    BaseFloat num_samples_history, BaseFloat alpha,
+    BaseFloat max_change_per_sample) {
+  linear_params_.Resize(output_dim, input_dim);
+  KALDI_ASSERT(output_dim > 0 && input_dim > 0 && param_stddev >= 0.0);
+  linear_params_.SetRandn(); // sets to random normally distributed noise.
+  linear_params_.Scale(param_stddev);
+  rank_in_ = rank_in;
+  rank_out_ = rank_out;
+  update_period_ = update_period;
+  num_samples_history_ = num_samples_history;
+  alpha_ = alpha;
+  SetNaturalGradientConfigs();
+  if (max_change_per_sample > 0.0)
+    KALDI_WARN << "You are setting a positive max_change_per_sample for "
+               << "NaturalGradientLinearComponent. But it has been deprecated. "
+               << "Please use max_change for all updatable components instead "
+               << "to activate the per-component max change mechanism.";
+  KALDI_ASSERT(max_change_per_sample >= 0.0);
+  max_change_per_sample_ = max_change_per_sample;
+  is_gradient_ = false;  // not configurable; there's no reason you'd want this
+  update_count_ = 0.0;
+  active_scaling_count_ = 0.0;
+  max_change_scale_stats_ = 0.0;
+}
+
+void NaturalGradientLinearComponent::Write(std::ostream &os,
+                                           bool binary) const {
+  WriteUpdatableCommon(os, binary);  // Write the opening tag and learning rate
+  WriteToken(os, binary, "<LinearParams>");
+  linear_params_.Write(os, binary);
+  WriteToken(os, binary, "<RankIn>");
+  WriteBasicType(os, binary, rank_in_);
+  WriteToken(os, binary, "<RankOut>");
+  WriteBasicType(os, binary, rank_out_);
+  WriteToken(os, binary, "<UpdatePeriod>");
+  WriteBasicType(os, binary, update_period_);
+  WriteToken(os, binary, "<NumSamplesHistory>");
+  WriteBasicType(os, binary, num_samples_history_);
+  WriteToken(os, binary, "<Alpha>");
+  WriteBasicType(os, binary, alpha_);
+  WriteToken(os, binary, "<MaxChangePerSample>");
+  WriteBasicType(os, binary, max_change_per_sample_);
+  WriteToken(os, binary, "<IsGradient>");
+  WriteBasicType(os, binary, is_gradient_);
+  WriteToken(os, binary, "<UpdateCount>");
+  WriteBasicType(os, binary, update_count_);
+  WriteToken(os, binary, "<ActiveScalingCount>");
+  WriteBasicType(os, binary, active_scaling_count_);
+  WriteToken(os, binary, "<MaxChangeScaleStats>");
+  WriteBasicType(os, binary, max_change_scale_stats_);
+  WriteToken(os, binary, "</NaturalGradientLinearComponent>");
+}
+
+std::string NaturalGradientLinearComponent::Info() const {
+  std::ostringstream stream;
+  stream << UpdatableComponent::Info();
+  PrintParameterStats(stream, "linear-params", linear_params_);
+  stream << ", rank-in=" << rank_in_
+         << ", rank-out=" << rank_out_
+         << ", num_samples_history=" << num_samples_history_
+         << ", update_period=" << update_period_
+         << ", alpha=" << alpha_
+         << ", max-change-per-sample=" << max_change_per_sample_;
+  if (update_count_ > 0.0 && max_change_per_sample_ > 0.0) {
+    stream << ", avg-scaling-factor=" << max_change_scale_stats_ / update_count_
+           << ", active-scaling-portion="
+           << active_scaling_count_ / update_count_;
+  }
+  return stream.str();
+}
+
+Component* NaturalGradientLinearComponent::Copy() const {
+  return new NaturalGradientLinearComponent(*this);
 }
 
 std::string FixedAffineComponent::Info() const {
@@ -3408,6 +3894,11 @@ void NaturalGradientPerElementScaleComponent::Update(
   CuVector<BaseFloat> delta_scales(scales_.Dim());
   delta_scales.AddRowSumMat(scale * learning_rate_, derivs_per_frame);
   scales_.AddVec(1.0, delta_scales);
+}
+
+/// virtual
+void NaturalGradientPerElementScaleComponent::FreezeNaturalGradient(bool freeze) {
+  preconditioner_.Freeze(freeze);
 }
 
 // Constructors for the convolution component
@@ -4894,6 +5385,18 @@ BaseFloat CompositeComponent::DotProduct(
   return ans;
 }
 
+/// virtual
+void CompositeComponent::FreezeNaturalGradient(bool freeze) {
+  for (size_t i = 0; i < components_.size(); i++) {
+    if (components_[i]->Properties() & kUpdatableComponent) {
+      UpdatableComponent *uc =
+          dynamic_cast<UpdatableComponent*>(components_[i]);
+      KALDI_ASSERT(uc != NULL);
+      uc->FreezeNaturalGradient(freeze);
+    }
+  }
+}
+
 // virtual
 Component* CompositeComponent::Copy() const {
   std::vector<Component*> components(components_.size());
@@ -5285,6 +5788,10 @@ void LstmNonlinearityComponent::InitNaturalGradient() {
   preconditioner_.SetNumSamplesHistory(1000.0);
 }
 
+/// virtual
+void LstmNonlinearityComponent::FreezeNaturalGradient(bool freeze) {
+  preconditioner_.Freeze(freeze);
+}
 
 void LstmNonlinearityComponent::InitFromConfig(ConfigLine *cfl) {
   InitLearningRatesFromConfig(cfl);

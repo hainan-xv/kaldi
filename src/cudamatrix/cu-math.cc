@@ -755,7 +755,6 @@ void BackpropLstmNonlinearity(const CuMatrixBase<Real> &input,
   KALDI_ASSERT(deriv_sum_in.NumRows() == 5);
   KALDI_ASSERT(deriv_sum_in.NumCols() == cell_dim);
   KALDI_ASSERT(self_repair_config.Dim() == 10);
-  KALDI_ASSERT(count_in >= 0);
   if (input_deriv != NULL) {
     KALDI_ASSERT(SameDim(input, *input_deriv));
   }
@@ -928,8 +927,126 @@ void BackpropLstmNonlinearity(const CuMatrixBase<double> &input,
                               CuMatrixBase<double> *deriv_sum_out,
                               CuMatrixBase<double> *self_repair_sum_out);
 
+template<typename Real>
+void ComputeAffineOnSparse(const CuMatrixBase<Real> &params,
+                           const SparseMatrix<Real> &sp,
+                           CuMatrixBase<Real> *output) {
+  KALDI_ASSERT(output->NumCols() == params.NumRows());
+  KALDI_ASSERT(sp.NumRows() == output->NumRows());
+#if HAVE_CUDA == 1
+  std::vector<MatrixIndexT> vis;
+  for (size_t i = 0; i < sp.NumRows(); i++) {
+    const SparseVector<Real> &sv = sp.Row(i);
+    MatrixIndexT non_zero_index = -1;
+    sv.Max(&non_zero_index);
+    vis.push_back(non_zero_index);
+  }
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
 
+    CuArray<MatrixIndexT> indices(vis);
 
+    dim3 dimGrid, dimBlock;
+    GetBlockSizesForSimpleMatrixOperation(output->NumRows(), output->NumCols(),
+                                          &dimGrid, &dimBlock);
+    cuda_affine_on_sparse(dimGrid, dimBlock, params.Data(), params.Stride(),
+                          indices.Data(), output->Dim(), output->Data());
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    MatrixIndexT* arr = new MatrixIndexT[sp.NumRows()];
+    for (size_t i = 0; i < sp.NumRows(); i++) {
+      const SparseVector<Real> &sv = sp.Row(i);
+      MatrixIndexT non_zero_index = -1;
+      sv.Max(&non_zero_index);
+      KALDI_ASSERT(non_zero_index != -1);
+      arr[i] = non_zero_index;
+    }
+
+    Matrix<Real> cpu_out_transpose(output->Mat().NumCols(),
+                                   output->Mat().NumRows());
+    cpu_out_transpose.CopyFromMat(*output, kTrans);
+
+    cpu_out_transpose.AddCols(params.Mat(), arr);
+    output->CopyFromMat(cpu_out_transpose, kTrans);
+    delete []arr;
+  }
+}
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(Real alpha,
+                                const CuMatrixBase<Real> &out_deriv,
+                                const SparseMatrix<Real> &sp,
+                                CuMatrixBase<Real> *params) {
+  KALDI_ASSERT(out_deriv.NumRows() == sp.NumRows());
+  KALDI_ASSERT(params->NumRows() == out_deriv.NumCols());
+  KALDI_ASSERT(params->NumCols() == sp.NumCols());
+#if HAVE_CUDA == 1
+  std::vector<MatrixIndexT> vis;
+  for (size_t i = 0; i < sp.NumRows(); i++) {
+    const SparseVector<Real> &sv = sp.Row(i);
+    MatrixIndexT non_zero_index = -1;
+    sv.Max(&non_zero_index);
+    vis.push_back(non_zero_index);
+  }
+  KALDI_ASSERT(vis.size() == sp.NumRows());
+  if (CuDevice::Instantiate().Enabled()) {
+    Timer tim;
+
+    CuArray<MatrixIndexT> indices(vis);
+
+    dim3 dimGrid, dimBlock;
+    GetBlockSizesForSimpleMatrixOperation(out_deriv.NumRows(),
+                                          out_deriv.NumCols(),
+                                          &dimGrid, &dimBlock);
+    cuda_update_simple_affine_on_sparse(dimGrid, dimBlock, alpha, out_deriv.Data(),
+                                        indices.Data(), out_deriv.Dim(),
+                                        params->Stride(), params->Data());
+    CU_SAFE_CALL(cudaGetLastError());
+
+    CuDevice::Instantiate().AccuProfile(__func__, tim.Elapsed());
+  } else
+#endif
+  {
+    Matrix<Real> cpu_params_transpose(params->Mat().NumCols(),
+                                           params->Mat().NumRows());
+    Real** arr = new Real*[sp.NumRows()];
+    for (size_t i = 0; i < sp.NumRows(); i++) {
+      const SparseVector<Real> &sv = sp.Row(i);
+      MatrixIndexT non_zero_index = -1;
+      sv.Max(&non_zero_index);
+      arr[i] = cpu_params_transpose.RowData(non_zero_index);
+    }
+    out_deriv.Mat().AddToRows(1.0, arr);
+    delete []arr;
+    params->Mat().AddMat(alpha, cpu_params_transpose, kTrans);
+  }
+}
+
+template
+void ComputeAffineOnSparse(const CuMatrixBase<float> &params,
+                           const SparseMatrix<float> &sp,
+                           CuMatrixBase<float> *output);
+ 
+template
+void ComputeAffineOnSparse(const CuMatrixBase<double> &params,
+                           const SparseMatrix<double> &sp,
+                           CuMatrixBase<double> *output);
+ 
+template
+void UpdateSimpleAffineOnSparse(float alpha, const CuMatrixBase<float> &out_deriv,
+                                const SparseMatrix<float> &sp,
+                                CuMatrixBase<float> *params);
+
+template<typename Real>
+void UpdateSimpleAffineOnSparse(double alpha, const CuMatrixBase<double> &out_deriv,
+                                const SparseMatrix<double> &sp,
+                                CuMatrixBase<double> *params);
+ 
+ 
 } //namespace cu
 
 } //namespace kaldi

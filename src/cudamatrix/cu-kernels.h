@@ -406,10 +406,10 @@ inline void cuda_copy_cols(dim3 Gr, dim3 Bl, float* dst, const float* src,
                            int src_stride) {
   cudaF_copy_cols(Gr, Bl, dst, src, reorder, dst_dim, src_stride);
 }
-inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
-                                    MatrixDim d_out, const double *v_in) {
-  cudaD_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
-}
+//inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
+//                                    MatrixDim d_out, const double *v_in) {
+//  cudaD_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
+//}
 inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, float *mat_out,
                                     MatrixDim d_out, const float *v_in) {
   cudaF_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
@@ -1304,9 +1304,49 @@ inline void cuda_vec_min(int Gr, int Bl, const double* v, double* value,
                          int dim, int inc) {
   cudaD_vec_min(Gr, Bl, v, value, dim, inc);
 }
+
 inline void cuda_vec_min(int Gr, int Bl, const float* v, float* value, int dim,
                          int inc) {
   cudaF_vec_min(Gr, Bl, v, value, dim, inc);
+}
+
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const double* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, double* output) {
+  cudaD_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_affine_on_sparse(dim3 Gr, dim3 Bl, const float* params,
+                                  const int params_stride,
+                                  const MatrixIndexT_cuda* reorder,
+                                  MatrixDim output_dim, float* output) {
+  cudaF_affine_on_sparse(Gr, Bl, params, params_stride, reorder, output_dim,
+                         output);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                double alpha,
+                                                const double* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                double* params) {
+  cudaD_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
+}
+inline void cuda_update_simple_affine_on_sparse(dim3 Gr, dim3 Bl,
+                                                float alpha,
+                                                const float* out_deriv,
+                                                const MatrixIndexT_cuda* indices,
+                                                MatrixDim out_deriv_dim,
+                                                const int params_stride,
+                                                float* params) {
+  cudaF_update_simple_affine_on_sparse(Gr, Bl, alpha, out_deriv, indices,
+                                       out_deriv_dim, params_stride, params);
+}
+inline void cuda_copy_cols_from_vec(dim3 Gr, dim3 Bl, double *mat_out,
+                                    MatrixDim d_out, const double *v_in) {
+  cudaD_copy_cols_from_vec(Gr, Bl, mat_out, d_out, v_in);
 }
 inline void cuda_vec_mul_elements(int Gr, int Bl, double* v, const double* a,
                                   int dim) {

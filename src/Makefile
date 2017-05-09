@@ -6,16 +6,16 @@ SHELL := /bin/bash
 
 
 SUBDIRS = base matrix util feat tree thread gmm transform \
-          fstext hmm lm decoder lat kws cudamatrix nnet \
+          fstext hmm lm decoder lat kws cudamatrix nnet rnnlm \
           bin fstbin gmmbin fgmmbin featbin \
           nnetbin latbin sgmm2 sgmm2bin nnet2 nnet3 chain nnet3bin nnet2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin chainbin
+          ivector ivectorbin online2 online2bin lmbin chainbin rnnlmbin
 
 MEMTESTDIRS = base matrix util feat tree thread gmm transform \
-          fstext hmm lm decoder lat nnet kws chain \
+          fstext hmm lm decoder lat nnet kws chain rnnlm \
           bin fstbin gmmbin fgmmbin featbin \
           nnetbin latbin sgmm2 nnet2 nnet3 nnet2bin nnet3bin sgmm2bin kwsbin \
-          ivector ivectorbin online2 online2bin lmbin
+          ivector ivectorbin online2 online2bin lmbin rnnlmbin
 
 CUDAMEMTESTDIR = cudamatrix
 
@@ -150,9 +150,9 @@ $(EXT_SUBDIRS) : mklibdir ext_depend
 # this is necessary for correct parallel compilation
 #1)The tools depend on all the libraries
 
-bin fstbin gmmbin fgmmbin sgmm2bin featbin nnetbin nnet2bin nnet3bin chainbin latbin ivectorbin lmbin kwsbin online2bin: \
+bin fstbin gmmbin fgmmbin sgmm2bin featbin nnetbin nnet2bin nnet3bin chainbin latbin ivectorbin lmbin kwsbin online2bin rnnlmbin: \
  base matrix util feat tree thread gmm transform sgmm2 fstext hmm \
- lm decoder lat cudamatrix nnet nnet2 nnet3 ivector chain kws online2
+ lm decoder lat cudamatrix nnet nnet2 nnet3 ivector chain kws online2 rnnlm
 
 #2)The libraries have inter-dependencies
 base: base/.depend.mk
@@ -173,6 +173,7 @@ cudamatrix: base util thread matrix
 nnet: base util hmm tree thread matrix cudamatrix
 nnet2: base util matrix thread lat gmm hmm tree transform cudamatrix
 nnet3: base util matrix thread lat gmm hmm tree transform cudamatrix chain fstext
+rnnlm: base util matrix thread lat gmm hmm tree transform cudamatrix chain fstext nnet3
 chain: lat hmm tree fstext matrix cudamatrix util thread base
 ivector: base util matrix thread transform tree gmm
 #3)Dependencies for optional parts of Kaldi

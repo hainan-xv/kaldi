@@ -65,6 +65,16 @@ NnetIo::NnetIo(const std::string &name,
     indexes[i].t = t_begin + i;
 }
 
+NnetIo::NnetIo(const std::string &name,
+               int32 t_begin, const SparseMatrix<BaseFloat> &feats):
+    name(name), features(feats) {
+  int32 num_rows = feats.NumRows();
+  KALDI_ASSERT(num_rows > 0);
+  indexes.resize(num_rows);  // sets all n,t,x to zeros.
+  for (int32 i = 0; i < num_rows; i++)
+    indexes[i].t = t_begin + i;
+}
+
 void NnetIo::Swap(NnetIo *other) {
   name.swap(other->name);
   indexes.swap(other->indexes);
@@ -97,6 +107,18 @@ void NnetExample::Write(std::ostream &os, bool binary) const {
   WriteBasicType(os, binary, size);
   for (int32 i = 0; i < size; i++)
     io[i].Write(os, binary);
+  if (samples.size() > 0) {
+    WriteToken(os, binary, "<Samples>");
+    WriteBasicType(os, binary, samples.size());
+    WriteBasicType(os, binary, samples[0].size());
+    for (int i = 0; i < samples.size(); i++) {
+      for (int j = 0; j < samples[0].size(); j++) {
+        WriteBasicType(os, binary, samples[i][j].first);
+        WriteBasicType(os, binary, samples[i][j].second);
+      }
+    }
+    WriteToken(os, binary, "</Samples>");
+  }
   WriteToken(os, binary, "</Nnet3Eg>");
 }
 
@@ -110,7 +132,26 @@ void NnetExample::Read(std::istream &is, bool binary) {
   io.resize(size);
   for (int32 i = 0; i < size; i++)
     io[i].Read(is, binary);
-  ExpectToken(is, binary, "</Nnet3Eg>");
+
+  string token;
+  ReadToken(is, binary, &token);
+  if (token == "<Samples>") {
+    size_t sample_size;
+    size_t num_samples;
+    ReadBasicType(is, binary, &sample_size);
+    ReadBasicType(is, binary, &num_samples);
+    samples.resize(sample_size, std::vector<std::pair<int32, double> >(num_samples));
+    for (int i = 0; i < sample_size; i++) {
+      for (int j = 0; j < num_samples; j++) {
+        ReadBasicType(is, binary, &samples[i][j].first);
+        ReadBasicType(is, binary, &samples[i][j].second);
+      }
+    }
+    ExpectToken(is, binary, "</Samples>");
+    ExpectToken(is, binary, "</Nnet3Eg>");
+  } else {
+    KALDI_ASSERT(token ==  "</Nnet3Eg>");
+  }
 }
 
 
