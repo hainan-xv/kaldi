@@ -94,8 +94,8 @@ void DecodableRnnlmSimpleLooped::TakeFeatures(
   }
   SparseMatrix<BaseFloat> feats_temp(feats_.NumCols(), pairs);
   feats_.Swap(&feats_temp);
-  // resets offset so that AdvanceChunk would be called in GetOutput() and
-  // GetNnetOutputForFrame()
+  // resets offset so that AdvanceChunk() would be called in GetOutput() and
+  // GetNnetOutputForFrame() after taking new features
   current_log_post_offset_ = -1;
 }
 
@@ -131,6 +131,8 @@ void DecodableRnnlmSimpleLooped::AdvanceChunk() {
   begin_input_frame = -info_.frames_left_context;
   // note: end is last plus one.
   end_input_frame = info_.frames_per_chunk + info_.frames_right_context;
+  // currently there is no left/right context and frames_per_chunk == 1
+  KALDI_ASSERT(begin_input_frame == 0 && end_input_frame == 1);
 
   SparseMatrix<BaseFloat> feats_chunk(end_input_frame - begin_input_frame,
                                       feats_.NumCols());
