@@ -14,6 +14,7 @@ N=10
 inv_acwt=12
 weight=1.0  # Interpolation weight for RNNLM.
 # End configuration section.
+rnnlm_ver=
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -38,6 +39,18 @@ rnnlm_dir=$2
 data=$3
 indir=$4
 outdir=$5
+
+rescoring_binary=lattice-lmrescore-rnnlm
+
+first_arg=ark:$rnnlm_dir/unk.probs # this is for mikolov's rnnlm
+extra_arg=
+
+if [ "$rnnlm_ver" == "nnet3rnnlm" ]; then
+  total_size=`wc -l $rnnlm_dir/unigram.counts | awk '{print $1}'`
+  rescoring_binary="lattice-lmrescore-nnet3-rnnlm"
+  cat $rnnlm_dir/rnnlm.input.wlist.index | tail -n +2 | awk '{print $1-1,$2}' > $rnnlm_dir/rnn.wlist
+  first_arg=$rnnlm_dir/rnn.wlist
+fi
 
 oldlm=$oldlang/G.fst
 if [ -f $oldlang/G.carpa ]; then
@@ -72,20 +85,19 @@ if [ "$oldlm" == "$oldlang/G.fst" ]; then
   $cmd JOB=1:$nj $outdir/log/rescorelm.JOB.log \
     lattice-lmrescore --lm-scale=$oldlm_weight \
     "ark:gunzip -c $indir/lat.JOB.gz|" "$oldlm_command" ark:-  \| \
-    lattice-lmrescore-rnnlm --lm-scale=$weight \
-    --max-ngram-order=$max_ngram_order ark:$rnnlm_dir/unk.probs \
-    $oldlang/words.txt ark:- "$rnnlm_dir/rnnlm" \
+    $rescoring_binary $extra_arg --lm-scale=$weight \
+    --max-ngram-order=$max_ngram_order \
+    $first_arg $oldlang/words.txt ark:- "$rnnlm_dir/rnnlm" \
     "ark,t:|gzip -c>$outdir/lat.JOB.gz" || exit 1;
 else
   $cmd JOB=1:$nj $outdir/log/rescorelm.JOB.log \
     lattice-lmrescore-const-arpa --lm-scale=$oldlm_weight \
-    "ark:gunzip -c $indir/lat.JOB.gz|" "$oldlm" ark:-  \| \
-    lattice-lmrescore-rnnlm --lm-scale=$weight \
-    --max-ngram-order=$max_ngram_order ark:$rnnlm_dir/unk.probs \
-    $oldlang/words.txt ark:- "$rnnlm_dir/rnnlm" \
+    "ark:gunzip -c $indir/lat.JOB.gz|" "$oldlm_command" ark:-  \| \
+    $rescoring_binary $extra_arg --lm-scale=$weight \
+    --max-ngram-order=$max_ngram_order \
+    $first_arg $oldlang/words.txt ark:- "$rnnlm_dir/rnnlm" \
     "ark,t:|gzip -c>$outdir/lat.JOB.gz" || exit 1;
 fi
-
 if ! $skip_scoring ; then
   err_msg="Not scoring because local/score.sh does not exist or not executable."
   [ ! -x local/score.sh ] && echo $err_msg && exit 1;

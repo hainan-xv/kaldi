@@ -12,6 +12,7 @@ OBJFILES = rnnlm-component-itf.o rnnlm-utils.o  rnnlm-nnet.o  rnnlm-component.o 
            rnnlm-training.o \
            rnnlm-diagnostics.o \
            arpa-sampling.o \
+           kaldi-rnnlm-decodable-simple-looped.o kaldi-rnnlm-rescoring.o
 
 LIBNAME = kaldi-rnnlm
 
