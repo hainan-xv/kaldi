@@ -96,6 +96,7 @@ KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
   bos.push_back(0); // 0 for <s>
   state_to_wseq_.push_back(bos);
   DecodableRnnlmSimpleLooped decodable_rnnlm(info);
+  decodable_rnnlm.TakeFeatures(std::vector<Label>(1, bos[0]));
   state_to_decodable_rnnlm_.push_back(decodable_rnnlm);
   wseq_to_state_[bos] = 0;
   start_state_ = 0;
@@ -105,8 +106,6 @@ fst::StdArc::Weight KaldiRnnlmDeterministicFst::Final(StateId s) {
   // At this point, we should have created the state.
   KALDI_ASSERT(static_cast<size_t>(s) < state_to_wseq_.size());
 
-  const std::vector<Label>& wseq = state_to_wseq_[s];
-  state_to_decodable_rnnlm_[s].TakeFeatures(std::vector<Label>(1, wseq.back()));
   // log prob of end of sentence
   BaseFloat logprob = state_to_decodable_rnnlm_[s].GetOutput(0, 0);
   return Weight(-logprob);
@@ -119,7 +118,6 @@ bool KaldiRnnlmDeterministicFst::GetArc(StateId s, Label ilabel,
 
   std::vector<Label> wseq = state_to_wseq_[s];
   DecodableRnnlmSimpleLooped decodable_rnnlm = state_to_decodable_rnnlm_[s];
-  decodable_rnnlm.TakeFeatures(std::vector<Label>(1, wseq.back()));
   int32 rnn_word = fst_label_to_rnn_label_[ilabel];
   BaseFloat logprob = decodable_rnnlm.GetOutput(0, rnn_word);
   if (rnn_word == out_OOS_index_)
@@ -145,6 +143,7 @@ bool KaldiRnnlmDeterministicFst::GetArc(StateId s, Label ilabel,
   // <state_to_decodable_rnnlm_>.
   if (result.second == true) {
     state_to_wseq_.push_back(wseq);
+    decodable_rnnlm.TakeFeatures(std::vector<Label>(1, wseq.back()));
     state_to_decodable_rnnlm_.push_back(decodable_rnnlm);
   }
 
