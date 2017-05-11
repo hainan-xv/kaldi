@@ -46,10 +46,11 @@ first_arg=ark:$rnnlm_dir/unk.probs # this is for mikolov's rnnlm
 extra_arg=
 
 if [ "$rnnlm_ver" == "nnet3rnnlm" ]; then
-  total_size=`wc -l $rnnlm_dir/unigram.counts | awk '{print $1}'`
+  total_size=`wc -l $rnnlm_dir/rnn.wlist | awk '{print $1}'`
   rescoring_binary="lattice-lmrescore-nnet3-rnnlm"
-  cat $rnnlm_dir/rnnlm.input.wlist.index | tail -n +2 | awk '{print $1-1,$2}' > $rnnlm_dir/rnn.wlist
+#  cat $rnnlm_dir/rnnlm.input.wlist.index | tail -n +2 | awk '{print $1-1,$2}' > $rnnlm_dir/rnn.wlist
   first_arg=$rnnlm_dir/rnn.wlist
+#  first_arg=$rnnlm_dir/wordlist.out
 fi
 
 oldlm=$oldlang/G.fst

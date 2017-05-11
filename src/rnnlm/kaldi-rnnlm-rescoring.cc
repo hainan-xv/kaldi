@@ -52,28 +52,27 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
 
   fst_label_to_rnn_label_.resize(fst_word_symbols->NumSymbols(), -1);
 
-  rnn_label_to_word_.push_back("<s>");
-  rnn_label_to_word_.push_back("<OOS>");
+//  rnn_label_to_word_.push_back("<s>");
+//  rnn_label_to_word_.push_back("<OOS>");
   out_OOS_index_ = 1;
   { // input
     std::ifstream ifile(rnn_wordlist.c_str());
     int32 id;
     string word;
-    int32 i = 1;
-    while (ifile >> id >> word) { // TODO(hxu) ugly fix for cued-rnnlm's bug
-                                  // will implement a better fix later
-      if (word == "[UNK]") {
-        word = "<unk>";
-      } else if (word == "<OOS>") {
-        continue;
+    int32 i = 0;
+    while (ifile >> word >> id) {
+      if (word == "<oos>") {
+        KALDI_ASSERT(id == out_OOS_index_);
       }
+      KALDI_ASSERT(i == id);
       i++;
-      assert(i == id + 2);
       rnn_label_to_word_.push_back(word);
 
-      int fst_label = fst_word_symbols->Find(rnn_label_to_word_[i]);
-      KALDI_ASSERT(fst::SymbolTable::kNoSymbol != fst_label);
-      fst_label_to_rnn_label_[fst_label] = i;
+      int fst_label = fst_word_symbols->Find(rnn_label_to_word_[id]);
+      KALDI_ASSERT(fst::SymbolTable::kNoSymbol != fst_label || id == out_OOS_index_ || id == 0);
+      if (id != out_OOS_index_ && out_OOS_index_ != 0) {
+        fst_label_to_rnn_label_[fst_label] = id;
+      }
     }
   }
 
