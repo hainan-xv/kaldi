@@ -86,12 +86,12 @@ void DoGroupingCDF(const vector<double> &u,
 // it should add up to n
 void SampleWithoutReplacement(const vector<double>& u, const vector<double>& cdf, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
-                              vector<std::pair<int, double> > *out);
+                              vector<std::pair<int, BaseFloat> > *out);
 
 // void SampleWithoutReplacementHigher(vector<std::pair<int, BaseFloat> > u, int n, vector<int> *out);
 
 void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
-                               vector<std::pair<int, double> > *out);
+                               vector<std::pair<int, BaseFloat> > *out);
 
 // normalize the prob vector such that
 // every prob satisfies 0 < p <= 1

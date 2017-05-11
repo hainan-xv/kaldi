@@ -66,8 +66,6 @@ struct LmNnetTrainerOptions {
   int32 nnet_input_dim;
   int32 nnet_output_dim;
 
-  int32 sample_size;
-
   LmNnetTrainerOptions():
       zero_component_stats(true),
       store_component_stats(true),
@@ -78,7 +76,6 @@ struct LmNnetTrainerOptions {
       adversarial_training_interval(1),
       binary_write_cache(true),
       max_param_change(2.0),
-      sample_size(256),
       input_dim(-1),
       output_dim(-1),
       nnet_input_dim(-1),
@@ -86,7 +83,6 @@ struct LmNnetTrainerOptions {
   { }
   void Register(OptionsItf *opts) {
 
-    opts->Register("sample-size", &sample_size, "sample size");
     opts->Register("input-dim", &input_dim, "input dim, e.g. 10000");
     opts->Register("nnet-input-dim", &nnet_input_dim, "nnet input dim, e.g. 200");
     opts->Register("nnet-output-dim", &nnet_output_dim, "nnet output dim, e.g. 200");
@@ -198,7 +194,7 @@ class LmNnetSamplingTrainer {
    // do the forward prop for last layer compute the objective based on the samples
    // do back-prop of last layer
  static void ComputeObjfAndDerivSample(
-                              const vector<vector<std::pair<int32, double> > > &sample,
+                              const SparseMatrix<BaseFloat> &sample,
                               const GeneralMatrix &supervision,
                               ObjectiveType objective_type,
                               const std::string &output_name,

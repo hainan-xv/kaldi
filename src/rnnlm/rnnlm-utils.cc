@@ -6,7 +6,6 @@ namespace rnnlm {
 void DoSamplingInExamples(int num_samples, int ngram_order,
                           const vector<double>& unigram, const vector<double> &cdf,
                           NnetExample *egs) {
-  int num_words_in = 0;
   int num_words_out = 0;
   int i = 0;
   KALDI_ASSERT (egs->io[0].name == "input");
@@ -40,12 +39,15 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
 
   int32 minibatch_size = current_n + 1;
 
-  num_words_in = egs->io[0].features.NumCols();
+//  num_words_in = egs->io[0].features.NumCols();
   num_words_out = egs->io[1].features.NumCols();
   KALDI_ASSERT(unigram.size() == num_words_out);
 
+  std::vector<std::vector<std::pair<int32, BaseFloat> > > samples;
+
   if (num_samples <= 0) {
-    egs->samples.resize(length, vector<std::pair<int32, double> >());
+    samples.resize(length, vector<std::pair<int32, BaseFloat> >());
+    egs->io.push_back(nnet3::NnetIo("samples", 0, SparseMatrix<BaseFloat>(unigram.size(), samples)));
     return;
   }
 
@@ -54,7 +56,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
   SparseMatrixToVector(egs->io[0].features.GetSparseMatrix(), &input_words);
   SparseMatrixToVector(egs->io[1].features.GetSparseMatrix(), &output_words);
 
-  egs->samples.resize(length, vector<std::pair<int32, double> >(minibatch_size));
+  samples.resize(length, vector<std::pair<int32, BaseFloat> >(minibatch_size));
 
   // v[t][n] is a vector representing the history of the input and n, t
   vector<vector<vector<int32> > > histories(length, vector<vector<int32> >(minibatch_size));
@@ -71,8 +73,11 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
   }
 
   for (int t = 0; t < length; t++) {
-    SampleWithoutReplacement(unigram, cdf, num_samples, must_samples[t], map<int, double>(), &egs->samples[t]);
+    SampleWithoutReplacement(unigram, cdf, num_samples, must_samples[t], map<int, double>(), &samples[t]);
   }
+//  if (num_samples != unigram.size()) {
+  egs->io.push_back(nnet3::NnetIo("samples", 0, SparseMatrix<BaseFloat>(unigram.size(), samples)));
+//  }
 }
 
 void CheckValidGrouping(const vector<interval> &g, int k) {
@@ -315,11 +320,6 @@ void DoGroupingCDF(const vector<double> &u,
 
 // return an int i in [L, R - 1], w/ probs porportional to their pdf's
 int SelectOne(const vector<double> &cdf, int L, int R) {
-//  BaseFloat low = 0;
-//  if (L - 1 >= 0) {
-//    low = cdf[L];
-//  }
-//  BaseFloat p = RandUniform() * (cdf[R] - low) + low;
   double p = RandUniform() * (cdf[R] - cdf[L]) + cdf[L];
 
   int index = -1;
@@ -444,7 +444,7 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
 
 void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf, int n,
                               const set<int>& must_sample, const map<int, double> &bigrams,
-                              vector<std::pair<int, double> > *out) {
+                              vector<std::pair<int, BaseFloat> > *out) {
   // out.first is the word and out.second is P(choose that word)
   KALDI_ASSERT(u.size() + 1 == cdf.size());
   if (n == u.size()) {
@@ -481,7 +481,7 @@ void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf
       (*out)[i].first = index;
 
     } else {
-      KALDI_ASSERT((*out)[i].second == g[(*out)[i].first].selection_prob);
+//      KALDI_ASSERT((*out)[i].second == g[(*out)[i].first].selection_prob);
       if ((*out)[i].second > 1.0) {
         KALDI_ASSERT((*out)[i].second == ONE);
         (*out)[i].second = 1.0;
@@ -506,12 +506,12 @@ void SampleWithoutReplacement(const vector<double> &u, const vector<double>& cdf
 // u is vector of <word, prob> pairs
 // select words according to these probs into out
 void SampleWithoutReplacement_(vector<std::pair<int, double> > u, int n,
-                               vector<std::pair<int, double> > *out) {
+                               vector<std::pair<int, BaseFloat> > *out) {
   sort(u.begin(), u.end(), LargerThan);
 
   KALDI_ASSERT(n != 0);
 
-  vector<std::pair<int, double> >& ans(*out);
+  vector<std::pair<int, BaseFloat> >& ans(*out);
   ans.resize(n);
 
   double tot_weight = 0;
@@ -710,22 +710,6 @@ void ComponentDotProducts(const LmNnet &nnet1,
   Vector<BaseFloat> v1(dot_prod->Dim() - 2);
   nnet3::ComponentDotProducts(nnet1.Nnet(), nnet2.Nnet(), &v1);
   dot_prod->Range(0, dot_prod->Dim() - 2).CopyFromVec(v1);
-
-//  KALDI_ASSERT(nnet1.NumComponents() == nnet2.NumComponents());
-//  int32 updatable_c = 0;
-//  for (int32 c = 0; c < nnet1.NumComponents(); c++) {
-//    const Component *comp1 = nnet1.GetComponent(c),
-//                    *comp2 = nnet2.GetComponent(c);
-//    if (comp1->Properties() & kUpdatableComponent) {
-//      const UpdatableComponent
-//          *u_comp1 = dynamic_cast<const UpdatableComponent*>(comp1),
-//          *u_comp2 = dynamic_cast<const UpdatableComponent*>(comp2);
-//      KALDI_ASSERT(u_comp1 != NULL && u_comp2 != NULL);
-//      dot_prod->Data()[updatable_c] = u_comp1->DotProduct(*u_comp2);
-//      updatable_c++;
-//    }
-//  }
-//  KALDI_ASSERT(updatable_c == dot_prod->Dim());
 
   int32 dim = dot_prod->Dim();
   dot_prod->Data()[dim - 2] = nnet1.InputLayer()->DotProduct(*nnet2.InputLayer());

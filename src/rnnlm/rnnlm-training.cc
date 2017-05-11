@@ -352,6 +352,9 @@ void LmNnetSamplingTrainer::ProcessOutputs(bool is_adversarial_step,
   std::vector<NnetIo>::const_iterator iter = eg.io.begin(), end = eg.io.end();
   for (; iter != end; ++iter) {
     const NnetIo &io = *iter;
+    if (io.name == "samples") {
+      break;
+    }
     int32 node_index = nnet_->GetNnet()->GetNodeIndex(io.name);
     KALDI_ASSERT(node_index >= 0);
     if (nnet_->GetNnet()->IsOutputNode(node_index)) {
@@ -360,7 +363,8 @@ void LmNnetSamplingTrainer::ProcessOutputs(bool is_adversarial_step,
       bool supply_deriv = true;
 
       if (dynamic_cast<const AffineImportanceSamplingComponent*>(nnet_->OutputLayer()) != NULL) {
-        const vector<vector<std::pair<int32, double> > > &samples = eg.samples;
+        KALDI_ASSERT(eg.io.size() == 3 && eg.io[2].name == "samples");
+        const SparseMatrix<BaseFloat> &samples = eg.io[2].features.GetSparseMatrix();
         ComputeObjfAndDerivSample(samples, io.features,
                                        obj_type, io.name,
                                        supply_deriv, computer,
@@ -467,7 +471,7 @@ LmNnetSamplingTrainer::~LmNnetSamplingTrainer() {
 }
 
 void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
-                  const vector<vector<std::pair<int32, double> > > &samples,
+                  const SparseMatrix<BaseFloat> &samples,
                   const GeneralMatrix &supervision,
                   ObjectiveType objective_type,
                   const std::string &output_name,
@@ -480,11 +484,11 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
                   LmNnet *nnet_to_update) {
   *old_output = &computer->GetOutput(output_name);
 
-  int t = samples.size();
+  int t = samples.NumRows();
   int num_samples;
 
   KALDI_ASSERT(t > 0);
-  num_samples = samples[0].size();
+  num_samples = samples.NumCols();
 
   if (num_samples == 0) {
     num_samples = output_projection.OutputDim();
@@ -524,8 +528,8 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 
       vector<int> indexes(num_samples);
       for (int j = 0; j < num_samples; j++) {
-        indexes[j] = samples[i][j].first;
-        selected_probs[j + i * num_samples] = samples[i][j].second;
+        indexes[j] = samples.Row(i).GetElement(j).first;
+        selected_probs[j + i * num_samples] = samples.Row(i).GetElement(j).second;
       }
       output_projection.Propagate(this_in, indexes, &this_out);
     }
@@ -547,15 +551,12 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     for (int j = 0; j < t; j++) {
       unordered_map<int32, int32> word2pos;
       for (int i = 0; i < num_samples; i++) {
-        word2pos[samples[j][i].first] = i;
+        word2pos[samples.Row(j).GetElement(i).first] = i;
       }
 
       for (int i = 0; i < minibatch_size; i++) {
         unordered_map<int32, int32>::iterator iter = word2pos.find(outputs[j + i * t]);
-//        KALDI_ASSERT(iter != word2pos.end());
-
         correct_indexes[j + i * t] = iter->second;
-//        KALDI_ASSERT(outputs[j + i * t] == samples[j][correct_indexes[j + i * t]].first);
       }
     }
     VectorToSparseMatrix(correct_indexes, num_samples, &supervision_cpu);
@@ -662,7 +663,7 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 //      t = 0;
       for (int i = 0; i < t; i++) {
         for (int j = 0; j < num_samples; j++) {
-          int32 index = samples[i][j].first;
+          int32 index = samples.Row(i).GetElement(j).first;
           unordered_map<int32, int32>::iterator iter = new_index_to_id.find(index);
           if (iter == new_index_to_id.end()) {
             all_indexes.push_back(index);
@@ -672,12 +673,6 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
             old_index_to_new[i][j] = iter->second;
           }
         }
-//        if (i == 0) {
-//          KALDI_ASSERT(samples[0].size() == all_indexes.size());
-//          for (int j = 0; j < samples[0].size(); j++) {
-//            KALDI_ASSERT(samples[0][j].first == all_indexes[j]);
-//          }
-//        }
       }
 
       int32 total_samples = all_indexes.size();

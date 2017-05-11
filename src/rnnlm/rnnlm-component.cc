@@ -260,10 +260,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Propagate(const CuMatrixB
   out->AddMatMat(1.0, in, kNoTrans, linear_params, kTrans, 1.0);
   out->ApplyCeiling(0.0);
   if (normalize) {
-//    ComputeSamplingNonlinearity(*out, out);
-////    KALDI_LOG << "average normalization term is " << exp(out->Sum() / out->NumRows() - 1);
-//    out->ApplyLog();
-//    KALDI_LOG << "Sum is " << out->Sum();
     out->ApplyLogSoftMaxPerRow(*out);
   }
 }
@@ -274,19 +270,8 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
                                const CuMatrixBase<BaseFloat> &output_deriv,
                                LmOutputComponent *to_update_0,
                                CuMatrixBase<BaseFloat> *input_deriv) const {
-  KALDI_LOG << "Natural gradient backprop";  // TODO(hxu)
-
   CuSubMatrix<BaseFloat> bias_params(params_.ColRange(params_.NumCols() - 1, 1));
   CuSubMatrix<BaseFloat> linear_params(params_.ColRange(0, params_.NumCols() - 1));
-
-//  CuMatrix<BaseFloat> tmp(output_deriv.NumRows(), output_deriv.NumCols());
-//  tmp.Row(0).CopyColFromMat(bias_params, 0);
-//  if (tmp.NumRows() > 1)
-//    tmp.RowRange(1, tmp.NumRows() - 1).CopyRowsFromVec(tmp.Row(0));
-//
-//  tmp.AddMatMat(1.0, in_value, kNoTrans, linear_params, kTrans, 1.0);
-//  // now tmp is the in_value for log-softmax
-//  tmp.DiffLogSoftmaxPerRow(tmp, output_deriv);
 
   if (input_deriv != NULL)
     input_deriv->AddMatMat(1.0, output_deriv, kNoTrans, linear_params, kNoTrans,
@@ -296,16 +281,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
              = dynamic_cast<NaturalGradientAffineImportanceSamplingComponent*>(to_update_0);
 
   if (to_update != NULL) {
-    // need to add natural gradient TODO(hxu)
-//    CuMatrix<BaseFloat> delta(1, params_.NumRows(), kSetZero);
-//    delta.Row(0).AddRowSumMat(to_update->learning_rate_, output_deriv, 1.0);
-//    to_update->params_.ColRange(params_.NumCols() - 1, 1).AddMat(1.0, delta, kTrans);
-//    to_update->params_.ColRange(0, params_.NumCols() - 1).AddMatMat(to_update->learning_rate_, output_deriv, kTrans,
-//                                in_value, kNoTrans, 1.0);
-
-//    CuMatrix<BaseFloat> delta_bias(1, output_deriv.NumCols(), kSetZero);
-//    new_linear.SetZero();  // clear the contents
-
     CuSubMatrix<BaseFloat> bias(to_update->params_.ColRange(params_.NumCols() - 1, 1));
     CuSubMatrix<BaseFloat> linear(to_update->params_.ColRange(0, params_.NumCols() - 1));
 
@@ -332,14 +307,11 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
       to_update->preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
                                                 &in_scale);
-//      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
-//                                                 &out_scale);
 
       // "scale" is a scaling factor coming from the PreconditionDirections calls
       // (it's faster to have them output a scaling factor than to have them scale
       // their outputs).
       BaseFloat scale = in_scale;
-//      BaseFloat scale = in_scale * out_scale;
 
       CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
                                                   0, in_value_temp.NumRows(),
@@ -412,8 +384,6 @@ void NaturalGradientAffineImportanceSamplingComponent::Backprop(
 
       to_update->preconditioner_in_.PreconditionDirections(&in_value_temp, &in_row_products,
                                                 &in_scale);
-//      to_update->preconditioner_out_.PreconditionDirections(&out_deriv_temp, &out_row_products,
-//                                                 &out_scale);
 
       // "scale" is a scaling factor coming from the PreconditionDirections calls
       // (it's faster to have them output a scaling factor than to have them scale
@@ -594,22 +564,8 @@ void LmNaturalGradientLinearComponent::Update(
   // their outputs).
   BaseFloat scale = in_scale * out_scale;
 
-//  CuSubMatrix<BaseFloat> in_value_precon_part(in_value_temp,
-//                                              0, in_value_temp.NumRows(),
-//                                              0, in_value_temp.NumCols() - 1);
-  // this "precon_ones" is what happens to the vector of 1's representing
-  // offsets, after multiplication by the preconditioner.
-//  CuVector<BaseFloat> precon_ones(in_value_temp.NumRows());
-
-//  precon_ones.CopyColFromMat(in_value_temp, in_value_temp.NumCols() - 1);
-
   BaseFloat local_lrate = scale * learning_rate_;
   update_count_ += 1.0;
-//  bias_params_.AddMatVec(local_lrate, out_deriv_temp, kTrans,
-//                         precon_ones, 1.0);
-
-//  linear_params_.AddMatMat(local_lrate, out_deriv_temp, kTrans,
-//                           in_value_precon_part, kNoTrans, 1.0);
   cu::UpdateSimpleAffineOnSparse(local_lrate, out_deriv_temp, in_value, &linear_params_);
 }
 

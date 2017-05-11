@@ -202,10 +202,12 @@ void GetComputationRequest(const Nnet &nnet,
     const NnetIo &io = eg.io[i];
     const std::string &name = io.name;
     int32 node_index = nnet.GetNodeIndex(name);
-    if (node_index == -1 &&
-        !nnet.IsInputNode(node_index) && !nnet.IsOutputNode(node_index))
-      KALDI_ERR << "Nnet example has input or output named '" << name
+    if (node_index == -1 ||
+        (!nnet.IsInputNode(node_index) && !nnet.IsOutputNode(node_index))) {
+      KALDI_WARN << "Nnet example has input or output named '" << name
                 << "', but no such input or output node is in the network.";
+      continue;
+    }
 
     std::vector<IoSpecification> &dest =
         nnet.IsInputNode(node_index) ? request->inputs : request->outputs;
