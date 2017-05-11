@@ -236,7 +236,7 @@ void NnetChainTrainer::UpdateParamsWithMaxChange(bool is_adversarial_step) {
       ostr << "Per-component max-change active on "
            << num_max_change_per_component_applied_per_minibatch
            << " / " << num_updatable << " Updatable Components."
-           << "(smallest factor=" << min_scale << " on "
+           << " (smallest factor=" << min_scale << " on "
            << component_name_with_min_scale
            << " with max-change=" << max_change_with_min_scale <<"). ";
     if (param_delta > nnet_config.max_param_change)

@@ -66,7 +66,7 @@ NnetIo::NnetIo(const std::string &name,
 }
 
 NnetIo::NnetIo(const std::string &name,
-               int32 t_begin, const SparseMatrix<BaseFloat> &feats):
+               int32 t_begin, const GeneralMatrix &feats):
     name(name), features(feats) {
   int32 num_rows = feats.NumRows();
   KALDI_ASSERT(num_rows > 0);

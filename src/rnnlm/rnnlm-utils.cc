@@ -47,7 +47,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
 
   if (num_samples <= 0) {
     samples.resize(length, vector<std::pair<int32, BaseFloat> >());
-    egs->io.push_back(nnet3::NnetIo("samples", 0, SparseMatrix<BaseFloat>(unigram.size(), samples)));
+    egs->io.push_back(nnet3::NnetIo("samples", 0, GeneralMatrix(SparseMatrix<BaseFloat>(unigram.size(), samples))));
     return;
   }
 
@@ -76,7 +76,7 @@ void DoSamplingInExamples(int num_samples, int ngram_order,
     SampleWithoutReplacement(unigram, cdf, num_samples, must_samples[t], map<int, double>(), &samples[t]);
   }
 //  if (num_samples != unigram.size()) {
-  egs->io.push_back(nnet3::NnetIo("samples", 0, SparseMatrix<BaseFloat>(unigram.size(), samples)));
+  egs->io.push_back(nnet3::NnetIo("samples", 0, GeneralMatrix(SparseMatrix<BaseFloat>(unigram.size(), samples))));
 //  }
 }
 
@@ -430,7 +430,7 @@ void GetEgsFromSent(const vector<int>& word_ids_in, int input_dim,
   }
 
   NnetExample &eg = *out;
-  eg.io.push_back(nnet3::NnetIo("input", 0, input_frames));
+  eg.io.push_back(nnet3::NnetIo("input", 0, GeneralMatrix(input_frames)));
 
   Posterior posterior;
   for (int i = 0; i < word_ids_out.size(); i++) {
