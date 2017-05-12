@@ -14,7 +14,7 @@ eos="</s>"
 oos="<oos>"
 
 max_param_change=20
-num_iters=80
+num_iters=160
 
 num_train_frames_combine=10000 # # train frames for the above.                  
 num_frames_diagnostic=2000 # number of frames for "compute_prob" jobs  

@@ -12,7 +12,7 @@ id=rnn
 
 set -e
 
-local/nnet3-rnnlm/run-rnnlm-train.sh --use-gpu yes --stage 41
+local/nnet3-rnnlm/run-rnnlm-train.sh --use-gpu yes --stage -20
 
 [ ! -f $rnndir/rnnlm ] && echo "Can't find RNNLM model" && exit 1;
 
