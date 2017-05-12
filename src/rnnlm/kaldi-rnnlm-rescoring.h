@@ -41,7 +41,8 @@ class KaldiRnnlmDeterministicFst
 
   // Does not take ownership.
   KaldiRnnlmDeterministicFst(int32 max_ngram_order,
-      const std::string &rnn_wordlist,
+      const std::string &rnn_input_wordlist,
+      const std::string &rnn_output_wordlist,
       const std::string &word_symbol_table_rxfilename,
       const DecodableRnnlmSimpleLoopedInfo &info);
 
@@ -56,8 +57,12 @@ class KaldiRnnlmDeterministicFst
   virtual bool GetArc(StateId s, Label ilabel, fst::StdArc* oarc);
 
  private:
-  std::vector<int32> fst_label_to_rnn_label_;
-  std::vector<std::string> rnn_label_to_word_;
+  std::vector<int32> fst_label_to_rnn_out_label_;
+  std::vector<std::string> rnn_out_label_to_word_;
+
+  std::vector<int32> fst_label_to_rnn_in_label_;
+  std::vector<std::string> rnn_in_label_to_word_;
+
   std::vector<std::string> fst_label_to_word_;
   int32 full_voc_size_;
   int32 out_OOS_index_;
@@ -71,7 +76,8 @@ class KaldiRnnlmDeterministicFst
   int32 max_ngram_order_;
   std::vector<DecodableRnnlmSimpleLooped> state_to_decodable_rnnlm_;
 
-  void ReadFstWordSymbolTableAndRnnWordlist(const std::string &rnn_wordlist,
+  void ReadFstWordSymbolTableAndRnnWordlist(const std::string &rnn_in_wordlist,
+      const std::string &rnn_out_wordlist,
       const std::string &word_symbol_table_rxfilename);
 
 };

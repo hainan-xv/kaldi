@@ -6,7 +6,7 @@ dev_text=data/sdm1/dev/text
 cmd=queue.pl
 
 num_words_in=10000
-num_words_out=10000
+num_words_out=12000
 
 stage=-100
 bos="<s>"
@@ -185,7 +185,8 @@ cat $egsdir/wordlist.in $egsdir/wordlist.out | awk '{print $1}' > $outdir/wordli
 cat $outdir/wordlist.all.[12] | sort -u > $outdir/wordlist.all
 
 cp $outdir/wordlist.all $outdir/wordlist.rnn
-cp $egsdir/wordlist.out $outdir/rnn.wlist
+cp $egsdir/wordlist.in $outdir/rnn.wlist.in
+cp $egsdir/wordlist.out $outdir/rnn.wlist.out
 
 touch $outdir/unk.probs
 

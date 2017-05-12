@@ -56,20 +56,20 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 4 && po.NumArgs() != 5) {
+    if (po.NumArgs() != 6) {
       po.PrintUsage();
       exit(1);
     }
 
-    std::string lats_rspecifier, rnn_wordlist,
+    std::string lats_rspecifier, rnn_input_wordlist, rnn_output_wordlist,
         word_symbols_rxfilename, rnnlm_rxfilename, lats_wspecifier;
-    KALDI_ASSERT (po.NumArgs() == 5);
 
-    rnn_wordlist = po.GetArg(1);
-    word_symbols_rxfilename = po.GetArg(2);
-    lats_rspecifier = po.GetArg(3);
-    rnnlm_rxfilename = po.GetArg(4);
-    lats_wspecifier = po.GetArg(5);
+    rnn_input_wordlist = po.GetArg(1);
+    rnn_output_wordlist = po.GetArg(2);
+    word_symbols_rxfilename = po.GetArg(3);
+    lats_rspecifier = po.GetArg(4);
+    rnnlm_rxfilename = po.GetArg(5);
+    lats_wspecifier = po.GetArg(6);
 
     // Reads the language model.
     rnnlm::LmNnet lm_nnet;
@@ -100,7 +100,8 @@ int main(int argc, char *argv[]) {
         // Wraps the rnnlm into FST. We re-create it for each lattice to prevent
         // memory usage increasing with time.
         nnet3::KaldiRnnlmDeterministicFst rnnlm_fst(max_ngram_order,
-                                                    rnn_wordlist,
+                                                    rnn_input_wordlist,
+                                                    rnn_output_wordlist,
                                                     word_symbols_rxfilename,
                                                     info);
 

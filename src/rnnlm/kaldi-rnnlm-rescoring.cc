@@ -28,7 +28,8 @@ namespace kaldi {
 namespace nnet3 {
 
 void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
-    const std::string &rnn_wordlist,
+    const std::string &rnn_in_wordlist,
+    const std::string &rnn_out_wordlist,
     const std::string &word_symbol_table_rxfilename) {
   // Reads symbol table.
   fst::SymbolTable *fst_word_symbols = NULL;
@@ -50,13 +51,12 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
     }
   }
 
-  fst_label_to_rnn_label_.resize(fst_word_symbols->NumSymbols(), -1);
+  fst_label_to_rnn_out_label_.resize(fst_word_symbols->NumSymbols(), -1);
+  fst_label_to_rnn_in_label_.resize(fst_word_symbols->NumSymbols(), -1);
 
-//  rnn_label_to_word_.push_back("<s>");
-//  rnn_label_to_word_.push_back("<OOS>");
   out_OOS_index_ = 1;
-  { // input
-    std::ifstream ifile(rnn_wordlist.c_str());
+  {
+    std::ifstream ifile(rnn_out_wordlist.c_str());
     int32 id;
     string word;
     int32 i = 0;
@@ -66,29 +66,54 @@ void KaldiRnnlmDeterministicFst::ReadFstWordSymbolTableAndRnnWordlist(
       }
       KALDI_ASSERT(i == id);
       i++;
-      rnn_label_to_word_.push_back(word);
+      rnn_out_label_to_word_.push_back(word);
 
-      int fst_label = fst_word_symbols->Find(rnn_label_to_word_[id]);
+      int fst_label = fst_word_symbols->Find(rnn_out_label_to_word_[id]);
       KALDI_ASSERT(fst::SymbolTable::kNoSymbol != fst_label || id == out_OOS_index_ || id == 0);
       if (id != out_OOS_index_ && out_OOS_index_ != 0) {
-        fst_label_to_rnn_label_[fst_label] = id;
+        fst_label_to_rnn_out_label_[fst_label] = id;
       }
     }
   }
 
-  for (int32 i = 0; i < fst_label_to_rnn_label_.size(); i++) {
-    if (fst_label_to_rnn_label_[i] == -1) {
-      fst_label_to_rnn_label_[i] = out_OOS_index_;
+  {
+    std::ifstream ifile(rnn_in_wordlist.c_str());
+    int32 id;
+    string word;
+    int32 i = 0;
+    while (ifile >> word >> id) {
+      if (word == "<oos>") {
+        KALDI_ASSERT(id == out_OOS_index_);
+      }
+      KALDI_ASSERT(i == id);
+      i++;
+      rnn_in_label_to_word_.push_back(word);
+
+      int fst_label = fst_word_symbols->Find(rnn_in_label_to_word_[id]);
+      KALDI_ASSERT(fst::SymbolTable::kNoSymbol != fst_label || id == out_OOS_index_ || id == 0);
+      if (id != out_OOS_index_ && out_OOS_index_ != 0) {
+        fst_label_to_rnn_in_label_[fst_label] = id;
+      }
+    }
+  }
+
+  for (int32 i = 0; i < fst_label_to_rnn_out_label_.size(); i++) {
+    if (fst_label_to_rnn_out_label_[i] == -1) {
+      fst_label_to_rnn_out_label_[i] = out_OOS_index_;
+    }
+    if (fst_label_to_rnn_in_label_[i] == -1) {
+      fst_label_to_rnn_in_label_[i] = out_OOS_index_;
     }
   }
 }
 
 KaldiRnnlmDeterministicFst::KaldiRnnlmDeterministicFst(int32 max_ngram_order,
-    const std::string &rnn_wordlist,
+    const std::string &rnn_in_wordlist,
+    const std::string &rnn_out_wordlist,
     const std::string &word_symbol_table_rxfilename,
     const DecodableRnnlmSimpleLoopedInfo &info) {
   max_ngram_order_ = max_ngram_order;
-  ReadFstWordSymbolTableAndRnnWordlist(rnn_wordlist,
+  ReadFstWordSymbolTableAndRnnWordlist(rnn_in_wordlist, rnn_out_wordlist,
                                        word_symbol_table_rxfilename);
 
   std::vector<Label> bos;
@@ -117,12 +142,14 @@ bool KaldiRnnlmDeterministicFst::GetArc(StateId s, Label ilabel,
 
   std::vector<Label> wseq = state_to_wseq_[s];
   DecodableRnnlmSimpleLooped decodable_rnnlm = state_to_decodable_rnnlm_[s];
-  int32 rnn_word = fst_label_to_rnn_label_[ilabel];
-  BaseFloat logprob = decodable_rnnlm.GetOutput(0, rnn_word);
-  if (rnn_word == out_OOS_index_)
-    logprob = logprob - Log(full_voc_size_ - rnn_label_to_word_.size() + 1.0);
+  int32 rnn_out_word = fst_label_to_rnn_out_label_[ilabel];
+  int32 rnn_in_word = fst_label_to_rnn_in_label_[ilabel];
 
-  wseq.push_back(rnn_word);
+  BaseFloat logprob = decodable_rnnlm.GetOutput(0, rnn_out_word);
+  if (rnn_out_word == out_OOS_index_)
+    logprob = logprob - Log(full_voc_size_ - rnn_out_label_to_word_.size() + 1.0);
+
+  wseq.push_back(rnn_in_word);
   if (max_ngram_order_ > 0) {
     while (wseq.size() >= max_ngram_order_) {
       // History state has at most <max_ngram_order_> - 1 words in the state.
