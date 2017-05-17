@@ -6,7 +6,7 @@ dev_text=data/sdm1/dev/text
 cmd=queue.pl
 
 num_words_in=10000
-num_words_out=12000
+num_words_out=10000
 
 stage=-100
 bos="<s>"
@@ -24,8 +24,8 @@ shuffle_buffer_size=5000 # This "buffer_size" variable controls randomization of
 minibatch_size=1:128
 
 hidden_dim=200
-initial_learning_rate=0.1
-final_learning_rate=0.01
+initial_learning_rate=0.08
+final_learning_rate=0.004
 learning_rate_decline_factor=1.01
 
 # LSTM parameters
@@ -39,8 +39,10 @@ clipping_threshold=30
 label_delay=0  # 5
 splice_indexes=0
 
-use_gpu=no
+use_gpu=yes
 num_samples=256
+momentum=0
+wang_scale=0
 
 type=rnn
 
@@ -48,8 +50,8 @@ type=rnn
 . path.sh
 . parse_options.sh || exit 1;
 
-egsdir=data/nnet3_rnnlm/egs
-outdir=data/nnet3_rnnlm
+egsdir=data/nnet3_rnnlm_egs
+outdir=data/nnet3_rnnlm_${hidden_dim}_${num_samples}_${wang_scale}
 srcdir=data/local/dict
 set -e
 
@@ -140,39 +142,19 @@ if [ $stage -le -2 ]; then
   if [ "$type" == "rnn" ]; then
   cat > $outdir/config <<EOF
   LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=2
-  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=2 num-samples-history=2000 unigram=$unigram
+  NaturalGradientAffineImportanceSamplingComponent learning-rate-factor=0.1 input-dim=$hidden_dim output-dim=$num_words_out max-change=2 num-samples-history=2000 unigram=$unigram
 
   input-node name=input dim=$hidden_dim
   component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
   component name=hidden_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=2
-#  component name=noop type=NoOpComponent dim=$hidden_dim
 
 #Component nodes
   component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
   component-node name=hidden_affine component=hidden_affine  input=IfDefined(Offset(first_nonlin, -1))
-#  component-node name=noop component=noop input=first_nonlin
+
   output-node    name=output input=first_nonlin objective=linear
 EOF
   fi
-
-#  if [ "$type" == "rnn-natural-relu" ]; then
-#  cat > $outdir/config <<EOF
-#  LmNaturalGradientLinearComponent input-dim=$num_words_in output-dim=$hidden_dim max-change=2
-#  NaturalGradientAffineImportanceSamplingComponent input-dim=$hidden_dim output-dim=$num_words_out max-change=2 unigram=$unigram
-#
-#  input-node name=input dim=$hidden_dim
-##  component name=first_nonlin type=SigmoidComponent dim=$hidden_dim
-#  component name=first_nonlin type=RectifiedLinearComponent dim=$hidden_dim
-#  component name=first_renorm type=NormalizeComponent dim=$hidden_dim target-rms=1.0
-#  component name=hidden_affine type=NaturalGradientAffineComponent input-dim=$hidden_dim output-dim=$hidden_dim max-change=2
-#
-##Component nodes
-#  component-node name=first_nonlin component=first_nonlin  input=Sum(input, hidden_affine)
-#  component-node name=first_renorm component=first_renorm  input=first_nonlin
-#  component-node name=hidden_affine component=hidden_affine  input=IfDefined(Offset(first_renorm, -1))
-#  output-node    name=output input=first_renorm objective=linear
-#EOF
-#  fi
 
 fi
 
@@ -209,7 +191,7 @@ if [ $stage -le $num_iters ]; then
           this_cmd=$cuda_cmd
         fi
 
-        $this_cmd $outdir/log/train.$n.log rnnlm-train --verbose=2 --use-gpu=$use_gpu --binary=false \
+        $this_cmd $outdir/log/train.$n.log rnnlm-train --adversarial-training-scale=$wang_scale --momentum=$momentum --verbose=2 --use-gpu=$use_gpu --binary=false \
         --max-param-change=$max_param_change "rnnlm-copy --learning-rate=$learning_rate $outdir/$[$n-1].mdl -|" \
         "ark:nnet3-shuffle-egs --buffer-size=$shuffle_buffer_size --srand=$n ark:$egsdir/egs/train.$this_archive.egs ark:- | nnet3-merge-egs --minibatch-size=$minibatch_size ark:- ark:- | nnet3-copy-egs-add-samples --num-samples=$num_samples --srand=$n ark:- $unigram ark:- |" $outdir/$n.mdl
 

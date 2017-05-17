@@ -12,7 +12,7 @@ id=rnn
 
 set -e
 
-local/nnet3-rnnlm/run-rnnlm-train.sh --use-gpu yes --stage 25 --num-iters 160
+local/nnet3-rnnlm/run-rnnlm-train.sh --use-gpu yes --stage -20 --num-iters 160
 
 [ ! -f $rnndir/rnnlm ] && echo "Can't find RNNLM model" && exit 1;
 
@@ -26,9 +26,9 @@ for decode_set in dev eval; do
   steps/lmrescore_rnnlm_lat.sh \
     --cmd "$decode_cmd --mem 16G" \
     --rnnlm-ver nnet3rnnlm  --weight 0.5 --max-ngram-order $ngram_order \
-    data/lang_$LM data/nnet3_rnnlm \
+    data/lang_$LM $rnndir \
     data/$mic/${decode_set}_hires ${decode_dir} \
-    ${decode_dir}.rnnlm.lat.${ngram_order}gram.2list
+    ${decode_dir}.rnnlm.lat.${ngram_order}gram
 ) &
 done
 

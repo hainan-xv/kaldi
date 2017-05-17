@@ -123,7 +123,6 @@ void LmNnetSamplingTrainer::Train(const NnetExample &eg) {
   if (config_.adversarial_training_scale > 0.0 &&
       num_minibatches_processed_ % config_.adversarial_training_interval == 0) {
     // adversarial training is incompatible with momentum > 0
-    KALDI_ASSERT(false); // TODO(hxu) turn this off first
     KALDI_ASSERT(config_.momentum == 0.0);
     delta_nnet_->FreezeNaturalGradient(true);
     bool is_adversarial_step = true;
@@ -506,10 +505,8 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
 
   SparseMatrixToVector(post, &outputs);
 
-  std::vector<double> selected_probs;  // selected_probs[i * t + j] is the prob of
-                                                        // selecting samples[j][i]
-  // words for the same sentence would be grouped together
-  // TODO(hxu) actually this is not true any more
+  std::vector<double> selected_probs;
+  // words for the same t would be grouped together
 
   int minibatch_size = (*old_output)->NumRows() / t;
   KALDI_ASSERT(outputs.size() == t * minibatch_size);
@@ -547,7 +544,6 @@ void LmNnetSamplingTrainer::ComputeObjfAndDerivSample(
     // no need to generate a new struct - just use post
   } else {
     correct_indexes.resize(out.NumRows(), -1);
-    // TODO(hxu) not tested it yet
     for (int j = 0; j < t; j++) {
       unordered_map<int32, int32> word2pos;
       for (int i = 0; i < num_samples; i++) {
