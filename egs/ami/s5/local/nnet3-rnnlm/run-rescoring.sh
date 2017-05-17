@@ -1,9 +1,9 @@
 #!/bin/bash
 
-mic=ihm
+mic=sdm1
 n=50
 ngram_order=4
-rnndir=data/nnet3_rnnlm
+rnndir=data/nnet3_rnnlm_200_256_0
 id=rnn
 
 . ./utils/parse_options.sh
@@ -20,7 +20,7 @@ final_lm=ami_fsh.o3g.kn
 LM=$final_lm.pr1-7
 
 for decode_set in dev eval; do
-(  dir=exp/$mic/nnet3_cleaned/tdnn_sp/
+(  dir=exp/$mic/nnet3/tdnn_sp/
   decode_dir=${dir}/decode_${decode_set}
 
   steps/lmrescore_rnnlm_lat.sh \
