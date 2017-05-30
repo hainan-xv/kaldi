@@ -8,6 +8,7 @@
 """ This script is based on steps/nnet3/tdnn/train.sh
 """
 
+from __future__ import print_function
 import argparse
 import logging
 import os
@@ -86,8 +87,8 @@ def get_args():
                         help="Directory to store the models and "
                         "all other files.")
 
-    print(' '.join(sys.argv))
-    print(sys.argv)
+    print(' '.join(sys.argv), file=sys.stderr)
+    print(sys.argv, file=sys.stderr)
 
     args = parser.parse_args()
 
@@ -170,7 +171,8 @@ def train(args, run_opts):
 
     # split the training data into parts for individual jobs
     # we will use the same number of jobs as that used for alignment
-    common_lib.split_data(args.feat_dir, num_jobs)
+    common_lib.execute_command("utils/split_data.sh {0} {1}".format(
+            args.feat_dir, num_jobs))
     shutil.copy('{0}/tree'.format(args.ali_dir), args.dir)
 
     with open('{0}/num_jobs'.format(args.dir), 'w') as f:

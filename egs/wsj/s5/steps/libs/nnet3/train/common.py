@@ -40,6 +40,65 @@ class RunOpts(object):
         self.prior_queue_opt = None
         self.parallel_train_opts = None
 
+def get_outputs_list(model_file, get_raw_nnet_from_am=True):
+    """ Generates list of output-node-names used in nnet3 model configuration.
+        It will normally return 'output'.
+    """
+    if get_raw_nnet_from_am:
+      outputs_list = common_lib.get_command_stdout(
+          "nnet3-am-info --print-args=false {0} | "
+          "grep -e 'output-node' | cut -f2 -d' ' | cut -f2 -d'=' ".format(model_file))
+    else:
+      outputs_list = common_lib.get_command_stdout(
+          "nnet3-info --print-args=false {0} | "
+          "grep -e 'output-node' | cut -f2 -d' ' | cut -f2 -d'=' ".format(model_file))
+
+    return outputs_list.split()
+
+
+def get_multitask_egs_opts(egs_dir, egs_prefix="",
+                           archive_index=-1,
+                           use_multitask_egs=False):
+    """ Generates egs option for multitask(or multilingual) training setup,
+        if {egs_prefix}output.*.ark or {egs_prefix}weight.*.ark files exists in egs_dir.
+        Each line in {egs_prefix}*.scp has a corresponding line containing
+        name of the output-node in the network and language-dependent weight in
+        {egs_prefix}output.*.ark or {egs_prefix}weight.*.ark respectively.
+        e.g. Returns the empty string ('') if use_multitask_egs == False,
+        otherwise something like:
+        '--output=ark:foo/egs/output.3.ark --weight=ark:foo/egs/weights.3.ark'
+        i.e. egs_prefix is "" for train and
+        "valid_diagnostic." for validation.
+    """
+    multitask_egs_opts = ""
+    egs_suffix =  ".{0}".format(archive_index) if archive_index > -1 else ""
+
+    if use_multitask_egs:
+        output_file_name = ("{egs_dir}/{egs_prefix}output{egs_suffix}.ark"
+                            "".format(egs_dir=egs_dir,
+                                     egs_prefix=egs_prefix,
+                                     egs_suffix=egs_suffix))
+        output_rename_opt = ""
+        if os.path.isfile(output_file_name):
+            output_rename_opt = ("--outputs=ark:{output_file_name}".format(
+                output_file_name=output_file_name))
+
+        weight_file_name = ("{egs_dir}/{egs_prefix}weight{egs_suffix}.ark"
+                            "".format(egs_dir=egs_dir,
+                                      egs_prefix=egs_prefix,
+                                      egs_suffix=egs_suffix))
+        weight_opt = ""
+        if os.path.isfile(weight_file_name):
+            weight_opt = ("--weights=ark:{weight_file_name}"
+                          "".format(weight_file_name=weight_file_name))
+
+        multitask_egs_opts = (
+            "{output_rename_opt} {weight_opt}".format(
+                output_rename_opt=output_rename_opt,
+                weight_opt=weight_opt))
+
+    return multitask_egs_opts
+
 
 def get_successful_models(num_models, log_file_pattern,
                           difference_threshold=1.0):
@@ -78,26 +137,17 @@ def get_successful_models(num_models, log_file_pattern,
 
 
 def get_average_nnet_model(dir, iter, nnets_list, run_opts,
-                           get_raw_nnet_from_am=True, shrink=None):
-    scale = 1.0
-    if shrink is not None:
-        scale = shrink
+                           get_raw_nnet_from_am=True):
 
     next_iter = iter + 1
     if get_raw_nnet_from_am:
-        out_model = ("""- \| nnet3-am-copy --set-raw-nnet=- --scale={scale} \
+        out_model = ("""- \| nnet3-am-copy --set-raw-nnet=-  \
                         {dir}/{iter}.mdl {dir}/{next_iter}.mdl""".format(
                             dir=dir, iter=iter,
-                            next_iter=next_iter,
-                            scale=scale))
+                            next_iter=next_iter))
     else:
-        if shrink is not None:
-            out_model = """- \| nnet3-copy --scale={scale} \
-                           - {dir}/{next_iter}.raw""".format(
-                                   dir=dir, next_iter=next_iter, scale=scale)
-        else:
-            out_model = "{dir}/{next_iter}.raw".format(dir=dir,
-                                                       next_iter=next_iter)
+        out_model = "{dir}/{next_iter}.raw".format(
+            dir=dir, next_iter=next_iter)
 
     common_lib.execute_command(
         """{command} {dir}/log/average.{iter}.log \
@@ -110,10 +160,7 @@ def get_average_nnet_model(dir, iter, nnets_list, run_opts,
 
 
 def get_best_nnet_model(dir, iter, best_model_index, run_opts,
-                        get_raw_nnet_from_am=True, shrink=None):
-    scale = 1.0
-    if shrink is not None:
-        scale = shrink
+                        get_raw_nnet_from_am=True):
 
     best_model = "{dir}/{next_iter}.{best_model_index}.raw".format(
             dir=dir,
@@ -130,11 +177,11 @@ def get_best_nnet_model(dir, iter, best_model_index, run_opts,
 
     common_lib.execute_command(
         """{command} {dir}/log/select.{iter}.log \
-                nnet3-copy --scale={scale} {best_model} \
+                nnet3-copy {best_model} \
                 {out_model}""".format(command=run_opts.command,
                                       dir=dir, iter=iter,
                                       best_model=best_model,
-                                      out_model=out_model, scale=scale))
+                                      out_model=out_model))
 
 
 def validate_chunk_width(chunk_width):
@@ -530,8 +577,8 @@ def get_learning_rate(iter, num_jobs, num_iters, num_archives_processed,
     return num_jobs * effective_learning_rate
 
 
-def do_shrinkage(iter, model_file, shrink_saturation_threshold,
-                 get_raw_nnet_from_am=True):
+def should_do_shrinkage(iter, model_file, shrink_saturation_threshold,
+                        get_raw_nnet_from_am=True):
 
     if iter == 0:
         return True
@@ -846,7 +893,7 @@ class CommonParser:
                                  expertise to setup. """)
         self.parser.add_argument("--reporting.interval",
                                  dest="reporting_interval",
-                                 type=int, default=0.1,
+                                 type=float, default=0.1,
                                  help="""Frequency with which reports have to
                                  be sent, measured in terms of fraction of
                                  iterations.

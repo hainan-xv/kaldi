@@ -371,7 +371,7 @@ class XconfigTrivialOutputLayer(XconfigLayerBase):
 
         # note: self.config['input'] is a descriptor, '[-1]' means output
         # the most recent layer.
-        self.config = { 'input':'[-1]' }
+        self.config = { 'input':'[-1]', 'dim':-1 }
 
     def check_configs(self):
 
@@ -628,7 +628,8 @@ class XconfigBasicLayer(XconfigLayerBase):
         # Here we just list some likely combinations.. you can just add any
         # combinations you want to use, to this list.
         assert first_token in [ 'relu-layer', 'relu-renorm-layer', 'sigmoid-layer',
-                                'tanh-layer', 'relu-batchnorm-layer', 'relu-dropout-layer' ]
+                                'tanh-layer', 'relu-batchnorm-layer', 'relu-dropout-layer',
+                                'relu-batchnorm-dropout-layer' ]
         XconfigLayerBase.__init__(self, first_token, key_to_value, prev_names)
 
     def set_default_configs(self):

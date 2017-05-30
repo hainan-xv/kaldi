@@ -225,7 +225,8 @@ def train(args, run_opts):
 
     # split the training data into parts for individual jobs
     # we will use the same number of jobs as that used for alignment
-    common_lib.split_data(args.feat_dir, num_jobs)
+    common_lib.execute_command("utils/split_data.sh {0} {1}".format(
+            args.feat_dir, num_jobs))
     shutil.copy('{0}/tree'.format(args.ali_dir), args.dir)
 
     with open('{0}/num_jobs'.format(args.dir), 'w') as f:
@@ -382,7 +383,7 @@ def train(args, run_opts):
             shrinkage_value = 1.0
             if args.shrink_value != 1.0:
                 shrinkage_value = (args.shrink_value
-                                   if common_train_lib.do_shrinkage(
+                                   if common_train_lib.should_do_shrinkage(
                                         iter, model_file,
                                         args.shrink_saturation_threshold)
                                    else 1

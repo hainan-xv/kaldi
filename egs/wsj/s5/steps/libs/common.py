@@ -108,13 +108,13 @@ def get_command_stdout(command, require_zero_status = True):
 
     stdout = p.communicate()[0]
     if p.returncode is not 0:
-        str = "Command exited with status {0}: {1}".format(
+        output = "Command exited with status {0}: {1}".format(
             p.returncode, command)
         if require_zero_status:
-            raise Exception(str)
+            raise Exception(output)
         else:
-            logger.warning(str)
-    return stdout
+            logger.warning(output)
+    return stdout if type(stdout) is str else stdout.decode()
 
 
 
@@ -246,22 +246,9 @@ def get_feat_dim_from_scp(feat_scp):
     return feat_dim
 
 
-#<<<<<<< HEAD
-#def split_data(data, num_jobs, per_utt=False):
-#    if per_utt:
-#        run_kaldi_command("utils/split_data.sh --per-utt {data} {num_jobs}"
-#                          "".format(data=data, num_jobs=num_jobs))
-#        return "{data}/split{num_jobs}utt".format(data=data, num_jobs=num_jobs)
-#
-#    run_kaldi_command("utils/split_data.sh {data} {num_jobs}"
-#                      "".format(data=data, num_jobs=num_jobs))
-#    return "{data}/split{num_jobs}".format(data=data, num_jobs=num_jobs)
-#=======
 def split_data(data, num_jobs):
     execute_command("utils/split_data.sh {data} {num_jobs}".format(
           data=data, num_jobs=num_jobs))
-#>>>>>>> 720133715566a823be93e634de094f448b67b7f1
-
 
 def read_kaldi_matrix(matrix_file):
     try:

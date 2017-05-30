@@ -80,6 +80,18 @@ def get_args():
                         rule as accepted by the --minibatch-size option of
                         nnet3-merge-egs; run that program without args to see
                         the format.""")
+    parser.add_argument("--trainer.optimization.proportional-shrink", type=float,
+                        dest='proportional_shrink', default=0.0,
+                        help="""If nonzero, this will set a shrinkage (scaling)
+                        factor for the parameters, whose value is set as:
+                        shrink-value=(1.0 - proportional-shrink * learning-rate), where
+                        'learning-rate' is the learning rate being applied
+                        on the current iteration, which will vary from
+                        initial-effective-lrate*num-jobs-initial to
+                        final-effective-lrate*num-jobs-final.
+                        Unlike for train_rnn.py, this is applied unconditionally,
+                        it does not depend on saturation of nonlinearities.
+                        Can be used to roughly approximate l2 regularization.""")
 
     # General options
     parser.add_argument("--nj", type=int, default=4,
@@ -301,6 +313,20 @@ def train(args, run_opts):
         num_archives_expanded, args.max_models_combine,
         args.num_jobs_final)
 
+    if (os.path.exists('{0}/valid_diagnostic.scp'.format(args.egs_dir))):
+        if (os.path.exists('{0}/valid_diagnostic.egs'.format(args.egs_dir))):
+            raise Exception('both {0}/valid_diagnostic.egs and '
+                            '{0}/valid_diagnostic.scp exist.'
+                            'This script expects only one of them to exist.'
+                            ''.format(args.egs_dir))
+        use_multitask_egs = True
+    else:
+        if (not os.path.exists('{0}/valid_diagnostic.egs'.format(args.egs_dir))):
+            raise Exception('neither {0}/valid_diagnostic.egs nor '
+                            '{0}/valid_diagnostic.scp exist.'
+                            'This script expects one of them.'.format(args.egs_dir))
+        use_multitask_egs = False
+
     def learning_rate(iter, current_num_jobs, num_archives_processed):
         return common_train_lib.get_learning_rate(iter, current_num_jobs,
                                                   num_iters,
@@ -320,6 +346,17 @@ def train(args, run_opts):
                                + (args.num_jobs_final - args.num_jobs_initial)
                                * float(iter) / num_iters)
 
+        lrate = learning_rate(iter, current_num_jobs,
+                              num_archives_processed)
+        shrink_value = 1.0
+        if args.proportional_shrink != 0.0:
+            shrink_value = 1.0 - (args.proportional_shrink * lrate)
+            if shrink_value <= 0.5:
+                raise Exception("proportional-shrink={0} is too large, it gives "
+                                "shrink-value={1}".format(args.proportional_shrink,
+                                                          shrink_value))
+
+
         if args.stage <= iter:
             train_lib.common.train_one_iteration(
                 dir=args.dir,
@@ -329,8 +366,7 @@ def train(args, run_opts):
                 num_jobs=current_num_jobs,
                 num_archives_processed=num_archives_processed,
                 num_archives=num_archives,
-                learning_rate=learning_rate(iter, current_num_jobs,
-                                            num_archives_processed),
+                learning_rate=lrate,
                 dropout_edit_string=common_train_lib.get_dropout_edit_string(
                     args.dropout_schedule,
                     float(num_archives_processed) / num_archives_to_process,
@@ -339,10 +375,12 @@ def train(args, run_opts):
                 frames_per_eg=args.frames_per_eg,
                 momentum=args.momentum,
                 max_param_change=args.max_param_change,
+                shrinkage_value=shrink_value,
                 shuffle_buffer_size=args.shuffle_buffer_size,
                 run_opts=run_opts,
                 get_raw_nnet_from_am=False,
-                image_augmentation_opts=args.image_augmentation_opts)
+                image_augmentation_opts=args.image_augmentation_opts,
+                use_multitask_egs=use_multitask_egs)
 
             if args.cleanup:
                 # do a clean up everythin but the last 2 models, under certain
@@ -373,14 +411,14 @@ def train(args, run_opts):
                 models_to_combine=models_to_combine, egs_dir=egs_dir,
                 minibatch_size_str=args.minibatch_size, run_opts=run_opts,
                 get_raw_nnet_from_am=False,
-                sum_to_one_penalty=args.combine_sum_to_one_penalty)
+                sum_to_one_penalty=args.combine_sum_to_one_penalty,
+                use_multitask_egs=use_multitask_egs)
         else:
             common_lib.force_symlink("{0}.raw".format(num_iters),
                                      "{0}/final.raw".format(args.dir))
 
     if include_log_softmax and args.stage <= num_iters + 1:
-        logger.info("Getting average posterior for purposes of "
-                    "adjusting the priors.")
+        logger.info("Getting average posterior for output-node 'output'.")
         train_lib.common.compute_average_posterior(
             dir=args.dir, iter='final', egs_dir=egs_dir,
             num_archives=num_archives,
@@ -403,13 +441,18 @@ def train(args, run_opts):
             get_raw_nnet_from_am=False)
 
     # do some reporting
-    [report, times, data] = nnet3_log_parse.generate_acc_logprob_report(args.dir)
-    if args.email is not None:
-        common_lib.send_mail(report, "Update : Expt {0} : "
-                                     "complete".format(args.dir), args.email)
+    outputs_list = common_train_lib.get_outputs_list("{0}/final.raw".format(
+        args.dir), get_raw_nnet_from_am=False)
+    if 'output' in outputs_list:
+        [report, times, data] = nnet3_log_parse.generate_acc_logprob_report(args.dir)
+        if args.email is not None:
+            common_lib.send_mail(report, "Update : Expt {0} : "
+                                         "complete".format(args.dir), args.email)
 
-    with open("{dir}/accuracy.report".format(dir=args.dir), "w") as f:
-        f.write(report)
+        with open("{dir}/accuracy.{output_name}.report".format(dir=args.dir,
+                                                               output_name="output"),
+                  "w") as f:
+            f.write(report)
 
     common_lib.execute_command("steps/info/nnet3_dir_info.pl "
                                "{0}".format(args.dir))
