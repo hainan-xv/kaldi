@@ -117,12 +117,12 @@ if [ $stage -le 2 ]; then
   sed 's:<lname>\([^<]*\)<\/lname>:\1:g' | \
   sed 's:<lname[\/]*>::g' | \
   sed 's:<laugh>[^<]*<\/laugh>:[laughter]:g' | \
-  sed 's:<\s*cough[\/]*>:[noise]:g' | \
-  sed 's:<sneeze[\/]*>:[noise]:g' | \
-  sed 's:<breath[\/]*>:[noise]:g' | \
-  sed 's:<lipsmack[\/]*>:[noise]:g' | \
-  sed 's:<background>[^<]*<\/background>:[noise]:g' | \
-  sed -r 's:<[/]?background[/]?>:[noise]:g' | \
+  sed 's:<\s*cough[\/]*>:[noise] :g' | \
+  sed 's:<sneeze[\/]*>:[noise] :g' | \
+  sed 's:<breath[\/]*>:[noise] :g' | \
+  sed 's:<lipsmack[\/]*>:[noise] :g' | \
+  sed 's:<background>[^<]*<\/background>:[noise] :g' | \
+  sed -r 's:<[/]?background[/]?>:[noise] :g' | \
   #One more time to take care of nested stuff
   sed 's:<laugh>[^<]*<\/laugh>:[laughter]:g' | \
   sed -r 's:<[/]?laugh[/]?>:[laughter]:g' | \

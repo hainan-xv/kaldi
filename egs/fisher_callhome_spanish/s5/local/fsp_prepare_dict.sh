@@ -11,7 +11,7 @@ fi
 
 stage=0
 
-dir=`pwd`/data/local/dict
+dir=`pwd`/data/local/dict_nosp
 datadir=`pwd`/data/local/data/train_all
 mkdir -p $dir
 local=`pwd`/local
@@ -46,8 +46,9 @@ if [ $stage -le 0 ]; then
 
   # Merge with gigaword corpus
   $local/merge_lexicons.py ${tmpdir} ${lexicon}
+
   mv $tmpdir/uniquewords $tmpdir/uniquewords.small
-  mv $tmpdir/uniquewords64k $tmpdir/uniquewords
+  cp $tmpdir/uniquewords64k $tmpdir/uniquewords
 fi
 
 #Then get the list of phones form basic_rules in the lexicon folder

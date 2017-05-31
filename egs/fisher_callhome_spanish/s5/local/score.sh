@@ -6,8 +6,8 @@
 
 
 cmd=run.pl
-min_lmwt=2
-max_lmwt=13
+min_lmwt=9
+max_lmwt=18
 #end configuration section.
 
 [ -f ./path.sh ] && . ./path.sh

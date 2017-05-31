@@ -46,7 +46,7 @@ for item in gigaword:
     if len(merged_lexicon) == wordlimit:
         break
 
-    if item[0].lower() not in merged_lexicon:
+    if item[0].lower() not in merged_lexicon and not any(char.isdigit() for char in item[0]):
         merged_lexicon.append(item[0].lower())
 
 print "After adding the Gigaword data, the lexicon contains " \
