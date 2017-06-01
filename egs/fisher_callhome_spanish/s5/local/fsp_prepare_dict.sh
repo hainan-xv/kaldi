@@ -11,8 +11,9 @@ fi
 
 stage=0
 
-dir=`pwd`/data/local/dict
+dir=`pwd`/data/local/dict_nosp
 datadir=`pwd`/data/local/data/train_all
+datadir2=`pwd`/data/local/data/callhome_train_all
 mkdir -p $dir
 local=`pwd`/local
 utils=`pwd`/utils
@@ -21,7 +22,7 @@ lexicon=$1
 
 #Get all unique words, remove punctuation.
 if [ $stage -le 0 ]; then
-  cat $datadir/text | sed 's:[0-9][0-9]\S*::g' | sed 's:[\.,\?]::g' | tr " " "\n" | sort | uniq | awk '{if (NF > 0){ print; }}' > $tmpdir/uniquewords
+  cat $datadir/text $datadir2/text | sed 's:[0-9][0-9]\S*::g' | sed 's:[\.,\?\<]::g' | tr " " "\n" | grep -v "î" | sort | uniq | awk '{if (NF > 0){ print; }}' > $tmpdir/uniquewords
   if [ ! -f "${tmpdir}/es_wordlist.json" ]; then
     echo "Could not find the large collection of Spanish words es_wordlist.json"
     echo "Trying to download it via wget"
@@ -46,8 +47,9 @@ if [ $stage -le 0 ]; then
 
   # Merge with gigaword corpus
   $local/merge_lexicons.py ${tmpdir} ${lexicon}
+
   mv $tmpdir/uniquewords $tmpdir/uniquewords.small
-  mv $tmpdir/uniquewords64k $tmpdir/uniquewords
+  cp $tmpdir/uniquewords64k $tmpdir/uniquewords
 fi
 
 #Then get the list of phones form basic_rules in the lexicon folder

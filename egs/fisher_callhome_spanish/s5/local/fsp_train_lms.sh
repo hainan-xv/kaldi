@@ -34,7 +34,7 @@ rm $tmp_dir/$split/*.tmp
 # Now use this training text
 
 text=$tmp_dir/train/text
-lexicon=data/local/dict/lexicon.txt 
+lexicon=data/local/dict_nosp/lexicon.txt 
 
 for f in "$text" "$lexicon"; do
   [ ! -f $x ] && echo "$0: No such file $f" && exit 1;

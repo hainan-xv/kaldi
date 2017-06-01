@@ -118,12 +118,12 @@ if [ $stage -le 2 ]; then
   sed 's:<lname>\([^<]*\)<\/lname>:\1:g' | \
   sed 's:<lname[\/]*>::g' | \
   sed 's:<laugh>[^<]*<\/laugh>:[laughter]:g' | \
-  sed 's:<\s*cough[\/]*>:[noise]:g' | \
-  sed 's:<sneeze[\/]*>:[noise]:g' | \
-  sed 's:<breath[\/]*>:[noise]:g' | \
-  sed 's:<lipsmack[\/]*>:[noise]:g' | \
-  sed 's:<background>[^<]*<\/background>:[noise]:g' | \
-  sed -r 's:<[/]?background[/]?>:[noise]:g' | \
+  sed 's:<\s*cough[\/]*>:[noise] :g' | \
+  sed 's:<sneeze[\/]*>:[noise] :g' | \
+  sed 's:<breath[\/]*>:[noise] :g' | \
+  sed 's:<lipsmack[\/]*>:[noise] :g' | \
+  sed 's:<background>[^<]*<\/background>:[noise] :g' | \
+  sed -r 's:<[/]?background[/]?>:[noise] :g' | \
   #One more time to take care of nested stuff
   sed 's:<laugh>[^<]*<\/laugh>:[laughter]:g' | \
   sed -r 's:<[/]?laugh[/]?>:[laughter]:g' | \
@@ -137,11 +137,16 @@ if [ $stage -le 2 ]; then
   sed 's:>::g' | \
   #How do you handle numbers?
   grep -v '()' | \
+  sed 's=noise=[noise]=g' | \
+  sed 's=laughter=[laughter]=g' | \
+  sed 's=\[\[noise\]\]= [noise] =g' | \
+  sed 's=\[\[laughter\]\]= [laughter] =g' | \
+  sed 's=\]=] =g' | \
   #Now go after the non-printable characters
-  sed -r 's:¿::g' > $tmpdir/callhome.text.2
+  iconv -f iso-8859-1 -t utf-8 | sed -r 's:¿::g' > $tmpdir/callhome.text.2
 
-  CHARS=$(python -c 'print u"\u00BF\u00A1".encode("utf8")')
-  sed -i 's/['"$CHARS"']//g' $tmpdir/callhome.text.2
+#  CHARS=$(python -c 'print u"\u00BF\u00A1".encode("utf8")')
+#  sed -i 's/['"$CHARS"']//g' $tmpdir/callhome.text.2
 
   cp $tmpdir/callhome.text.2 $dir/callhome_train_all/callhome.text
 
