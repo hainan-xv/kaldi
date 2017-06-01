@@ -258,9 +258,9 @@ if [ $stage -le 6 ]; then
 #  exp/tri5a/graph data/callhome_train exp/tri5a/decode_callhome_train
 #  ) &
 #
-#  steps/align_fmllr.sh \
-#    --boost-silence 0.5 --nj 32 --cmd "$train_cmd" \
-#    data/train data/lang exp/tri5a exp/tri5a_ali
+  steps/align_fmllr.sh \
+    --boost-silence 0.5 --nj 32 --cmd "$train_cmd" \
+    data/train data/lang exp/tri5a exp/tri5a_ali
 fi
 
 exit

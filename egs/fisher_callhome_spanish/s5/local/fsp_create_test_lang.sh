@@ -5,6 +5,9 @@
 if [ -f path.sh ]; then . path.sh; fi
 
 arpa_lm=data/local/lm/3gram-mincount/lm_unpruned.gz
+
+. parse_options.sh || exit 1;
+
 [ ! -f $arpa_lm ] && echo No such file $arpa_lm && exit 1;
 
 mkdir -p data/lang_nosp_test

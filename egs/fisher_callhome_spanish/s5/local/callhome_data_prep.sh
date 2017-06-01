@@ -137,10 +137,13 @@ if [ $stage -le 2 ]; then
   sed 's:>::g' | \
   #How do you handle numbers?
   grep -v '()' | \
+  sed 's=noise=[noise]=g' | \
+  sed 's=laughter=[laughter]=g' | \
+  sed 's=\[\[noise\]\]= [noise] =g' | \
+  sed 's=\[\[laughter\]\]= [laughter] =g' | \
+  sed 's=\]=] =g' | \
   #Now go after the non-printable characters
-  sed -r 's:¿::g' | iconv -f iso-8859-1 -t utf-8 > $tmpdir/callhome.text.2
-
-  file -bi $tmpdir/callhome.text.2  # TODO(hxu)
+  iconv -f iso-8859-1 -t utf-8 | sed -r 's:¿::g' > $tmpdir/callhome.text.2
 
 #  CHARS=$(python -c 'print u"\u00BF\u00A1".encode("utf8")')
 #  sed -i 's/['"$CHARS"']//g' $tmpdir/callhome.text.2
