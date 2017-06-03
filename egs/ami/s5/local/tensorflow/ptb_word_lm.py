@@ -14,11 +14,9 @@
 # ==============================================================================
 
 """Example / benchmark for building a PTB LSTM model.
-
 Trains the model described in:
 (Zaremba, et. al.) Recurrent Neural Network Regularization
 http://arxiv.org/abs/1409.2329
-
 There are 3 supported model configurations:
 ===========================================
 | config | epochs | train | valid  | test
@@ -27,7 +25,6 @@ There are 3 supported model configurations:
 | medium | 39     | 48.45 |  86.16 |  82.07
 | large  | 55     | 37.87 |  82.62 |  78.29
 The exact results may vary depending on the random initialization.
-
 The hyperparameters used in the model:
 - init_scale - the initial scale of the weights
 - learning_rate - the initial value of the learning rate
@@ -40,28 +37,23 @@ The hyperparameters used in the model:
 - keep_prob - the probability of keeping weights in the dropout layer
 - lr_decay - the decay of the learning rate for each epoch after "max_epoch"
 - batch_size - the batch size
-
 The data required for this example is in the data/ dir of the
 PTB dataset from Tomas Mikolov's webpage:
-
 $ wget http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
 $ tar xvf simple-examples.tgz
-
 To run:
-
 $ python ptb_word_lm.py --data_path=simple-examples/data/
-
 """
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import inspect
-import time
-
 import sys
 
 sys.path.insert(0,"/home/hxu/.local/lib/python2.7/site-packages/")
+
+import inspect
+import time
 
 import numpy as np
 import tensorflow as tf
@@ -136,10 +128,42 @@ class PTBModel(object):
 
     self._initial_state = cell.zero_state(batch_size, data_type())
 
+
+    # first implement the less efficient version
+    test_word_in = tf.placeholder(tf.int32, [1, 1])
+    test_word_out = tf.placeholder(tf.int32, [1, 1])
+    test_input_state_c = tf.placeholder(tf.float32, [1, size])
+    test_input_state_h = tf.placeholder(tf.float32, [1, size])
+    test_input_state = tf.contrib.rnn.LSTMStateTuple(test_input_state_c, test_input_state_h)
+
+#    print ("want to be", self._initial_state)
+#    print ("it actually is ", input_state)
     with tf.device("/cpu:0"):
       embedding = tf.get_variable(
           "embedding", [vocab_size, size], dtype=data_type())
+
+#      print("should be ", input_.input_data)
+#      print("is ", test_word)
+
       inputs = tf.nn.embedding_lookup(embedding, input_.input_data)
+      test_inputs = tf.nn.embedding_lookup(embedding, test_word_in)
+#      print("should be ", inputs)
+#      print("is ", test_inputs)
+
+    # test time
+    with tf.variable_scope("RNN"):
+#      tf.get_variable_scope().reuse_variables()
+      (test_cell_output, test_output_state) = cell(test_inputs[:, 0, :], [test_input_state])
+
+    softmax_w = tf.get_variable(
+        "softmax_w", [size, vocab_size], dtype=data_type())
+    softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
+
+    test_logits = tf.matmul(test_cell_output, softmax_w) + softmax_b
+    test_softmaxed = tf.nn.softmax(test_logits)
+    print("test softmaxed is ", test_softmaxed)
+    p_word = test_softmaxed[0, test_word_out[0,0]]
+#    p_word = tf.float32(test_softmaxed[:, test_word_out], name="p_out")
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)
@@ -157,14 +181,11 @@ class PTBModel(object):
     state = self._initial_state
     with tf.variable_scope("RNN"):
       for time_step in range(num_steps):
-        if time_step > 0: tf.get_variable_scope().reuse_variables()
+        if time_step > -1: tf.get_variable_scope().reuse_variables()
         (cell_output, state) = cell(inputs[:, time_step, :], state)
         outputs.append(cell_output)
 
     output = tf.reshape(tf.stack(axis=1, values=outputs), [-1, size])
-    softmax_w = tf.get_variable(
-        "softmax_w", [size, vocab_size], dtype=data_type())
-    softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
     logits = tf.matmul(output, softmax_w) + softmax_b
     loss = tf.contrib.legacy_seq2seq.sequence_loss_by_example(
         [logits],
