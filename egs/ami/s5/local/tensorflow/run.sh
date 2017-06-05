@@ -12,4 +12,5 @@ mkdir -p $dir
 #  cat data/$data_type/$i/text | awk -v w=$dir/wordlist 'BEGIN{while((getline<w)>0)d[$1]=1}{for(i=2;i<=NF;i++){if(d[$i]==1){s=$i}else{s="<oos>"} printf("%s ",s)} print""}' | sed "s=^= =g" > $dir/$i.txt
 #done
 
-python local/tensorflow/ptb_word_lm.py --data_path=$dir --model=$model_type --save_path=$dir/model
+#python local/tensorflow/ptb_word_lm.py --data_path=$dir --model=$model_type --save_path=$dir/model
+python local/tensorflow/rnnlm.py --data_path=$dir --model=$model_type --save_path=$dir/model
