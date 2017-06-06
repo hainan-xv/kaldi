@@ -127,14 +127,24 @@ class PTBModel(object):
         [attn_cell() for _ in range(config.num_layers)], state_is_tuple=True)
 
     self._initial_state = self.cell.zero_state(batch_size, data_type())
+    self._initial_state_single = self.cell.zero_state(1, data_type())
+
+    self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="test_initial_state")
 
 
     # first implement the less efficient version
     test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
     test_word_out = tf.placeholder(tf.int32, [1, 1], name="test_word_out")
-    test_input_state_c = tf.placeholder(tf.float32, [1, size], name="test_state_c")
-    test_input_state_h = tf.placeholder(tf.float32, [1, size], name="test_state_h")
-    test_input_state = tf.contrib.rnn.LSTMStateTuple(test_input_state_c, test_input_state_h)
+#    test_input_state_c = tf.placeholder(tf.float32, [1, size], name="test_state_c")
+#    test_input_state_h = tf.placeholder(tf.float32, [1, size], name="test_state_h")
+    state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 2, 1, size], name="test_state")
+    l = tf.unstack(state_placeholder, axis=0)
+    test_input_state = tuple(
+               [tf.contrib.rnn.LSTMStateTuple(l[idx][0],l[idx][1])
+                 for idx in range(config.num_layers)]
+    )
+
+#    test_input_state = tf.contrib.rnn.LSTMStateTuple(test_input_state_c, test_input_state_h)
 
 #    print ("want to be", self._initial_state)
 #    print ("it actually is ", input_state)
@@ -153,15 +163,16 @@ class PTBModel(object):
     # test time
     with tf.variable_scope("RNN"):
 #      tf.get_variable_scope().reuse_variables()
-      (test_cell_output, test_output_state) = self.cell(test_inputs[:, 0, :], [test_input_state])
+      (test_cell_output, test_output_state) = self.cell(test_inputs[:, 0, :], test_input_state)
 
+    test_out_state = tf.reshape(tf.stack(axis=1, values=test_output_state), [config.num_layers, 2, 1, size], name="test_state_out")
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
 
     test_logits = tf.matmul(test_cell_output, softmax_w) + softmax_b
     test_softmaxed = tf.nn.softmax(test_logits)
-    print("test softmaxed is ", test_softmaxed)
+
     p_word = test_softmaxed[0, test_word_out[0,0]]
     test_out = tf.identity(p_word, name="test_out")
 #    p_word = tf.float32(test_softmaxed[:, test_word_out], name="p_out")
@@ -247,8 +258,8 @@ class SmallConfig(object):
   num_layers = 2
   num_steps = 20
   hidden_size = 200
-  max_epoch = 4
-  max_max_epoch = 13
+  max_epoch = 1 #4
+  max_max_epoch = 1 #13
   keep_prob = 1.0
   lr_decay = 0.5
   batch_size = 20
@@ -374,20 +385,19 @@ def main(_):
       tf.summary.scalar("Training Loss", m.cost)
       tf.summary.scalar("Learning Rate", m.lr)
 
-#    with tf.name_scope("Valid"):
-#      valid_input = PTBInput(config=config, data=valid_data, name="ValidInput")
-#      with tf.variable_scope("Model", reuse=True, initializer=initializer):
-#        mvalid = PTBModel(is_training=False, config=config, input_=valid_input)
-#      tf.summary.scalar("Validation Loss", mvalid.cost)
-#
-#    with tf.name_scope("Test"):
-#      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
-#      with tf.variable_scope("Model", reuse=True, initializer=initializer):
-#        mtest = PTBModel(is_training=False, config=eval_config,
-#                         input_=test_input)
+    with tf.name_scope("Valid"):
+      valid_input = PTBInput(config=config, data=valid_data, name="ValidInput")
+      with tf.variable_scope("Model", reuse=True, initializer=initializer):
+        mvalid = PTBModel(is_training=False, config=config, input_=valid_input)
+      tf.summary.scalar("Validation Loss", mvalid.cost)
+
+    with tf.name_scope("Test"):
+      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
+      with tf.variable_scope("Model", reuse=True, initializer=initializer):
+        mtest = PTBModel(is_training=False, config=eval_config,
+                         input_=test_input)
 
 #    saver = tf.train.Saver({"embedding": m.embedding})
-#    saver = tf.train.Saver({"embedding": m.embedding, "lstm": m.cell})
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
       for i in range(config.max_max_epoch):
@@ -398,12 +408,12 @@ def main(_):
         train_perplexity = run_epoch(session, m, eval_op=m.train_op,
                                      verbose=True)
 
-#        print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
-#        valid_perplexity = run_epoch(session, mvalid)
-#        print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
+        print("Epoch: %d Train Perplexity: %.3f" % (i + 1, train_perplexity))
+        valid_perplexity = run_epoch(session, mvalid)
+        print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
-#      test_perplexity = run_epoch(session, mtest)
-#      print("Test Perplexity: %.3f" % test_perplexity)
+      test_perplexity = run_epoch(session, mtest)
+      print("Test Perplexity: %.3f" % test_perplexity)
 
       if FLAGS.save_path:
 #        saver = tf.train.Saver()
