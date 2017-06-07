@@ -2,11 +2,18 @@ set -uo pipefail
 
 # configs for 'chain'
 affix=
-stage=-10 # After running the entire script once, you can set stage=12 to tune the neural net only.
+stage=9 # After running the entire script once, you can set stage=12 to tune the neural net only.
 train_stage=-10
 get_egs_stage=-10
 dir=exp/chain/tdnn
 decode_iter=
+
+srand=1
+chunk_width=140,100,160
+chunk_left_context=0
+chunk_right_context=0
+common_egs_dir=
+reporting_email=
 
 # TDNN options
 # this script uses the new tdnn config generator so it needs a final 0 to reflect that the final layer input has no splicing
@@ -25,7 +32,7 @@ relu_dim=425
 frames_per_eg=150
 remove_egs=false
 xent_regularize=0.1
-
+backstitch_scale=0.2
 
 # End configuration section.
 echo "$0 $@"  # Print the command line for logging
@@ -34,7 +41,7 @@ echo "$0 $@"  # Print the command line for logging
 . ./path.sh
 . ./utils/parse_options.sh
 
-dir=${dir}${affix}
+dir=${dir}${affix}_$backstitch_scale
 
 if ! cuda-compiled; then
   cat <<EOF && exit 1
@@ -92,21 +99,60 @@ if [ $stage -le 12 ]; then
   echo "$0: creating neural net configs";
 
   # create the config files for nnet initialization
-  repair_opts=${self_repair_scale:+" --self-repair-scale-nonlinearity $self_repair_scale "}
+#  repair_opts=${self_repair_scale:+" --self-repair-scale-nonlinearity $self_repair_scale "}
+#
+#  steps/nnet3/tdnn/make_configs.py \
+#    $repair_opts \
+#    --feat-dir data/train_sp_hires \
+#    --ivector-dir exp/nnet3/ivectors_train_sp \
+#    --tree-dir $treedir \
+#    --relu-dim $relu_dim \
+#    --splice-indexes "-1,0,1 -1,0,1,2 -3,0,3 -3,0,3 -3,0,3 -6,-3,0 0" \
+#    --use-presoftmax-prior-scale false \
+#    --xent-regularize $xent_regularize \
+#    --xent-separate-forward-affine true \
+#    --include-log-softmax false \
+#    --final-layer-normalize-target $final_layer_normalize_target \
+#    $dir/configs || exit 1;
 
-  steps/nnet3/tdnn/make_configs.py \
-    $repair_opts \
-    --feat-dir data/train_sp_hires \
-    --ivector-dir exp/nnet3/ivectors_train_sp \
-    --tree-dir $treedir \
-    --relu-dim $relu_dim \
-    --splice-indexes "-1,0,1 -1,0,1,2 -3,0,3 -3,0,3 -3,0,3 -6,-3,0 0" \
-    --use-presoftmax-prior-scale false \
-    --xent-regularize $xent_regularize \
-    --xent-separate-forward-affine true \
-    --include-log-softmax false \
-    --final-layer-normalize-target $final_layer_normalize_target \
-    $dir/configs || exit 1;
+  num_targets=$(tree-info $treedir/tree |grep num-pdfs|awk '{print $2}')
+  learning_rate_factor=$(echo "print 0.5/$xent_regularize" | python)
+
+  mkdir -p $dir/configs
+  cat <<EOF > $dir/configs/network.xconfig
+  input dim=100 name=ivector
+  input dim=40 name=input
+
+  # please note that it is important to have input layer with the name=input
+  # as the layer immediately preceding the fixed-affine-layer to enable
+  # the use of short notation for the descriptor
+  fixed-affine-layer name=lda input=Append(-2,-1,0,1,2,ReplaceIndex(ivector, t, 0)) affine-transform-file=$dir/configs/lda.mat
+
+  # the first splicing is moved before the lda layer, so no splicing here
+  relu-renorm-layer name=tdnn1 dim=200
+  relu-renorm-layer name=tdnn2 dim=200 input=Append(-1,0,1)
+  relu-renorm-layer name=tdnn3 dim=200 input=Append(-1,0,1)
+  relu-renorm-layer name=tdnn4 dim=200 input=Append(-3,0,3)
+  relu-renorm-layer name=tdnn5 dim=200 input=Append(-3,0,3)
+  relu-renorm-layer name=tdnn6 dim=200 input=Append(-6,-3,0)
+
+  ## adding the layers for chain branch
+  relu-renorm-layer name=prefinal-chain dim=512 target-rms=0.5
+  output-layer name=output include-log-softmax=false dim=$num_targets max-change=1.5
+
+  # adding the layers for xent branch
+  # This block prints the configs for a separate output that will be
+  # trained with a cross-entropy objective in the 'chain' models... this
+  # has the effect of regularizing the hidden parts of the model.  we use
+  # 0.5 / args.xent_regularize as the learning rate factor- the factor of
+  # 0.5 / args.xent_regularize is suitable as it means the xent
+  # final-layer learns at a rate independent of the regularization
+  # constant; and the 0.5 was tuned so as to make the relative progress
+  # similar in the xent and regular final layers.
+  relu-renorm-layer name=prefinal-xent input=tdnn6 dim=512 target-rms=0.5
+  output-layer name=output-xent dim=$num_targets learning-rate-factor=$learning_rate_factor max-change=1.5
+EOF
+  steps/nnet3/xconfig_to_configs.py --xconfig-file $dir/configs/network.xconfig --config-dir $dir/configs/
 fi
 
 if [ $stage -le 13 ]; then
@@ -118,32 +164,70 @@ if [ $stage -le 13 ]; then
 
   touch $dir/egs/.nodelete
 
- steps/nnet3/chain/train.py --stage $train_stage \
-   --cmd "$decode_cmd" \
-   --feat.online-ivector-dir exp/nnet3/ivectors_train_sp \
-   --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
-   --chain.xent-regularize $xent_regularize \
-   --chain.leaky-hmm-coefficient 0.1 \
-   --chain.l2-regularize 0.00005 \
-   --chain.apply-deriv-weights false \
-   --chain.lm-opts="--num-extra-lm-states=2000" \
-   --egs.stage $get_egs_stage \
-   --egs.opts "--frames-overlap-per-eg 0" \
-   --egs.chunk-width $frames_per_eg \
-   --trainer.num-chunk-per-minibatch $minibatch_size \
-   --trainer.frames-per-iter 1500000 \
-   --trainer.num-epochs $num_epochs \
-   --trainer.optimization.num-jobs-initial $num_jobs_initial \
-   --trainer.optimization.num-jobs-final $num_jobs_final \
-   --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
-   --trainer.optimization.final-effective-lrate $final_effective_lrate \
-   --trainer.max-param-change $max_param_change \
-   --cleanup.remove-egs $remove_egs \
-   --cleanup.preserve-model-interval 20 \
-   --feat-dir data/train_sp_hires \
-   --tree-dir $treedir \
-   --lat-dir $lats_dir \
-   --dir $dir || exit 1;
+  steps/nnet3/chain/train.py --stage=$train_stage \
+    --cmd="$decode_cmd" \
+    --trainer.optimization.backstitch-training-scale $backstitch_scale \
+    --feat.online-ivector-dir=exp/nnet3/ivectors_train_sp \
+    --feat.cmvn-opts="--norm-means=false --norm-vars=false" \
+    --chain.xent-regularize $xent_regularize \
+    --chain.leaky-hmm-coefficient=0.1 \
+    --chain.l2-regularize=0.00005 \
+    --chain.apply-deriv-weights=false \
+    --chain.lm-opts="--num-extra-lm-states=2000" \
+    --trainer.srand=$srand \
+    --trainer.max-param-change=2.0 \
+    --trainer.num-epochs=4 \
+    --trainer.frames-per-iter=3000000 \
+    --trainer.optimization.num-jobs-initial=2 \
+    --trainer.optimization.num-jobs-final=5 \
+    --trainer.optimization.initial-effective-lrate=0.001 \
+    --trainer.optimization.final-effective-lrate=0.0001 \
+    --trainer.optimization.shrink-value=1.0 \
+    --trainer.optimization.proportional-shrink=60.0 \
+    --trainer.num-chunk-per-minibatch=256,128,64 \
+    --trainer.optimization.momentum=0.0 \
+    --egs.chunk-width=$chunk_width \
+    --egs.chunk-left-context=$chunk_left_context \
+    --egs.chunk-right-context=$chunk_right_context \
+    --egs.chunk-left-context-initial=0 \
+    --egs.chunk-right-context-final=0 \
+    --egs.dir="$common_egs_dir" \
+    --egs.opts="--frames-overlap-per-eg 0" \
+    --cleanup.remove-egs=$remove_egs \
+    --use-gpu=true \
+    --reporting.email="$reporting_email" \
+    --feat-dir=data/train_sp_hires \
+    --tree-dir=$treedir \
+    --lat-dir=$lats_dir \
+    --dir=$dir  || exit 1;
+
+# steps/nnet3/chain/train.py --stage $train_stage \
+#   --cmd "$decode_cmd" \
+#   --trainer.optimization.backstitch-training-scale $backstitch_scale \
+#   --feat.online-ivector-dir exp/nnet3/ivectors_train_sp \
+#   --feat.cmvn-opts "--norm-means=false --norm-vars=false" \
+#   --chain.xent-regularize $xent_regularize \
+#   --chain.leaky-hmm-coefficient 0.1 \
+#   --chain.l2-regularize 0.00005 \
+#   --chain.apply-deriv-weights false \
+#   --chain.lm-opts="--num-extra-lm-states=2000" \
+#   --egs.stage $get_egs_stage \
+#   --egs.opts "--frames-overlap-per-eg 0" \
+#   --egs.chunk-width $frames_per_eg \
+#   --trainer.num-chunk-per-minibatch $minibatch_size \
+#   --trainer.frames-per-iter 1500000 \
+#   --trainer.num-epochs $num_epochs \
+#   --trainer.optimization.num-jobs-initial $num_jobs_initial \
+#   --trainer.optimization.num-jobs-final $num_jobs_final \
+#   --trainer.optimization.initial-effective-lrate $initial_effective_lrate \
+#   --trainer.optimization.final-effective-lrate $final_effective_lrate \
+#   --trainer.max-param-change $max_param_change \
+#   --cleanup.remove-egs $remove_egs \
+#   --cleanup.preserve-model-interval 20 \
+#   --feat-dir data/train_sp_hires \
+#   --tree-dir $treedir \
+#   --lat-dir $lats_dir \
+#   --dir $dir || exit 1;
 fi
 
 if [ $stage -le 14 ]; then
@@ -162,7 +246,7 @@ if [ $stage -le 15 ]; then
 
   for decode_set in dev test; do
     steps/nnet3/decode.sh --acwt 1.0 --post-decode-acwt 10.0 \
-    --stage 3 \
+      --stage 3 \
       --nj $(wc -l < data/$decode_set/spk2utt) --cmd "$decode_cmd" $iter_opts \
       --online-ivector-dir exp/nnet3/ivectors_${decode_set} \
       --scoring-opts "--min_lmwt 5 --max_lmwt 15" \
