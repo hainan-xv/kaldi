@@ -2,9 +2,18 @@
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
 
+#include "base/kaldi-common.h"
+//#include "fstext/fstext-lib.h"
+//#include "lat/kaldi-lattice.h"
+//#include "lat/lattice-functions.h"
+//#include "lm/kaldi-rnnlm.h"
+//#include "lm/mikolov-rnnlm-lib.h"
+//#include "util/common-utils.h"
+
 using namespace tensorflow;
 
 int main(int argc, char* argv[]) {
+  /*
   // Initialize a tensorflow session
   Session* session;
   Status status = NewSession(SessionOptions(), &session);
@@ -96,5 +105,6 @@ int main(int argc, char* argv[]) {
 
   // Free any resources used by the session
   session->Close();
+  // */
   return 0;
 }
