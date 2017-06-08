@@ -13,6 +13,9 @@ fi
 
 splitFile=$1
 split=train
+
+. path.sh
+
 # Train only
 if [ -d $tmp_dir/$split ]; then
   rm -r $tmp_dir/$split

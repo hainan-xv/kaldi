@@ -9,7 +9,7 @@
 mfccdir=`pwd`/mfcc
 set -e
 
-stage=6
+stage=5
 
 . parse_options.sh || exit 1;
 
@@ -158,7 +158,6 @@ if [ $stage -le 3 ]; then
     data/train_100k data/lang_nosp exp/tri2 exp/tri2_ali || exit 1;
 fi
 
-
 if [ $stage -le 4 ]; then
 # Train tri3a, which is LDA+MLLT, on 100k data.
   steps/train_lda_mllt.sh --cmd "$train_cmd" \
@@ -187,40 +186,40 @@ if [ $stage -le 4 ]; then
 
 fi
 
-#if [ $stage -le 5 ]; then
-#  # adding silprobs
-#  steps/get_prons.sh --cmd "$train_cmd" data/train_100k data/lang_nosp exp/tri4a
-#
-##  mv data/local/dict data/local/dict_nosp
-#  utils/dict_dir_add_pronprobs.sh --max-normalize true \
-#    data/local/dict_nosp exp/tri4a/pron_counts_nowb.txt \
-#    exp/tri4a/sil_counts_nowb.txt \
-#    exp/tri4a/pron_bigram_counts_nowb.txt data/local/dict
-#
-#  utils/prepare_lang.sh data/local/dict "<unk>" data/local/lang data/lang
-#  cp -rT data/lang data/lang_test
-##  cp -rT data/lang data/lang_rescore
-#  cp data/lang_nosp_test/G.fst data/lang_test
-##  cp data/lang_nosp_rescore/G.carpa data/lang_rescore
-#
-#  utils/mkgraph.sh data/lang_test exp/tri4a exp/tri4a/graph || exit 1
-#  (  steps/decode_fmllr.sh --nj 25 --cmd "$decode_cmd" --config conf/decode.config \
-#     exp/tri4a/graph data/dev exp/tri4a/decode_dev
-#  )&
-#
-#  steps/align_fmllr.sh --nj 30 --cmd "$train_cmd" \
-#    data/train data/lang exp/tri4a exp/tri4a_ali || exit 1;
-#
-#fi
+if [ $stage -le 5 ]; then
+  # adding silprobs
+  steps/get_prons.sh --cmd "$train_cmd" data/train_100k data/lang_nosp exp/tri4a
+
+#  mv data/local/dict data/local/dict_nosp
+  utils/dict_dir_add_pronprobs.sh --max-normalize true \
+    data/local/dict_nosp exp/tri4a/pron_counts_nowb.txt \
+    exp/tri4a/sil_counts_nowb.txt \
+    exp/tri4a/pron_bigram_counts_nowb.txt data/local/dict
+
+  utils/prepare_lang.sh data/local/dict "<unk>" data/local/lang data/lang
+  cp -rT data/lang data/lang_test
+#  cp -rT data/lang data/lang_rescore
+  cp data/lang_nosp_test/G.fst data/lang_test
+#  cp data/lang_nosp_rescore/G.carpa data/lang_rescore
+
+  utils/mkgraph.sh data/lang_test exp/tri4a exp/tri4a/graph || exit 1
+  (  steps/decode_fmllr.sh --nj 25 --cmd "$decode_cmd" --config conf/decode.config \
+     exp/tri4a/graph data/dev exp/tri4a/decode_dev
+  )&
+
+  steps/align_fmllr.sh --nj 30 --cmd "$train_cmd" \
+    data/train data/lang exp/tri4a exp/tri4a_ali || exit 1;
+
+fi
 
 if [ $stage -le 6 ]; then
-#  steps/align_fmllr.sh --nj 30 --cmd "$train_cmd" \
-#    data/train data/lang_nosp exp/tri4a exp/tri4a_ali || exit 1;
-## Reduce the number of gaussians
-#  steps/train_sat.sh  --cmd "$train_cmd" \
-#    5000 120000 data/train data/lang_nosp exp/tri4a_ali exp/tri5a || exit 1;
+  steps/align_fmllr.sh --nj 30 --cmd "$train_cmd" \
+    data/train data/lang_nosp exp/tri4a exp/tri4a_ali || exit 1;
+# Reduce the number of gaussians
+  steps/train_sat.sh  --cmd "$train_cmd" \
+    5000 120000 data/train data/lang_nosp exp/tri4a_ali exp/tri5a || exit 1;
 
-#  utils/mkgraph.sh data/lang_nosp_test exp/tri5a exp/tri5a/graph_nosp
+  utils/mkgraph.sh data/lang_nosp_test exp/tri5a exp/tri5a/graph_nosp
 
   steps/decode_fmllr.sh --nj 25 --cmd "$decode_cmd" --config conf/decode.config \
    exp/tri5a/graph_nosp data/dev exp/tri5a/decode_dev_nosp &

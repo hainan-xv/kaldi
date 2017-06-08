@@ -45,8 +45,6 @@ if [ $stage -le 2 ] && [ "$generate_alignments" == "true" ]; then
     data/${train_set_sp} data/lang exp/tri5a exp/tri5a_ali_sp || exit 1
 fi
 
-exit
-
 if [ $stage -le 3 ]; then
   
   mfccdir=mfcc_hires
