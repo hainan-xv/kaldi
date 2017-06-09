@@ -28,3 +28,31 @@ fi
 #export highmem_cmd="queue.pl -P inf_hcrc_cstr_nst -l h_rt=05:00:00 -pe memory-2G 4"
 #export scoring_cmd="queue.pl -P inf_hcrc_cstr_nst  -l h_rt=00:20:00"
 
+#<<<<<<< HEAD
+# JSALT2015 workshop, cluster AWS-EC2, (setup from Vijay)
+export train_cmd="queue.pl -l arch=*64* --mem 1G"
+export decode_cmd="queue.pl -l arch=*64* --mem 2G"
+export highmem_cmd="queue.pl -l arch=*64* --mem 4G"
+export scoring_cmd="queue.pl -l arch=*64*"
+export cuda_cmd="queue.pl --gpu 1 -l mem_free=20G,ram_free=20G"
+export cuda_mem_cmd="queue.pl --gpu 1 -l mem_free=42G,ram_free=42G"
+export cntk_decode_cmd="queue.pl -l arch=*64* --mem 1G -pe smp 2"
+
+# To run locally, use:
+#export train_cmd=run.pl
+#export decode_cmd=run.pl
+#export highmem_cmd=run.pl
+#export cuda_cmd=run.pl
+
+#=======
+#>>>>>>> 6c7c0170812a1f7dfb5c09c078787e79ee72333a
+#if [ "$(hostname -d)" == "fit.vutbr.cz" ]; then
+#  # BUT cluster:
+#  queue="all.q@@blade,all.q@@speech"
+#  gpu_queue="long.q@@gpu"
+#  storage="matylda5"
+#  export train_cmd="queue.pl -q $queue -l ram_free=1.5G,mem_free=1.5G,${storage}=1"
+#  export decode_cmd="queue.pl -q $queue -l ram_free=2.5G,mem_free=2.5G,${storage}=0.5"
+#  export cuda_cmd="queue.pl -q $gpu_queue -l gpu=1"
+#fi
+

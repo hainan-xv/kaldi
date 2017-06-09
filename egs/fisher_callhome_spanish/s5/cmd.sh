@@ -13,3 +13,5 @@
 export train_cmd="queue.pl --mem 4G"
 export decode_cmd="queue.pl --mem 4G"
 export mkgraph_cmd="queue.pl --mem 8G"
+
+export cuda_mem_cmd="queue.pl --gpu 1 -l mem_free=42G,ram_free=42G"

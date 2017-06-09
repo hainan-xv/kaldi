@@ -2,7 +2,7 @@ set -uo pipefail
 
 # configs for 'chain'
 affix=
-stage=9 # After running the entire script once, you can set stage=12 to tune the neural net only.
+stage=-9 # After running the entire script once, you can set stage=12 to tune the neural net only.
 train_stage=-10
 get_egs_stage=-10
 dir=exp/chain/tdnn
@@ -63,8 +63,7 @@ lang=data/lang_chain
 
 mkdir -p $dir
 
-local/nnet3/run_ivector_common.sh --stage $stage \
-  --generate-alignments true || exit 1;
+local/nnet3/run_ivector_common.sh --stage $stage
 
 if [ $stage -le 9 ]; then
   # Get the alignments as lattices (gives the chain training more freedom).
