@@ -62,10 +62,10 @@ int main(int argc, char* argv[]) {
   status = session->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
 
   for (int32 word_out = 0; word_out < 10000; word_out++) {
-    Tensor in_word(DT_INT32, {1, 1});
+    Tensor in_word(tensorflow::DT_INT32, {1, 1});
     in_word.scalar<int32>()() = (word_out + 9999) % 10000; 
 
-    Tensor out_word(DT_INT32, {1, 1});
+    Tensor out_word(tensorflow::DT_INT32, {1, 1});
     out_word.scalar<int32>()() = word_out; 
 
     // num-layers

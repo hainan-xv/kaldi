@@ -28,7 +28,8 @@ import tensorflow as tf
 
 def _read_words(filename):
   with tf.gfile.GFile(filename, "r") as f:
-    return f.read().decode("utf-8").replace("\n", "<eos>").split()
+    return f.read().decode("utf-8").split()
+#    return f.read().decode("utf-8").replace("\n", "<eos>").split()
 
 
 def _build_vocab(filename):
@@ -76,7 +77,7 @@ def ptb_raw_data(data_path=None):
   valid_data = _file_to_word_ids(valid_path, word_to_id)
   test_data = _file_to_word_ids(test_path, word_to_id)
   vocabulary = len(word_to_id)
-  return train_data, valid_data, test_data, vocabulary
+  return train_data, valid_data, test_data, vocabulary, word_to_id
 
 
 def ptb_producer(raw_data, batch_size, num_steps, name=None):

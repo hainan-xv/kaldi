@@ -70,6 +70,8 @@ flags.DEFINE_string("data_path", None,
                     "Where the training/test data is stored.")
 flags.DEFINE_string("save_path", None,
                     "Model output directory.")
+flags.DEFINE_string("wordlist_save_path", None,
+                    "wordmap output directory.")
 flags.DEFINE_bool("use_fp16", False,
                   "Train using 16-bit floats instead of 32bit floats")
 
@@ -367,7 +369,12 @@ def main(_):
     raise ValueError("Must set --data_path to PTB data directory")
 
   raw_data = reader.ptb_raw_data(FLAGS.data_path)
-  train_data, valid_data, test_data, _ = raw_data
+  train_data, valid_data, test_data, _, word_map = raw_data
+
+  with open(FLAGS.wordlist_save_path, "w") as wmap_file:
+    count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
+    for k, v in count_pairs: 
+      wmap_file.write(str(k) + " " + str(v) + "\n")
 
   config = get_config()
   eval_config = get_config()

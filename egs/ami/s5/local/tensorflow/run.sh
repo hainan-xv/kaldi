@@ -6,13 +6,18 @@ model_type=small
 dir=data/tensorflow/
 mkdir -p $dir
 
-#cat data/$data_type/train/text | awk '{for(i=2;i<=NF;i++)print $i}' | sort | uniq -c | sort -k1nr | head -n 9998 | awk '{print $2}' > $dir/wordlist
-#
-#for i in train dev eval; do
-#  cat data/$data_type/$i/text | awk -v w=$dir/wordlist 'BEGIN{while((getline<w)>0)d[$1]=1}{for(i=2;i<=NF;i++){if(d[$i]==1){s=$i}else{s="<oos>"} printf("%s ",s)} print""}' | sed "s=^= =g" > $dir/$i.txt
-#done
+#echo "<s>" > $dir/wordlist
+#echo "</s>" >> $dir/wordlist
+
+# num-words is 10000 - 3 (bos, eos and <oos>)
+
+cat data/$data_type/train/text | awk '{for(i=2;i<=NF;i++)print $i}' | sort | uniq -c | sort -k1nr | head -n 9997 | awk '{print $2}' > $dir/wordlist
+
+for i in train dev eval; do
+  cat data/$data_type/$i/text | awk -v w=$dir/wordlist 'BEGIN{while((getline<w)>0)d[$1]=1}{for(i=2;i<=NF;i++){if(d[$i]==1){s=$i}else{s="<oos>"} printf("%s ",s)} print""}' | sed "s=^= <s> =g" | sed "s=$= </s>=" > $dir/$i.txt
+done
 
 
-#python local/tensorflow/rnnlm.py --data_path=$dir --model=small --save_path=$dir/model.small
-python local/tensorflow/rnnlm.py --data_path=$dir --model=medium --save_path=$dir/model.medium
+python local/tensorflow/rnnlm.py --data_path=$dir --model=small --save_path=$dir/model.small --wordlist_save_path=$dir/wordlist.rnn
+#python local/tensorflow/rnnlm.py --data_path=$dir --model=medium --save_path=$dir/model.medium
 #python local/tensorflow/rnnlm.py --data_path=$dir --model=large --save_path=$dir/model.large
