@@ -42,7 +42,12 @@ class KaldiTfRnnlmWrapper {
                     const std::string &rnn_wordlist,
                     const std::string &word_symbol_table_rxfilename,
                     const std::string &unk_prob_rspecifier,
-                    Session* session);
+                    const std::string &tf_model_path);
+//                    Session* session);
+
+  ~KaldiTfRnnlmWrapper() {
+    delete session_;
+  }
 
   int32 GetEos() const { return eos_; }
   int32 GetBos() const { return bos_; }
@@ -57,7 +62,7 @@ class KaldiTfRnnlmWrapper {
   std::vector<std::string> fst_label_to_word_;
  private:
 
-  Session* session_;  // ptf not owned here
+  Session* session_;  // ptf owned here
   std::vector<std::string> label_to_word_;
   int32 eos_;
   int32 bos_;

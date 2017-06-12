@@ -3,6 +3,10 @@
 #include <utility>
 #include <fstream>
 
+#include "tensorflow/core/public/session.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/protobuf/meta_graph.pb.h"
+
 #include "tensorflow/tensorflow-rnnlm-lib.h"
 #include "util/stl-utils.h"
 #include "util/text-utils.h"
@@ -19,8 +23,42 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const std::string &rnn_wordlist,
     const std::string &word_symbol_table_rxfilename, // TODO(hxu) will do this later
     const std::string &unk_prob_rspecifier,
-    Session* session) {
-  session_ = session;
+//    Session* session) {
+    const std::string &tf_model_path) {
+//  session_ = session;
+  {
+    string graph_path = tf_model_path + "/meta";
+
+    Status status = tensorflow::NewSession(tensorflow::SessionOptions(), &session_);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
+
+    tensorflow::MetaGraphDef graph_def;
+    status = tensorflow::ReadBinaryProto(tensorflow::Env::Default(), graph_path, &graph_def);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
+
+    // Add the graph to the session
+    status = session_->Create(graph_def.graph_def());
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
+
+    Tensor checkpointPathTensor(tensorflow::DT_STRING, tensorflow::TensorShape());
+    checkpointPathTensor.scalar<std::string>()() = tf_model_path;
+    
+    status = session_->Run(
+              {{ graph_def.saver_def().filename_tensor_name(), checkpointPathTensor },},
+              {},
+              {graph_def.saver_def().restore_op_name()},
+              nullptr);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
+
+  }
 
   fst::SymbolTable *fst_word_symbols = NULL;
   if (!(fst_word_symbols =
