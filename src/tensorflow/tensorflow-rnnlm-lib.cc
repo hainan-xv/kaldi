@@ -27,7 +27,7 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const std::string &tf_model_path) {
 //  session_ = session;
   {
-    string graph_path = tf_model_path + "/meta";
+    string graph_path = tf_model_path + ".meta";
 
     Status status = tensorflow::NewSession(tensorflow::SessionOptions(), &session_);
     if (!status.ok()) {
@@ -80,38 +80,44 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
 
   fst_label_to_rnn_label_.resize(fst_word_symbols->NumSymbols(), -1);
 
+  num_total_words = fst_word_symbols->NumSymbols();
+
   { // input.
     ifstream ifile(rnn_wordlist.c_str());
     int id;
     string word;
-    int i = 0;
-    while (ifile >> id >> word) { // TODO(hxu) ugly fix for cued-rnnlm's bug
+    int i = -1;
+    while (ifile >> word >> id) { // TODO(hxu) ugly fix for cued-rnnlm's bug
                                   // will implement a better fix later
-      if (word == "[UNK]") {
-        word = "<unk>";
-      } else if (word == "<OOS>") {
-        continue;
-      }
+//      if (word == "<oos>") {
+//        continue;
+//      }
       i++;
-      assert(i == id + 1);
+      assert(i == id);
       rnn_label_to_word_.push_back(word);
 
       int fst_label = fst_word_symbols->Find(rnn_label_to_word_[i]);
-      KALDI_ASSERT(fst::SymbolTable::kNoSymbol != fst_label);
+      if (fst::SymbolTable::kNoSymbol == fst_label) {
+        if (i < 2) continue;
+
+        KALDI_ASSERT(word == "<oos>");
+        oos_ = i;
+        continue;
+      }
+      KALDI_ASSERT(fst_label >= 0);
       fst_label_to_rnn_label_[fst_label] = i;
     }
     bos_ = 1;
     eos_ = 0; // TODO(hxu)
   }
-  rnn_label_to_word_.push_back("<OOS>");
+//  rnn_label_to_word_.push_back("<OOS>");
+  num_rnn_words = rnn_label_to_word_.size();
   
   for (int i = 0; i < fst_label_to_rnn_label_.size(); i++) {
     if (fst_label_to_rnn_label_[i] == -1) {
       fst_label_to_rnn_label_[i] = rnn_label_to_word_.size() - 1;
     }
   }
-
-
 }
 
 BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
@@ -149,7 +155,11 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
 //                                          context_in, context_out);
   if (context_out != NULL)
     *context_out = outputs[1];
-  return outputs[0].scalar<float>()();
+  if (word != oos_) {
+    return outputs[0].scalar<float>()();
+  } else {
+    return outputs[0].scalar<float>()() / (num_total_words - num_rnn_words);
+  }
 }
 
 void KaldiTfRnnlmWrapper::GetInitialContext(Tensor *c) const {

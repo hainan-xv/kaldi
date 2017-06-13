@@ -1,6 +1,7 @@
 include ../kaldi.mk
 
-TENSORFLOW = ../../tools/tensorflow
+CURDIR = $(shell pwd)
+TENSORFLOW = $(CURDIR)/../../tools/tensorflow
 
 all:
 
@@ -14,7 +15,8 @@ TESTFILES =
 LIBNAME = kaldi-tensorflow-rnnlm
 
 ADDLIBS = ../lm/kaldi-lm.a ../util/kaldi-util.a ../thread/kaldi-thread.a \
-          ../matrix/kaldi-matrix.a ../base/kaldi-base.a ../../tools/tensorflow/bazel-bin/tensorflow/tensorflow_cc.so
+          ../matrix/kaldi-matrix.a ../base/kaldi-base.a \
+          $(CURDIR)/../../tools/tensorflow/bazel-bin/tensorflow/tensorflow_cc.so
 
 LDLIBS +=  -lz -ldl -fPIC -lrt
 LDLIBS += $(OTHERLIBS) -L$(TENSORFLOW)/bazel-bin/tensorflow -ltensorflow_cc

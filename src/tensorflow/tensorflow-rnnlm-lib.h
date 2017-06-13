@@ -61,11 +61,14 @@ class KaldiTfRnnlmWrapper {
   std::vector<std::string> rnn_label_to_word_;
   std::vector<std::string> fst_label_to_word_;
  private:
+  int32 num_total_words;
+  int32 num_rnn_words;
 
   Session* session_;  // ptf owned here
   std::vector<std::string> label_to_word_;
   int32 eos_;
   int32 bos_;
+  int32 oos_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(KaldiTfRnnlmWrapper);
 };

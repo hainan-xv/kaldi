@@ -1,5 +1,6 @@
 
-TENSORFLOW = ../../tools/tensorflow
+CURDIR = $(shell pwd)
+TENSORFLOW = $(CURDIR)/../../tools/tensorflow
 
 all:
 
@@ -10,7 +11,7 @@ BINFILES = lattice-lmrescore-tf-rnnlm
 
 OBJFILES =
 
-
+CURDIR = $(shell pwd)
 
 TESTFILES =
 
@@ -18,7 +19,7 @@ ADDLIBS = ../lat/kaldi-lat.a ../lm/kaldi-lm.a ../fstext/kaldi-fstext.a \
           ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a ../util/kaldi-util.a \
           ../thread/kaldi-thread.a ../matrix/kaldi-matrix.a \
           ../base/kaldi-base.a ../tensorflow/kaldi-tensorflow-rnnlm.a \
-          ../../tools/tensorflow/bazel-bin/tensorflow/tensorflow_cc.so
+          $(CURDIR)/../../tools/tensorflow/bazel-bin/tensorflow/tensorflow_cc.so
 
 LDLIBS +=  -lz -ldl -fPIC -lrt
 LDLIBS += $(OTHERLIBS) -L$(TENSORFLOW)/bazel-bin/tensorflow -ltensorflow_cc
