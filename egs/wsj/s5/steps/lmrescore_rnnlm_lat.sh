@@ -58,7 +58,7 @@ fi
 
 if [ "$rnnlm_ver" == "tensorflow" ]; then
   rescoring_binary="lattice-lmrescore-tf-rnnlm"
-  first_arg=$rnnlm_dir/wordlist.rnn
+  first_arg=$rnnlm_dir/wordlist.rnn.final
 fi
 
 oldlm=$oldlang/G.fst
@@ -70,7 +70,7 @@ elif [ ! -f $oldlm ]; then
 fi
 
 [ ! -f $oldlm ] && echo "$0: Missing file $oldlm" && exit 1;
-[ ! -f $rnnlm_dir/rnnlm ] && [ ! -d $rnnlm_dir/rnnlm ] && [ !  && echo "$0: Missing file $rnnlm_dir/rnnlm" && exit 1;
+[ ! -f $rnnlm_dir/rnnlm ] && [ ! -d $rnnlm_dir/rnnlm ] && echo "$0: Missing file $rnnlm_dir/rnnlm" && exit 1;
 [ ! -f $rnnlm_dir/unk.probs ] &&\
   echo "$0: Missing file $rnnlm_dir/unk.probs" && exit 1;
 [ ! -f $oldlang/words.txt ] &&\

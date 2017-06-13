@@ -23,9 +23,8 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const std::string &rnn_wordlist,
     const std::string &word_symbol_table_rxfilename, // TODO(hxu) will do this later
     const std::string &unk_prob_rspecifier,
-//    Session* session) {
     const std::string &tf_model_path) {
-//  session_ = session;
+  // read the tf model
   {
     string graph_path = tf_model_path + ".meta";
 
@@ -58,7 +57,13 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
       KALDI_ERR << status.ToString();
     }
 
+    // get the initial context
+    std::vector<Tensor> state;
+    session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
+    initial_context_ = state[0];
   }
+
+//  GetInitialContext(&initial_context_);
 
   fst::SymbolTable *fst_word_symbols = NULL;
   if (!(fst_word_symbols =
@@ -82,25 +87,22 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
 
   num_total_words = fst_word_symbols->NumSymbols();
 
+  oos_ = -1;
   { // input.
     ifstream ifile(rnn_wordlist.c_str());
     int id;
     string word;
     int i = -1;
-    while (ifile >> word >> id) { // TODO(hxu) ugly fix for cued-rnnlm's bug
-                                  // will implement a better fix later
-//      if (word == "<oos>") {
-//        continue;
-//      }
+    while (ifile >> word >> id) {
       i++;
       assert(i == id);
       rnn_label_to_word_.push_back(word);
 
       int fst_label = fst_word_symbols->Find(rnn_label_to_word_[i]);
       if (fst::SymbolTable::kNoSymbol == fst_label) {
-        if (i < 2) continue;
+        if (i < 2) continue; // <s> and </s>
 
-        KALDI_ASSERT(word == "<oos>");
+        KALDI_ASSERT(word == "<oos>" && oos_ == -1);
         oos_ = i;
         continue;
       }
@@ -108,14 +110,15 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
       fst_label_to_rnn_label_[fst_label] = i;
     }
     bos_ = 1;
-    eos_ = 0; // TODO(hxu)
+    eos_ = 0; // TODO(hxu) need to think carefully about these..
   }
+  KALDI_ASSERT(oos_ != -1);
 //  rnn_label_to_word_.push_back("<OOS>");
   num_rnn_words = rnn_label_to_word_.size();
   
   for (int i = 0; i < fst_label_to_rnn_label_.size(); i++) {
     if (fst_label_to_rnn_label_[i] == -1) {
-      fst_label_to_rnn_label_[i] = rnn_label_to_word_.size() - 1;
+      fst_label_to_rnn_label_[i] = oos_;
     }
   }
 }
@@ -123,14 +126,8 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
 BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
     int32 word, const std::vector<int32> &wseq,
     const Tensor &context_in,
-    tensorflow::Tensor *context_out) {
-
-  std::vector<std::string> wseq_symbols(wseq.size());
-  for (int32 i = 0; i < wseq_symbols.size(); ++i) {
-    KALDI_ASSERT(wseq[i] < label_to_word_.size());
-    wseq_symbols[i] = label_to_word_[wseq[i]];
-  }
-
+    Tensor *context_out) {
+  KALDI_ASSERT(word >= 0);
   std::vector<std::pair<string, Tensor>> inputs;
 
   Tensor lastword(tensorflow::DT_INT32, {1, 1});
@@ -153,8 +150,10 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
 
 //  return rnnlm_.computeConditionalLogprob(label_to_word_[word], wseq_symbols,
 //                                          context_in, context_out);
-  if (context_out != NULL)
+  if (context_out != NULL) {
+    KALDI_ASSERT(outputs.size() == 2);
     *context_out = outputs[1];
+  }
   if (word != oos_) {
     return outputs[0].scalar<float>()();
   } else {
@@ -162,10 +161,8 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
   }
 }
 
-void KaldiTfRnnlmWrapper::GetInitialContext(Tensor *c) const {
-  std::vector<Tensor> state;
-  Status status = session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
-  *c = state[0];
+const Tensor& KaldiTfRnnlmWrapper::GetInitialContext() const {
+  return initial_context_;
 }
 
 TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
@@ -178,8 +175,7 @@ TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
   std::vector<Label> bos;
 //  std::vector<float> bos_context(rnnlm->GetHiddenLayerSize(), 1.0);
 
-  Tensor initial_context;
-  rnnlm_->GetInitialContext(&initial_context);
+  const Tensor& initial_context = rnnlm_->GetInitialContext();
 
   state_to_wseq_.push_back(bos);
   state_to_context_.push_back(initial_context);

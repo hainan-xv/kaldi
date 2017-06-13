@@ -46,12 +46,13 @@ class KaldiTfRnnlmWrapper {
 //                    Session* session);
 
   ~KaldiTfRnnlmWrapper() {
-    delete session_;
+    session_->Close();
   }
 
   int32 GetEos() const { return eos_; }
   int32 GetBos() const { return bos_; }
-  void GetInitialContext(Tensor* context) const;
+
+  const Tensor& GetInitialContext() const;
 
   BaseFloat GetLogProb(int32 word, const std::vector<int32> &wseq,
                        const Tensor &context_in,
@@ -61,11 +62,11 @@ class KaldiTfRnnlmWrapper {
   std::vector<std::string> rnn_label_to_word_;
   std::vector<std::string> fst_label_to_word_;
  private:
+  Tensor initial_context_;
   int32 num_total_words;
   int32 num_rnn_words;
 
   Session* session_;  // ptf owned here
-  std::vector<std::string> label_to_word_;
   int32 eos_;
   int32 bos_;
   int32 oos_;

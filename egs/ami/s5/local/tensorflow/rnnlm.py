@@ -369,7 +369,8 @@ def main(_):
     raise ValueError("Must set --data_path to PTB data directory")
 
   raw_data = reader.ptb_raw_data(FLAGS.data_path)
-  train_data, valid_data, test_data, _, word_map = raw_data
+  train_data, valid_data, _, word_map = raw_data
+#  train_data, valid_data, test_data, _, word_map = raw_data
 
   with open(FLAGS.wordlist_save_path, "w") as wmap_file:
     count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
@@ -398,11 +399,11 @@ def main(_):
         mvalid = PTBModel(is_training=False, config=config, input_=valid_input)
       tf.summary.scalar("Validation Loss", mvalid.cost)
 
-    with tf.name_scope("Test"):
-      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
-      with tf.variable_scope("Model", reuse=True, initializer=initializer):
-        mtest = PTBModel(is_training=False, config=eval_config,
-                         input_=test_input)
+#    with tf.name_scope("Test"):
+#      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
+#      with tf.variable_scope("Model", reuse=True, initializer=initializer):
+#        mtest = PTBModel(is_training=False, config=eval_config,
+#                         input_=test_input)
 
 #    saver = tf.train.Saver({"embedding": m.embedding})
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
@@ -419,8 +420,8 @@ def main(_):
         valid_perplexity = run_epoch(session, mvalid)
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
-      test_perplexity = run_epoch(session, mtest)
-      print("Test Perplexity: %.3f" % test_perplexity)
+#      test_perplexity = run_epoch(session, mtest)
+#      print("Test Perplexity: %.3f" % test_perplexity)
 
       if FLAGS.save_path:
 #        saver = tf.train.Saver()
@@ -428,7 +429,6 @@ def main(_):
 #        saver.save(session, FLAGS.save_path, global_step=sv.global_step)
         sv.saver.save(session, FLAGS.save_path)
 #        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
-
 
 if __name__ == "__main__":
   tf.app.run()
