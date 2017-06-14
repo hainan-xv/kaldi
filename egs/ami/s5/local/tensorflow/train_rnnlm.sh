@@ -22,7 +22,7 @@ srcdir=data/local/dict
 
 mkdir -p $dir
 
-cat $srcdir/lexicon.txt | awk '{print $1}' | grep -v -w '!SIL' > $dir/wordlist.all
+cat $srcdir/lexicon.txt | awk '{print $1}' | sort -u | grep -v -w '!SIL' > $dir/wordlist.all
 
 # Get training data with OOV words (w.r.t. our current vocab) replaced with <unk>.
 cat $train_text | awk -v w=$dir/wordlist.all \
@@ -48,13 +48,8 @@ head -$nwords $dir/unigram.counts | awk '{print $2}' | tee $dir/wordlist.rnn | a
 tail -n +$nwords $dir/unigram.counts > $dir/unk_class.counts
 
 for type in train valid; do
-  mv $dir/$type.in $dir/$type
+  cat $dir/$type.in | awk -v w=$dir/wordlist.rnn 'BEGIN{while((getline<w)>0)d[$1]=1}{for(i=1;i<=NF;i++){if(d[$i]==1){s=$i}else{s="<oos>"} printf("%s ",s)} print""}' | sed "s=^= <s> =g" | sed "s=$= </s>=" > $dir/$type
 done
-
-# Now randomize the order of the training data.
-cat $dir/train | awk -v rand_seed=$rand_seed 'BEGIN{srand(rand_seed);} {printf("%f\t%s\n", rand(), $0);}' | \
- sort | cut -f 2 > $dir/foo
-mv $dir/foo $dir/train
 
 # OK we'll train the RNNLM on this data.
 
