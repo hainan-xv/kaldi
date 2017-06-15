@@ -21,7 +21,7 @@ using std::ifstream;
 KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const KaldiTfRnnlmWrapperOpts &opts,
     const std::string &rnn_wordlist,
-    const std::string &word_symbol_table_rxfilename, // TODO(hxu) will do this later
+    const std::string &word_symbol_table_rxfilename,
     const std::string &unk_prob_rspecifier,
     const std::string &tf_model_path) {
   // read the tf model
@@ -96,9 +96,9 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     while (ifile >> word >> id) {
       i++;
       assert(i == id);
-      rnn_label_to_word_.push_back(word);
+      rnn_label_to_word_.push_back(word); // vector[i] = word
 
-      int fst_label = fst_word_symbols->Find(rnn_label_to_word_[i]);
+      int fst_label = fst_word_symbols->Find(word);
       if (fst::SymbolTable::kNoSymbol == fst_label) {
         if (i < 2) continue; // <s> and </s>
 
@@ -112,10 +112,15 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     bos_ = 1;
     eos_ = 0; // TODO(hxu) need to think carefully about these..
   }
-  KALDI_ASSERT(oos_ != -1);
+  if (fst_label_to_word_.size() > rnn_label_to_word_.size()) {
+    KALDI_ASSERT(oos_ != -1);
+  }
 //  rnn_label_to_word_.push_back("<OOS>");
   num_rnn_words = rnn_label_to_word_.size();
   
+  if (oos_ == -1) {
+    return;
+  }
   for (int i = 0; i < fst_label_to_rnn_label_.size(); i++) {
     if (fst_label_to_rnn_label_[i] == -1) {
       fst_label_to_rnn_label_[i] = oos_;
@@ -127,7 +132,7 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
     int32 word, const std::vector<int32> &wseq,
     const Tensor &context_in,
     Tensor *context_out) {
-  KALDI_ASSERT(word >= 0);
+
   std::vector<std::pair<string, Tensor>> inputs;
 
   Tensor lastword(tensorflow::DT_INT32, {1, 1});
@@ -148,17 +153,24 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
   // Run the session, evaluating our "c" operation from the graph
   Status status = session_->Run(inputs, {"Train/Model/test_out", "Train/Model/test_state_out"}, {}, &outputs);
 
-//  return rnnlm_.computeConditionalLogprob(label_to_word_[word], wseq_symbols,
-//                                          context_in, context_out);
   if (context_out != NULL) {
-    KALDI_ASSERT(outputs.size() == 2);
     *context_out = outputs[1];
   }
+
+  float ans;
   if (word != oos_) {
-    return outputs[0].scalar<float>()();
+    ans = log(outputs[0].scalar<float>()());
   } else {
-    return outputs[0].scalar<float>()() / (num_total_words - num_rnn_words);
+    ans = log(outputs[0].scalar<float>()() / (num_total_words - num_rnn_words));
   }
+//  std::ostringstream his_str;
+//  for (int i = 0; i < wseq.size(); i++) {
+//    his_str << rnn_label_to_word_[wseq[i]] << "(" << wseq[i] << ") ";
+//  }
+
+//  KALDI_LOG << "Computing logprob of word " << rnn_label_to_word_[word] << "(" << word << ")"
+//            << " given history " << his_str.str() << " is " << exp(ans);
+  return ans;
 }
 
 const Tensor& KaldiTfRnnlmWrapper::GetInitialContext() const {
@@ -194,6 +206,7 @@ fst::StdArc::Weight TfRnnlmDeterministicFst::Final(StateId s) {
 }
 
 bool TfRnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc) {
+//  std::cout << "computing label " << ilabel << " ";
   // At this point, we should have created the state.
   KALDI_ASSERT(static_cast<size_t>(s) < state_to_wseq_.size());
 

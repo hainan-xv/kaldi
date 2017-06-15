@@ -20,5 +20,5 @@ cd tensorflow
 ./configure
 
 tensorflow/contrib/makefile/download_dependencies.sh 
-bazel build //tensorflow:libtensorflow.so
+bazel build --copt=-msse4.2 //tensorflow:libtensorflow.so
 #bazel build //tensorflow:libtensorflow_cc.so

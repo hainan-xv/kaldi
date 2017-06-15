@@ -137,37 +137,27 @@ class PTBModel(object):
     # first implement the less efficient version
     test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
     test_word_out = tf.placeholder(tf.int32, [1, 1], name="test_word_out")
-#    test_input_state_c = tf.placeholder(tf.float32, [1, size], name="test_state_c")
-#    test_input_state_h = tf.placeholder(tf.float32, [1, size], name="test_state_h")
+
     state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 2, 1, size], name="test_state")
+    # unpacking the input state context 
     l = tf.unstack(state_placeholder, axis=0)
     test_input_state = tuple(
                [tf.contrib.rnn.LSTMStateTuple(l[idx][0],l[idx][1])
                  for idx in range(config.num_layers)]
     )
 
-#    test_input_state = tf.contrib.rnn.LSTMStateTuple(test_input_state_c, test_input_state_h)
-
-#    print ("want to be", self._initial_state)
-#    print ("it actually is ", input_state)
     with tf.device("/cpu:0"):
       self.embedding = tf.get_variable(
           "embedding", [vocab_size, size], dtype=data_type())
 
-#      print("should be ", input_.input_data)
-#      print("is ", test_word)
-
       inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
-#      print("should be ", inputs)
-#      print("is ", test_inputs)
 
     # test time
     with tf.variable_scope("RNN"):
-#      tf.get_variable_scope().reuse_variables()
       (test_cell_output, test_output_state) = self.cell(test_inputs[:, 0, :], test_input_state)
 
-    test_out_state = tf.reshape(tf.stack(axis=1, values=test_output_state), [config.num_layers, 2, 1, size], name="test_state_out")
+    test_out_state = tf.reshape(tf.stack(axis=0, values=test_output_state), [config.num_layers, 2, 1, size], name="test_state_out")
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
@@ -177,7 +167,6 @@ class PTBModel(object):
 
     p_word = test_softmaxed[0, test_word_out[0,0]]
     test_out = tf.identity(p_word, name="test_out")
-#    p_word = tf.float32(test_softmaxed[:, test_word_out], name="p_out")
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)
@@ -370,7 +359,6 @@ def main(_):
 
   raw_data = reader.ptb_raw_data(FLAGS.data_path)
   train_data, valid_data, _, word_map = raw_data
-#  train_data, valid_data, test_data, _, word_map = raw_data
 
   with open(FLAGS.wordlist_save_path, "w") as wmap_file:
     count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
@@ -399,13 +387,6 @@ def main(_):
         mvalid = PTBModel(is_training=False, config=config, input_=valid_input)
       tf.summary.scalar("Validation Loss", mvalid.cost)
 
-#    with tf.name_scope("Test"):
-#      test_input = PTBInput(config=eval_config, data=test_data, name="TestInput")
-#      with tf.variable_scope("Model", reuse=True, initializer=initializer):
-#        mtest = PTBModel(is_training=False, config=eval_config,
-#                         input_=test_input)
-
-#    saver = tf.train.Saver({"embedding": m.embedding})
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)
     with sv.managed_session() as session:
       for i in range(config.max_max_epoch):
@@ -420,15 +401,9 @@ def main(_):
         valid_perplexity = run_epoch(session, mvalid)
         print("Epoch: %d Valid Perplexity: %.3f" % (i + 1, valid_perplexity))
 
-#      test_perplexity = run_epoch(session, mtest)
-#      print("Test Perplexity: %.3f" % test_perplexity)
-
       if FLAGS.save_path:
-#        saver = tf.train.Saver()
         print("Saving model to %s." % FLAGS.save_path)
-#        saver.save(session, FLAGS.save_path, global_step=sv.global_step)
         sv.saver.save(session, FLAGS.save_path)
-#        sv.saver.save(session, FLAGS.save_path, global_step=sv.global_step)
 
 if __name__ == "__main__":
   tf.app.run()
