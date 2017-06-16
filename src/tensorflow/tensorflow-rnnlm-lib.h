@@ -53,16 +53,26 @@ class KaldiTfRnnlmWrapper {
   int32 GetBos() const { return bos_; }
 
   const Tensor& GetInitialContext() const;
+  const Tensor& GetInitialCell() const;
 
-  BaseFloat GetLogProb(int32 word, const std::vector<int32> &wseq,
+  // compute p(word | wseq) and return the log of that
+  // the computation used the input cell,
+  // which is the 2nd-to-last layer of the RNNLM associated with history wseq;
+  //
+  // and we generate (context_out, new_cell) by passing (context_in, word) into the nnet
+  BaseFloat GetLogProb(int32 word,
+///                       const std::vector<int32> &wseq,
                        const Tensor &context_in,
-                       Tensor *context_out);
+                       const Tensor &cell_in,
+                       Tensor *context_out,
+                       Tensor *new_cell);
 
   std::vector<int> fst_label_to_rnn_label_;
   std::vector<std::string> rnn_label_to_word_;
   std::vector<std::string> fst_label_to_word_;
  private:
   Tensor initial_context_;
+  Tensor initial_cell_;
   int32 num_total_words;
   int32 num_rnn_words;
 
@@ -104,6 +114,7 @@ class TfRnnlmDeterministicFst
   KaldiTfRnnlmWrapper *rnnlm_;
   int32 max_ngram_order_;
   std::vector<tensorflow::Tensor> state_to_context_;
+  std::vector<tensorflow::Tensor> state_to_cell_;
 };
 
 }  // namespace tf_rnnlm

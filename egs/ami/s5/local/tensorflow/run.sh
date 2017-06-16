@@ -2,8 +2,9 @@
 mic=ihm
 ngram_order=3
 model_type=small
-dir=data/tensorflow/$model_type
+dir=data/new_tensorflow/$model_type
 stage=1
+weight=0.5
 
 . ./utils/parse_options.sh
 . ./cmd.sh
@@ -42,10 +43,10 @@ if [ $stage -le 3 ]; then
     # Lattice rescoring
     steps/lmrescore_rnnlm_lat.sh \
       --cmd "$tensorflow_cmd --mem 16G" \
-      --rnnlm-ver tensorflow  --weight 0.5 --max-ngram-order $ngram_order \
+      --rnnlm-ver tensorflow  --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}.tfrnnlm.lat.${ngram_order}gram  &
+      ${decode_dir}.new.tfrnnlm.lat.${ngram_order}gram.$weight  &
 
   done
 fi

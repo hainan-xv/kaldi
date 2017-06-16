@@ -56,11 +56,6 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     if (!status.ok()) {
       KALDI_ERR << status.ToString();
     }
-
-    // get the initial context
-    std::vector<Tensor> state;
-    session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
-    initial_context_ = state[0];
   }
 
 //  GetInitialContext(&initial_context_);
@@ -126,35 +121,87 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
       fst_label_to_rnn_label_[i] = oos_;
     }
   }
+
+  {
+    Status status;
+    // get the initial context
+    {
+      std::vector<Tensor> state;
+      status = session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
+      if (!status.ok()) {
+        KALDI_ERR << status.ToString();
+      }
+      initial_context_ = state[0];
+    }
+
+    {
+      std::vector<Tensor> state;
+      Tensor bosword(tensorflow::DT_INT32, {1, 1});
+      bosword.scalar<int32>()() = bos_;
+
+      std::vector<std::pair<string, tensorflow::Tensor>> inputs = {
+        {"Train/Model/test_word_in", bosword},
+        {"Train/Model/test_state_in", initial_context_},
+      };
+
+      status = session_->Run(inputs, {"Train/Model/test_cell_out"}, {}, &state);
+      if (!status.ok()) {
+        KALDI_ERR << status.ToString();
+      }
+      initial_cell_ = state[0];
+    }
+  }
 }
 
 BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
-    int32 word, const std::vector<int32> &wseq,
+    int32 word,
+//    const std::vector<int32> &wseq,
     const Tensor &context_in,
-    Tensor *context_out) {
+    const Tensor &cell_in,
+    Tensor *context_out,
+    Tensor *new_cell) {
 
   std::vector<std::pair<string, Tensor>> inputs;
 
-  Tensor lastword(tensorflow::DT_INT32, {1, 1});
   Tensor thisword(tensorflow::DT_INT32, {1, 1});
 
-  lastword.scalar<int32>()() = (wseq.size() == 0? bos_: wseq.back());
   thisword.scalar<int32>()() = word;
-
-  inputs = {
-    {"Train/Model/test_word_in", lastword},
-    {"Train/Model/test_word_out", thisword},
-    {"Train/Model/test_state", context_in},
-  };
-
-  // The session will initialize the outputs
   std::vector<tensorflow::Tensor> outputs;
 
-  // Run the session, evaluating our "c" operation from the graph
-  Status status = session_->Run(inputs, {"Train/Model/test_out", "Train/Model/test_state_out"}, {}, &outputs);
-
   if (context_out != NULL) {
+    inputs = {
+      {"Train/Model/test_word_in", thisword},
+      {"Train/Model/test_word_out", thisword},
+      {"Train/Model/test_state_in", context_in},
+      {"Train/Model/test_cell_in", cell_in},
+//      {"Train/Model/test_cell_in", cell_in},
+    };
+
+    // The session will initialize the outputs
+
+    // Run the session, evaluating our "c" operation from the graph
+    Status status = session_->Run(inputs,
+        {"Train/Model/test_out",
+         "Train/Model/test_state_out",
+         "Train/Model/test_cell_out"}, {}, &outputs);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
+
     *context_out = outputs[1];
+    *new_cell = outputs[2];
+  } else {
+    inputs = {
+      {"Train/Model/test_word_out", thisword},
+      {"Train/Model/test_cell_in", cell_in},
+    };
+
+    // Run the session, evaluating our "c" operation from the graph
+    Status status = session_->Run(inputs,
+        {"Train/Model/test_out"}, {}, &outputs);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
+    }
   }
 
   float ans;
@@ -177,6 +224,10 @@ const Tensor& KaldiTfRnnlmWrapper::GetInitialContext() const {
   return initial_context_;
 }
 
+const Tensor& KaldiTfRnnlmWrapper::GetInitialCell() const {
+  return initial_cell_;
+}
+
 TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
                                              KaldiTfRnnlmWrapper *rnnlm) {
   KALDI_ASSERT(rnnlm != NULL);
@@ -188,9 +239,11 @@ TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
 //  std::vector<float> bos_context(rnnlm->GetHiddenLayerSize(), 1.0);
 
   const Tensor& initial_context = rnnlm_->GetInitialContext();
+  const Tensor& initial_cell = rnnlm_->GetInitialCell();
 
   state_to_wseq_.push_back(bos);
   state_to_context_.push_back(initial_context);
+  state_to_cell_.push_back(initial_cell);
   wseq_to_state_[bos] = 0;
   start_state_ = 0;
 }
@@ -200,8 +253,9 @@ fst::StdArc::Weight TfRnnlmDeterministicFst::Final(StateId s) {
   KALDI_ASSERT(static_cast<size_t>(s) < state_to_wseq_.size());
 
   std::vector<Label> wseq = state_to_wseq_[s];
-  BaseFloat logprob = rnnlm_->GetLogProb(rnnlm_->GetEos(), wseq,
-                                         state_to_context_[s], NULL);
+  BaseFloat logprob = rnnlm_->GetLogProb(rnnlm_->GetEos(), // wseq,
+                                         state_to_context_[s], state_to_cell_[s],
+                                         NULL, NULL);
   return Weight(-logprob);
 }
 
@@ -212,10 +266,14 @@ bool TfRnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc)
 
   std::vector<Label> wseq = state_to_wseq_[s];
   tensorflow::Tensor new_context;
+  tensorflow::Tensor new_cell;
 
   int32 rnn_word = rnnlm_->fst_label_to_rnn_label_[ilabel];
-  BaseFloat logprob = rnnlm_->GetLogProb(rnn_word, wseq,
-                                         state_to_context_[s], &new_context);
+  BaseFloat logprob = rnnlm_->GetLogProb(rnn_word, // wseq,
+                                         state_to_context_[s],
+                                         state_to_cell_[s],
+                                         &new_context,
+                                         &new_cell);
 
   wseq.push_back(rnn_word);
   if (max_ngram_order_ > 0) {
@@ -238,6 +296,7 @@ bool TfRnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc)
   if (result.second == true) {
     state_to_wseq_.push_back(wseq);
     state_to_context_.push_back(new_context);
+    state_to_cell_.push_back(new_cell);
   }
 
   // Creates the arc.
