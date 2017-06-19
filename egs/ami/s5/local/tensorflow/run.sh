@@ -2,7 +2,6 @@
 mic=ihm
 ngram_order=3
 model_type=small
-dir=data/new_tensorflow/$model_type
 stage=1
 weight=0.5
 
@@ -12,6 +11,7 @@ weight=0.5
 
 set -e
 
+dir=data/new_tensorflow/$model_type
 mkdir -p $dir
 
 if [ $stage -le 1 ]; then
