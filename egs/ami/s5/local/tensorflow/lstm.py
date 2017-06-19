@@ -1,4 +1,5 @@
 # Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+#           Modified by Hainan Xu to be used in Kaldi for lattice rescoring 2017
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,10 +38,10 @@ flags.DEFINE_string(
     "A type of model. Possible options are: small, medium, large.")
 flags.DEFINE_string("data_path", None,
                     "Where the training/test data is stored.")
+flags.DEFINE_string("vocab_path", None,
+                    "Where the wordlist file is stored.")
 flags.DEFINE_string("save_path", None,
                     "Model output directory.")
-flags.DEFINE_string("wordlist_save_path", None,
-                    "wordmap output directory.")
 flags.DEFINE_bool("use_fp16", False,
                   "Train using 16-bit floats instead of 32bit floats")
 
@@ -51,19 +52,19 @@ def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
 
-class PTBInput(object):
+class RNNLMInput(object):
   """The input data."""
 
   def __init__(self, config, data, name=None):
     self.batch_size = batch_size = config.batch_size
     self.num_steps = num_steps = config.num_steps
     self.epoch_size = ((len(data) // batch_size) - 1) // num_steps
-    self.input_data, self.targets = reader.ptb_producer(
+    self.input_data, self.targets = reader.rnnlm_producer(
         data, batch_size, num_steps, name=name)
 
 
-class PTBModel(object):
-  """The PTB model."""
+class RNNLMModel(object):
+  """The RNNLM model."""
 
   def __init__(self, is_training, config, input_):
     self._input = input_
@@ -223,6 +224,19 @@ class PTBModel(object):
   def train_op(self):
     return self._train_op
 
+class TestConfig(object):
+  """Tiny config, for testing."""
+  init_scale = 0.1
+  learning_rate = 1.0
+  max_grad_norm = 1
+  num_layers = 1
+  num_steps = 2
+  hidden_size = 2
+  max_epoch = 1
+  max_max_epoch = 1
+  keep_prob = 1.0
+  lr_decay = 0.5
+  batch_size = 20
 
 class SmallConfig(object):
   """Small config."""
@@ -236,8 +250,7 @@ class SmallConfig(object):
   max_max_epoch = 13
   keep_prob = 1.0
   lr_decay = 0.5
-  batch_size = 20
-  vocab_size = 10000
+  batch_size = 64
 
 
 class MediumConfig(object):
@@ -253,7 +266,6 @@ class MediumConfig(object):
   keep_prob = 0.5
   lr_decay = 0.8
   batch_size = 20
-  vocab_size = 10000
 
 
 class LargeConfig(object):
@@ -269,23 +281,7 @@ class LargeConfig(object):
   keep_prob = 0.35
   lr_decay = 1 / 1.15
   batch_size = 20
-  vocab_size = 10000
 
-
-class TestConfig(object):
-  """Tiny config, for testing."""
-  init_scale = 0.1
-  learning_rate = 1.0
-  max_grad_norm = 1
-  num_layers = 1
-  num_steps = 2
-  hidden_size = 2
-  max_epoch = 1
-  max_max_epoch = 1
-  keep_prob = 1.0
-  lr_decay = 0.5
-  batch_size = 20
-  vocab_size = 10000
 
 
 def run_epoch(session, model, eval_op=None, verbose=False):
@@ -338,17 +334,18 @@ def get_config():
 
 def main(_):
   if not FLAGS.data_path:
-    raise ValueError("Must set --data_path to PTB data directory")
+    raise ValueError("Must set --data_path to RNNLM data directory")
 
-  raw_data = reader.ptb_raw_data(FLAGS.data_path)
+  raw_data = reader.rnnlm_raw_data(FLAGS.data_path, FLAGS.vocab_path)
   train_data, valid_data, _, word_map = raw_data
 
-  with open(FLAGS.wordlist_save_path, "w") as wmap_file:
-    count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
-    for k, v in count_pairs: 
-      wmap_file.write(str(k) + " " + str(v) + "\n")
+#  with open(FLAGS.wordlist_save_path, "w") as wmap_file:
+#    count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
+#    for k, v in count_pairs: 
+#      wmap_file.write(str(k) + " " + str(v) + "\n")
 
   config = get_config()
+  config.vocab_size = len(word_map)
   eval_config = get_config()
   eval_config.batch_size = 1
   eval_config.num_steps = 1
@@ -358,16 +355,16 @@ def main(_):
                                                 config.init_scale)
 
     with tf.name_scope("Train"):
-      train_input = PTBInput(config=config, data=train_data, name="TrainInput")
+      train_input = RNNLMInput(config=config, data=train_data, name="TrainInput")
       with tf.variable_scope("Model", reuse=None, initializer=initializer):
-        m = PTBModel(is_training=True, config=config, input_=train_input)
+        m = RNNLMModel(is_training=True, config=config, input_=train_input)
       tf.summary.scalar("Training Loss", m.cost)
       tf.summary.scalar("Learning Rate", m.lr)
 
     with tf.name_scope("Valid"):
-      valid_input = PTBInput(config=config, data=valid_data, name="ValidInput")
+      valid_input = RNNLMInput(config=config, data=valid_data, name="ValidInput")
       with tf.variable_scope("Model", reuse=True, initializer=initializer):
-        mvalid = PTBModel(is_training=False, config=config, input_=valid_input)
+        mvalid = RNNLMModel(is_training=False, config=config, input_=valid_input)
       tf.summary.scalar("Validation Loss", mvalid.cost)
 
     sv = tf.train.Supervisor(logdir=FLAGS.save_path)

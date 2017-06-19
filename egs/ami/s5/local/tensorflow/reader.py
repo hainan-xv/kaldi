@@ -1,4 +1,5 @@
 # Copyright 2015 The TensorFlow Authors. All Rights Reserved.
+#           Modified by Hainan Xu to be used in Kaldi for lattice rescoring 2017
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +15,7 @@
 # ==============================================================================
 
 
-"""Utilities for parsing PTB text files."""
+"""Utilities for parsing RNNLM text files."""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -24,23 +25,30 @@ import os
 
 import tensorflow as tf
 
-
-
 def _read_words(filename):
   with tf.gfile.GFile(filename, "r") as f:
     return f.read().decode("utf-8").split()
 #    return f.read().decode("utf-8").replace("\n", "<eos>").split()
 
-
 def _build_vocab(filename):
-  data = _read_words(filename)
+#  data = _read_words(filename)
+#
+#  counter = collections.Counter(data)
+#  count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
+#
+#  words, _ = list(zip(*count_pairs))
+#  word_to_id = dict(zip(words, range(len(words))))
+  
+#  word_to_id = {}
+#  new_id = 0
+#  with open(filename, "r") as f:
+#    for word in f:
+#      word_to_id[word] = new_id
+#      new_id = new_id + 1
+#  return word_to_id
 
-  counter = collections.Counter(data)
-  count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
-
-  words, _ = list(zip(*count_pairs))
+  words = _read_words(filename)
   word_to_id = dict(zip(words, range(len(words))))
-
   return word_to_id
 
 
@@ -49,13 +57,13 @@ def _file_to_word_ids(filename, word_to_id):
   return [word_to_id[word] for word in data if word in word_to_id]
 
 
-def ptb_raw_data(data_path=None):
-  """Load PTB raw data from data directory "data_path".
+def rnnlm_raw_data(data_path, vocab_path):
+  """Load RNNLM raw data from data directory "data_path".
 
-  Reads PTB text files, converts strings to integer ids,
+  Reads RNNLM text files, converts strings to integer ids,
   and performs mini-batching of the inputs.
 
-  The PTB dataset comes from Tomas Mikolov's webpage:
+  The RNNLM dataset comes from Tomas Mikolov's webpage:
 
   http://www.fit.vutbr.cz/~imikolov/rnnlm/simple-examples.tgz
 
@@ -65,14 +73,14 @@ def ptb_raw_data(data_path=None):
 
   Returns:
     tuple (train_data, valid_data, test_data, vocabulary)
-    where each of the data objects can be passed to PTBIterator.
+    where each of the data objects can be passed to RNNLMIterator.
   """
 
   train_path = os.path.join(data_path, "train")
   valid_path = os.path.join(data_path, "valid")
 #  test_path = os.path.join(data_path, "eval.txt")
 
-  word_to_id = _build_vocab(train_path)
+  word_to_id = _build_vocab(vocab_path)
   train_data = _file_to_word_ids(train_path, word_to_id)
   valid_data = _file_to_word_ids(valid_path, word_to_id)
 #  test_data = _file_to_word_ids(test_path, word_to_id)
@@ -81,14 +89,14 @@ def ptb_raw_data(data_path=None):
 #  return train_data, valid_data, test_data, vocabulary, word_to_id
 
 
-def ptb_producer(raw_data, batch_size, num_steps, name=None):
-  """Iterate on the raw PTB data.
+def rnnlm_producer(raw_data, batch_size, num_steps, name=None):
+  """Iterate on the raw RNNLM data.
 
   This chunks up raw_data into batches of examples and returns Tensors that
   are drawn from these batches.
 
   Args:
-    raw_data: one of the raw data outputs from ptb_raw_data.
+    raw_data: one of the raw data outputs from rnnlm_raw_data.
     batch_size: int, the batch size.
     num_steps: int, the number of unrolls.
     name: the name of this operation (optional).
@@ -100,7 +108,7 @@ def ptb_producer(raw_data, batch_size, num_steps, name=None):
   Raises:
     tf.errors.InvalidArgumentError: if batch_size or num_steps are too high.
   """
-  with tf.name_scope(name, "PTBProducer", [raw_data, batch_size, num_steps]):
+  with tf.name_scope(name, "RNNLMProducer", [raw_data, batch_size, num_steps]):
     raw_data = tf.convert_to_tensor(raw_data, name="raw_data", dtype=tf.int32)
 
     data_len = tf.size(raw_data)

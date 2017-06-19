@@ -21,16 +21,13 @@ namespace tf_rnnlm {
 
 struct KaldiTfRnnlmWrapperOpts {
   std::string unk_symbol;
-  std::string bos_symbol;
   std::string eos_symbol;
 
-  KaldiTfRnnlmWrapperOpts() : unk_symbol("<RNN_UNK>"), bos_symbol("<s>"), eos_symbol("</s>") {}
+  KaldiTfRnnlmWrapperOpts() : unk_symbol("<RNN_UNK>"), eos_symbol("</s>") {}
 
   void Register(OptionsItf *opts) {
     opts->Register("unk-symbol", &unk_symbol, "Symbol for out-of-vocabulary "
                    "words in rnnlm.");
-    opts->Register("bos-symbol", &eos_symbol, "Beginning of setence symbol in "
-                   "rnnlm.");
     opts->Register("eos-symbol", &eos_symbol, "End of setence symbol in "
                    "rnnlm.");
   }
@@ -50,7 +47,6 @@ class KaldiTfRnnlmWrapper {
   }
 
   int32 GetEos() const { return eos_; }
-  int32 GetBos() const { return bos_; }
 
   const Tensor& GetInitialContext() const;
   const Tensor& GetInitialCell() const;
@@ -78,7 +74,6 @@ class KaldiTfRnnlmWrapper {
 
   Session* session_;  // ptf owned here
   int32 eos_;
-  int32 bos_;
   int32 oos_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(KaldiTfRnnlmWrapper);

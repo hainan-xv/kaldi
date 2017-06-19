@@ -85,27 +85,24 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
   oos_ = -1;
   { // input.
     ifstream ifile(rnn_wordlist.c_str());
-    int id;
     string word;
-    int i = -1;
-    while (ifile >> word >> id) {
-      i++;
-      assert(i == id);
+    int id = -1;
+    eos_ = 0;
+    while (ifile >> word) {
+      id++;
       rnn_label_to_word_.push_back(word); // vector[i] = word
 
       int fst_label = fst_word_symbols->Find(word);
       if (fst::SymbolTable::kNoSymbol == fst_label) {
-        if (i < 2) continue; // <s> and </s>
+        if (id == eos_) continue;
 
         KALDI_ASSERT(word == "<oos>" && oos_ == -1);
-        oos_ = i;
+        oos_ = id;
         continue;
       }
       KALDI_ASSERT(fst_label >= 0);
-      fst_label_to_rnn_label_[fst_label] = i;
+      fst_label_to_rnn_label_[fst_label] = id;
     }
-    bos_ = 1;
-    eos_ = 0; // TODO(hxu) need to think carefully about these..
   }
   if (fst_label_to_word_.size() > rnn_label_to_word_.size()) {
     KALDI_ASSERT(oos_ != -1);
@@ -137,7 +134,7 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     {
       std::vector<Tensor> state;
       Tensor bosword(tensorflow::DT_INT32, {1, 1});
-      bosword.scalar<int32>()() = bos_;
+      bosword.scalar<int32>()() = eos_; // eos_ is more like a sentence boundary
 
       std::vector<std::pair<string, tensorflow::Tensor>> inputs = {
         {"Train/Model/test_word_in", bosword},

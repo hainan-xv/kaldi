@@ -183,8 +183,8 @@ class RNNLMModel(object):
     grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars),
                                       config.max_grad_norm)
 #    optimizer = tf.train.AdamOptimizer()  # TODO
-    optimizer = tf.train.MomentumOptimizer(self._lr, 0.9)  # TODO
-#    optimizer = tf.train.GradientDescentOptimizer(self._lr)  # TODO
+#    optimizer = tf.train.MomentumOptimizer(self._lr, 0.9)  # TODO
+    optimizer = tf.train.GradientDescentOptimizer(self._lr)  # TODO
     self._train_op = optimizer.apply_gradients(
         zip(grads, tvars),
         global_step=tf.contrib.framework.get_or_create_global_step())
