@@ -339,11 +339,6 @@ def main(_):
   raw_data = reader.rnnlm_raw_data(FLAGS.data_path, FLAGS.vocab_path)
   train_data, valid_data, _, word_map = raw_data
 
-#  with open(FLAGS.wordlist_save_path, "w") as wmap_file:
-#    count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
-#    for k, v in count_pairs: 
-#      wmap_file.write(str(k) + " " + str(v) + "\n")
-
   config = get_config()
   config.vocab_size = len(word_map)
   eval_config = get_config()

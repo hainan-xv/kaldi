@@ -11,7 +11,7 @@ weight=0.5
 
 set -e
 
-dir=data/vannila_tensorflow/$model_type
+dir=data/vannila_tensorflow_200/$model_type
 mkdir -p $dir
 
 if [ $stage -le 1 ]; then

@@ -183,8 +183,8 @@ class RNNLMModel(object):
     grads, _ = tf.clip_by_global_norm(tf.gradients(cost, tvars),
                                       config.max_grad_norm)
 #    optimizer = tf.train.AdamOptimizer()  # TODO
-#    optimizer = tf.train.MomentumOptimizer(self._lr, 0.9)  # TODO
-    optimizer = tf.train.GradientDescentOptimizer(self._lr)  # TODO
+    optimizer = tf.train.MomentumOptimizer(self._lr, 0.9)  # TODO
+#    optimizer = tf.train.GradientDescentOptimizer(self._lr)  # TODO
     self._train_op = optimizer.apply_gradients(
         zip(grads, tvars),
         global_step=tf.contrib.framework.get_or_create_global_step())
@@ -237,15 +237,15 @@ class TestConfig(object):
 class SmallConfig(object):
   """Small config."""
   init_scale = 0.1
-  learning_rate = 0.1
-  max_grad_norm = 0.5
-  num_layers = 2
+  learning_rate = 0.2
+  max_grad_norm = 1
+  num_layers = 1
   num_steps = 20
   hidden_size = 200
-  max_epoch = 10
-  max_max_epoch = 40
+  max_epoch = 4
+  max_max_epoch = 20
   keep_prob = 1
-  lr_decay = 0.5
+  lr_decay = 0.95
   batch_size = 64
 
 class MediumConfig(object):
@@ -330,11 +330,6 @@ def main(_):
   raw_data = reader.rnnlm_raw_data(FLAGS.data_path, FLAGS.vocab_path)
   train_data, valid_data, _, word_map = raw_data
 
-#  with open(FLAGS.wordlist_save_path, "w") as wmap_file:
-#    count_pairs = sorted(word_map.items(), key=lambda x: (x[1], x[0]))
-#    for k, v in count_pairs: 
-#      wmap_file.write(str(k) + " " + str(v) + "\n")
-
   config = get_config()
   config.vocab_size = len(word_map)
   eval_config = get_config()
@@ -362,6 +357,7 @@ def main(_):
     with sv.managed_session() as session:
       for i in range(config.max_max_epoch):
         lr_decay = config.lr_decay ** max(i + 1 - config.max_epoch, 0.0)
+
         m.assign_lr(session, config.learning_rate * lr_decay)
 
         print("Epoch: %d Learning rate: %.3f" % (i + 1, session.run(m.lr)))
