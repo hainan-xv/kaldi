@@ -147,7 +147,7 @@ class RNNLMModel(object):
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
 
     test_logits = tf.matmul(cellout_placeholder, softmax_w) + softmax_b
-    test_softmaxed = tf.nn.softmax(test_logits)
+    test_softmaxed = tf.nn.log_softmax(test_logits)
 
     p_word = test_softmaxed[0, test_word_out[0,0]]
     test_out = tf.identity(p_word, name="test_out")

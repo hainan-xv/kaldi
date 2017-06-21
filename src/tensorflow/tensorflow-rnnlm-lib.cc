@@ -203,10 +203,16 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
 
   float ans;
   if (word != oos_) {
-    ans = log(outputs[0].scalar<float>()());
+    ans = outputs[0].scalar<float>()();
   } else {
-    ans = log(outputs[0].scalar<float>()() / (num_total_words - num_rnn_words));
+    ans = outputs[0].scalar<float>()() - log (num_total_words - num_rnn_words);
   }
+
+//  if (word != oos_) {
+//    ans = log(outputs[0].scalar<float>()());
+//  } else {
+//    ans = log(outputs[0].scalar<float>()() / (num_total_words - num_rnn_words));
+//  }
 //  std::ostringstream his_str;
 //  for (int i = 0; i < wseq.size(); i++) {
 //    his_str << rnn_label_to_word_[wseq[i]] << "(" << wseq[i] << ") ";
@@ -214,6 +220,7 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
 
 //  KALDI_LOG << "Computing logprob of word " << rnn_label_to_word_[word] << "(" << word << ")"
 //            << " given history " << his_str.str() << " is " << exp(ans);
+//  KALDI_LOG << "prob is " << outputs[0].scalar<float>()();
   return ans;
 }
 

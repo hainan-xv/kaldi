@@ -1,7 +1,7 @@
 #!/bin/bash
 mic=ihm
 ngram_order=4
-model_type=test
+model_type=small
 stage=1
 weight=0.5
 
@@ -27,7 +27,6 @@ final_lm=ami_fsh.o3g.kn
 LM=$final_lm.pr1-7
 
 if [ $stage -le 3 ]; then
-#  for decode_set in dev; do
   for decode_set in dev eval; do
     basedir=exp/$mic/nnet3/tdnn_sp/
     decode_dir=${basedir}/decode_${decode_set}

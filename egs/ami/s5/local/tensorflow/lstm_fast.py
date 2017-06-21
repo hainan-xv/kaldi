@@ -51,24 +51,23 @@ FLAGS = flags.FLAGS
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
+def f(x):
+  x1 = tf.minimum(0.0, x)
+
+  x2 = tf.maximum(0.0, x)
+
+  return tf.exp(x1) + x2
+
 def new_softmax(labels, logits):
-#  logits = -logits;
-#  logits = tf.nn.relu(logits)
-#  logits = -logits;
-#  print (labels, logits)
   logits = tf.minimum(logits, 0)
   target = tf.reshape(labels, [-1])
-  exp_logits = tf.exp(logits)
-  row_sums = tf.reduce_sum(exp_logits, 1) # this is the negative part of the objf
-#  print (sums)
+  f_logits = f(logits)
+  row_sums = tf.reduce_sum(f_logits, 1) # this is the negative part of the objf
 
   t2 = tf.expand_dims(target, 1)
   range = tf.expand_dims(tf.range(tf.shape(target)[0]), 1)
   ind = tf.concat([range, t2], 1)
   res = tf.gather_nd(logits, ind)
-#  print (res)
-#  positive_part = tf.reduce_sum(res, 1)
-#  print (positive_part)
 
   return -res + row_sums - 1
 #  return -res + tf.log(row_sums) # this is the original softmax
@@ -166,11 +165,11 @@ class RNNLMModel(object):
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
+    softmax_b = softmax_b - 9.0
 
-    test_logits = tf.matmul(cellout_placeholder, softmax_w) + softmax_b
-    test_softmaxed = tf.nn.softmax(test_logits)
+    test_logits = tf.matmul(cellout_placeholder, tf.transpose(tf.nn.embedding_lookup(tf.transpose(softmax_w), test_word_out[0]))) + softmax_b[test_word_out[0,0]]
 
-    p_word = test_softmaxed[0, test_word_out[0,0]]
+    p_word = test_logits[0, 0]
     test_out = tf.identity(p_word, name="test_out")
 
     if is_training and config.keep_prob < 1:
@@ -263,7 +262,7 @@ class TestConfig(object):
 class SmallConfig(object):
   """Small config."""
   init_scale = 0.1
-  learning_rate = 1.0
+  learning_rate = 1
   max_grad_norm = 5
   num_layers = 2
   num_steps = 20
@@ -335,8 +334,6 @@ def run_epoch(session, model, eval_op=None, verbose=False):
     iters += model.input.num_steps
 
     if verbose and step % (model.input.epoch_size // 10) == 10:
-      print ("cost is ", costs)
-      print ("avg cost is ", costs / iters)
       print("%.3f perplexity: %.3f speed: %.0f wps" %
             (step * 1.0 / model.input.epoch_size, np.exp(costs / iters),
              iters * model.input.batch_size / (time.time() - start_time)))

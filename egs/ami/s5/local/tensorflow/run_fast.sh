@@ -20,11 +20,9 @@ fi
 
 mkdir -p $dir/
 if [ $stage -le 2 ]; then
-  python local/tensorflow/lstm_fast.py --data_path=$dir --model=$model_type --save_path=$dir/rnnlm --vocab_path=$dir/wordlist.rnn.final
+  $decode_cmd $dir/train.log python local/tensorflow/lstm_fast.py --data_path=$dir --model=$model_type --save_path=$dir/rnnlm --vocab_path=$dir/wordlist.rnn.final
 #  $decode_cmd $dir/train.log python local/tensorflow/rnnlm.py --data_path=$dir --model=$model_type --save_path=$dir/rnnlm --vocab_path=$dir/wordlist.rnn.final
 fi
-
-exit
 
 final_lm=ami_fsh.o3g.kn
 LM=$final_lm.pr1-7
@@ -41,7 +39,7 @@ if [ $stage -le 3 ]; then
       --rnnlm-ver tensorflow  --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}.tfrnnlm.lat.${ngram_order}gram.$weight  &
+      ${decode_dir}.fast.tfrnnlm.lat.${ngram_order}gram.$weight  &
 
   done
 fi
