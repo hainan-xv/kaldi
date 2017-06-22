@@ -23,7 +23,7 @@ struct KaldiTfRnnlmWrapperOpts {
   std::string unk_symbol;
   std::string eos_symbol;
 
-  KaldiTfRnnlmWrapperOpts() : unk_symbol("<RNN_UNK>"), eos_symbol("</s>") {}
+  KaldiTfRnnlmWrapperOpts() : unk_symbol("<oos>"), eos_symbol("</s>") {}
 
   void Register(OptionsItf *opts) {
     opts->Register("unk-symbol", &unk_symbol, "Symbol for out-of-vocabulary "
@@ -40,7 +40,6 @@ class KaldiTfRnnlmWrapper {
                     const std::string &word_symbol_table_rxfilename,
                     const std::string &unk_prob_rspecifier,
                     const std::string &tf_model_path);
-//                    Session* session);
 
   ~KaldiTfRnnlmWrapper() {
     session_->Close();
@@ -48,18 +47,21 @@ class KaldiTfRnnlmWrapper {
 
   int32 GetEos() const { return eos_; }
 
+  // get an all-zero Tensor of the size that matches the hidden state of the TF model
   const Tensor& GetInitialContext() const;
+
+  // get the 2nd-to-last layer of RNN when feeding input of
+  // (initial-context, sentence-boundary)
   const Tensor& GetInitialCell() const;
 
   // compute p(word | wseq) and return the log of that
   // the computation used the input cell,
   // which is the 2nd-to-last layer of the RNNLM associated with history wseq;
   //
-  // and we generate (context_out, new_cell) by passing (context_in, word) into the nnet
+  // and we generate (context_out, new_cell) by passing (context_in, word) into the model
   BaseFloat GetLogProb(int32 word,
-///                       const std::vector<int32> &wseq,
-                       const Tensor &context_in,
-                       const Tensor &cell_in,
+                       const Tensor &context_in, // context to pass into RNN
+                       const Tensor &cell_in,  // 2nd-to-last layer
                        Tensor *context_out,
                        Tensor *new_cell);
 
@@ -67,12 +69,18 @@ class KaldiTfRnnlmWrapper {
   std::vector<std::string> rnn_label_to_word_;
   std::vector<std::string> fst_label_to_word_;
  private:
+  void ReadTfModel(const std::string &tf_model_path);
+
+  // do queries on the session to get the initial tensors (cell + context)
+  void AcquireInitialTensors();
+
+  KaldiTfRnnlmWrapperOpts opts_;
   Tensor initial_context_;
   Tensor initial_cell_;
   int32 num_total_words;
   int32 num_rnn_words;
 
-  Session* session_;  // ptf owned here
+  Session* session_;  // owned here
   int32 eos_;
   int32 oos_;
 

@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
         "composing with the wrapped LM using a special type of composition\n"
         "algorithm. Determinization will be applied on the composed lattice.\n"
         "\n"
-        "Usage: lattice-lmrescore-rnnlm [options] <rnnlm-wordlist> \\\n"
+        "Usage: lattice-lmrescore-tf-rnnlm [options] <rnnlm-wordlist> \\\n"
         "             <word-symbol-table-rxfilename> <lattice-rspecifier> \\\n"
         "             <rnnlm-rxfilename> <lattice-wspecifier>\n"
         " e.g.: lattice-lmrescore-rnnlm --lm-scale=-1.0 words.txt \\\n"

@@ -1,4 +1,5 @@
-// lm/kaldi-rnnlm.cc
+// Copyright 2017 Hainan Xu
+// wrapper for tensorflow rnnlm
 
 #include <utility>
 #include <fstream>
@@ -11,54 +12,52 @@
 #include "util/stl-utils.h"
 #include "util/text-utils.h"
 
-using tensorflow::Status;
-
 namespace kaldi {
+using std::ifstream;
 using tf_rnnlm::KaldiTfRnnlmWrapper;
 using tf_rnnlm::TfRnnlmDeterministicFst;
-using std::ifstream;
+using tensorflow::Status;
+
+void KaldiTfRnnlmWrapper::ReadTfModel(const std::string &tf_model_path) {
+  string graph_path = tf_model_path + ".meta";
+
+  Status status = tensorflow::NewSession(tensorflow::SessionOptions(), &session_);
+  if (!status.ok()) {
+    KALDI_ERR << status.ToString();
+  }
+
+  tensorflow::MetaGraphDef graph_def;
+  status = tensorflow::ReadBinaryProto(tensorflow::Env::Default(), graph_path, &graph_def);
+  if (!status.ok()) {
+    KALDI_ERR << status.ToString();
+  }
+
+  // Add the graph to the session
+  status = session_->Create(graph_def.graph_def());
+  if (!status.ok()) {
+    KALDI_ERR << status.ToString();
+  }
+
+  Tensor checkpointPathTensor(tensorflow::DT_STRING, tensorflow::TensorShape());
+  checkpointPathTensor.scalar<std::string>()() = tf_model_path;
+  
+  status = session_->Run(
+            {{ graph_def.saver_def().filename_tensor_name(), checkpointPathTensor },},
+            {},
+            {graph_def.saver_def().restore_op_name()},
+            nullptr);
+  if (!status.ok()) {
+    KALDI_ERR << status.ToString();
+  }
+}
 
 KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const KaldiTfRnnlmWrapperOpts &opts,
     const std::string &rnn_wordlist,
     const std::string &word_symbol_table_rxfilename,
     const std::string &unk_prob_rspecifier,
-    const std::string &tf_model_path) {
-  // read the tf model
-  {
-    string graph_path = tf_model_path + ".meta";
-
-    Status status = tensorflow::NewSession(tensorflow::SessionOptions(), &session_);
-    if (!status.ok()) {
-      KALDI_ERR << status.ToString();
-    }
-
-    tensorflow::MetaGraphDef graph_def;
-    status = tensorflow::ReadBinaryProto(tensorflow::Env::Default(), graph_path, &graph_def);
-    if (!status.ok()) {
-      KALDI_ERR << status.ToString();
-    }
-
-    // Add the graph to the session
-    status = session_->Create(graph_def.graph_def());
-    if (!status.ok()) {
-      KALDI_ERR << status.ToString();
-    }
-
-    Tensor checkpointPathTensor(tensorflow::DT_STRING, tensorflow::TensorShape());
-    checkpointPathTensor.scalar<std::string>()() = tf_model_path;
-    
-    status = session_->Run(
-              {{ graph_def.saver_def().filename_tensor_name(), checkpointPathTensor },},
-              {},
-              {graph_def.saver_def().restore_op_name()},
-              nullptr);
-    if (!status.ok()) {
-      KALDI_ERR << status.ToString();
-    }
-  }
-
-//  GetInitialContext(&initial_context_);
+    const std::string &tf_model_path): opts_(opts) {
+  ReadTfModel(tf_model_path);
 
   fst::SymbolTable *fst_word_symbols = NULL;
   if (!(fst_word_symbols =
@@ -79,9 +78,9 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
   }
 
   fst_label_to_rnn_label_.resize(fst_word_symbols->NumSymbols(), -1);
-
   num_total_words = fst_word_symbols->NumSymbols();
 
+  // read rnn wordlist and then generate ngram-label-to-rnn-label map
   oos_ = -1;
   { // input.
     ifstream ifile(rnn_wordlist.c_str());
@@ -94,9 +93,12 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
 
       int fst_label = fst_word_symbols->Find(word);
       if (fst::SymbolTable::kNoSymbol == fst_label) {
-        if (id == eos_) continue;
-
-        KALDI_ASSERT(word == "<oos>" && oos_ == -1);
+        if (id == eos_) {
+          KALDI_ASSERT(word == opts_.eos_symbol);
+          continue;
+        }
+//        KALDI_LOG << word << " " << opts_.unk_symbol << " " << oos_;
+        KALDI_ASSERT(word == opts_.unk_symbol && oos_ == -1);
         oos_ = id;
         continue;
       }
@@ -107,9 +109,9 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
   if (fst_label_to_word_.size() > rnn_label_to_word_.size()) {
     KALDI_ASSERT(oos_ != -1);
   }
-//  rnn_label_to_word_.push_back("<OOS>");
   num_rnn_words = rnn_label_to_word_.size();
   
+  // we must have a oos symbol in the wordlist
   if (oos_ == -1) {
     return;
   }
@@ -119,34 +121,36 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     }
   }
 
+  AcquireInitialTensors();
+}
+
+void KaldiTfRnnlmWrapper::AcquireInitialTensors() {
+  Status status;
+  // get the initial context
   {
-    Status status;
-    // get the initial context
-    {
-      std::vector<Tensor> state;
-      status = session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
-      if (!status.ok()) {
-        KALDI_ERR << status.ToString();
-      }
-      initial_context_ = state[0];
+    std::vector<Tensor> state;
+    status = session_->Run(std::vector<std::pair<string, tensorflow::Tensor>>(), {"Train/Model/test_initial_state"}, {}, &state);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
     }
+    initial_context_ = state[0];
+  }
 
-    {
-      std::vector<Tensor> state;
-      Tensor bosword(tensorflow::DT_INT32, {1, 1});
-      bosword.scalar<int32>()() = eos_; // eos_ is more like a sentence boundary
+  {
+    std::vector<Tensor> state;
+    Tensor bosword(tensorflow::DT_INT32, {1, 1});
+    bosword.scalar<int32>()() = eos_; // eos_ is more like a sentence boundary
 
-      std::vector<std::pair<string, tensorflow::Tensor>> inputs = {
-        {"Train/Model/test_word_in", bosword},
-        {"Train/Model/test_state_in", initial_context_},
-      };
+    std::vector<std::pair<string, tensorflow::Tensor>> inputs = {
+      {"Train/Model/test_word_in", bosword},
+      {"Train/Model/test_state_in", initial_context_},
+    };
 
-      status = session_->Run(inputs, {"Train/Model/test_cell_out"}, {}, &state);
-      if (!status.ok()) {
-        KALDI_ERR << status.ToString();
-      }
-      initial_cell_ = state[0];
+    status = session_->Run(inputs, {"Train/Model/test_cell_out"}, {}, &state);
+    if (!status.ok()) {
+      KALDI_ERR << status.ToString();
     }
+    initial_cell_ = state[0];
   }
 }
 
@@ -171,11 +175,9 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
       {"Train/Model/test_word_out", thisword},
       {"Train/Model/test_state_in", context_in},
       {"Train/Model/test_cell_in", cell_in},
-//      {"Train/Model/test_cell_in", cell_in},
     };
 
     // The session will initialize the outputs
-
     // Run the session, evaluating our "c" operation from the graph
     Status status = session_->Run(inputs,
         {"Train/Model/test_out",
@@ -208,16 +210,6 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
     ans = outputs[0].scalar<float>()() - log (num_total_words - num_rnn_words);
   }
 
-//  if (word != oos_) {
-//    ans = log(outputs[0].scalar<float>()());
-//  } else {
-//    ans = log(outputs[0].scalar<float>()() / (num_total_words - num_rnn_words));
-//  }
-//  std::ostringstream his_str;
-//  for (int i = 0; i < wseq.size(); i++) {
-//    his_str << rnn_label_to_word_[wseq[i]] << "(" << wseq[i] << ") ";
-//  }
-
 //  KALDI_LOG << "Computing logprob of word " << rnn_label_to_word_[word] << "(" << word << ")"
 //            << " given history " << his_str.str() << " is " << exp(ans);
 //  KALDI_LOG << "prob is " << outputs[0].scalar<float>()();
@@ -240,7 +232,6 @@ TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
 
   // Uses empty history for <s>.
   std::vector<Label> bos;
-//  std::vector<float> bos_context(rnnlm->GetHiddenLayerSize(), 1.0);
 
   const Tensor& initial_context = rnnlm_->GetInitialContext();
   const Tensor& initial_cell = rnnlm_->GetInitialCell();

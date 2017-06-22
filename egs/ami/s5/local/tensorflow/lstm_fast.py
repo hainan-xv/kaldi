@@ -51,17 +51,18 @@ FLAGS = flags.FLAGS
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
+# this function does the following:
+# return exp(x) if x < 0
+#        x if x >= 0
 def f(x):
   x1 = tf.minimum(0.0, x)
-
   x2 = tf.maximum(0.0, x)
-
   return tf.exp(x1) + x2
 
 def new_softmax(labels, logits):
-  logits = tf.minimum(logits, 0)
   target = tf.reshape(labels, [-1])
-  f_logits = f(logits)
+  f_logits = tf.exp(logits)
+#  f_logits = f(logits)
   row_sums = tf.reduce_sum(f_logits, 1) # this is the negative part of the objf
 
   t2 = tf.expand_dims(target, 1)
@@ -270,7 +271,7 @@ class SmallConfig(object):
   max_epoch = 4
   max_max_epoch = 13
   keep_prob = 1.0
-  lr_decay = 0.5
+  lr_decay = 0.8
   batch_size = 64
 
 
