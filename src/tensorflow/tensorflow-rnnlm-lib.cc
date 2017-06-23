@@ -18,6 +18,28 @@ using tf_rnnlm::KaldiTfRnnlmWrapper;
 using tf_rnnlm::TfRnnlmDeterministicFst;
 using tensorflow::Status;
 
+void SetUnkPenalties(const string &filename, const fst::SymbolTable& fst_word_symbols,
+                     std::vector<float> *out) {
+  if (filename == "")
+    return;
+  out->resize(fst_word_symbols.NumSymbols(), 0);  // default is 0
+  ifstream ifile(filename.c_str());
+  string word;
+  float count, total_count = 0;
+  while (ifile >> word >> count) {
+    int id = fst_word_symbols.Find(word);
+    KALDI_ASSERT(id != fst::SymbolTable::kNoSymbol);
+    (*out)[id] = count;
+    total_count += count;
+  }
+
+  for (int i = 0; i < out->size(); i++) {
+    if ((*out)[i] != 0) {
+      (*out)[i] = log ((*out)[i] / total_count);
+    }
+  }
+}
+
 void KaldiTfRnnlmWrapper::ReadTfModel(const std::string &tf_model_path) {
   string graph_path = tf_model_path + ".meta";
 
@@ -55,7 +77,7 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
     const KaldiTfRnnlmWrapperOpts &opts,
     const std::string &rnn_wordlist,
     const std::string &word_symbol_table_rxfilename,
-    const std::string &unk_prob_rspecifier,
+    const std::string &unk_prob_file,
     const std::string &tf_model_path): opts_(opts) {
   ReadTfModel(tf_model_path);
 
@@ -122,6 +144,7 @@ KaldiTfRnnlmWrapper::KaldiTfRnnlmWrapper(
   }
 
   AcquireInitialTensors();
+  SetUnkPenalties(unk_prob_file, *fst_word_symbols, &unk_probs_);
 }
 
 void KaldiTfRnnlmWrapper::AcquireInitialTensors() {
@@ -156,6 +179,7 @@ void KaldiTfRnnlmWrapper::AcquireInitialTensors() {
 
 BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
     int32 word,
+    int32 fst_word,
 //    const std::vector<int32> &wseq,
     const Tensor &context_in,
     const Tensor &cell_in,
@@ -207,7 +231,11 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(
   if (word != oos_) {
     ans = outputs[0].scalar<float>()();
   } else {
-    ans = outputs[0].scalar<float>()() - log (num_total_words - num_rnn_words);
+    if (unk_probs_.size() == 0) {
+      ans = outputs[0].scalar<float>()() - log (num_total_words - num_rnn_words);
+    } else {
+      ans = outputs[0].scalar<float>()() + unk_probs_[fst_word];
+    } 
   }
 
 //  KALDI_LOG << "Computing logprob of word " << rnn_label_to_word_[word] << "(" << word << ")"
@@ -249,6 +277,7 @@ fst::StdArc::Weight TfRnnlmDeterministicFst::Final(StateId s) {
 
   std::vector<Label> wseq = state_to_wseq_[s];
   BaseFloat logprob = rnnlm_->GetLogProb(rnnlm_->GetEos(), // wseq,
+                                         -1,
                                          state_to_context_[s], state_to_cell_[s],
                                          NULL, NULL);
   return Weight(-logprob);
@@ -265,6 +294,7 @@ bool TfRnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc)
 
   int32 rnn_word = rnnlm_->fst_label_to_rnn_label_[ilabel];
   BaseFloat logprob = rnnlm_->GetLogProb(rnn_word, // wseq,
+                                         ilabel,
                                          state_to_context_[s],
                                          state_to_cell_[s],
                                          &new_context,

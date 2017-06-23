@@ -38,7 +38,7 @@ class KaldiTfRnnlmWrapper {
   KaldiTfRnnlmWrapper(const KaldiTfRnnlmWrapperOpts &opts,
                     const std::string &rnn_wordlist,
                     const std::string &word_symbol_table_rxfilename,
-                    const std::string &unk_prob_rspecifier,
+                    const std::string &unk_prob_file,
                     const std::string &tf_model_path);
 
   ~KaldiTfRnnlmWrapper() {
@@ -60,6 +60,7 @@ class KaldiTfRnnlmWrapper {
   //
   // and we generate (context_out, new_cell) by passing (context_in, word) into the model
   BaseFloat GetLogProb(int32 word,
+                       int32 fst_word,
                        const Tensor &context_in, // context to pass into RNN
                        const Tensor &cell_in,  // 2nd-to-last layer
                        Tensor *context_out,
@@ -83,6 +84,8 @@ class KaldiTfRnnlmWrapper {
   Session* session_;  // owned here
   int32 eos_;
   int32 oos_;
+
+  std::vector<float> unk_probs_;
 
   KALDI_DISALLOW_COPY_AND_ASSIGN(KaldiTfRnnlmWrapper);
 };

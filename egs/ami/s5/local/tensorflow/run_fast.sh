@@ -1,6 +1,6 @@
 #!/bin/bash
 mic=ihm
-ngram_order=4
+ngram_order=3
 model_type=small
 stage=1
 weight=0.5
@@ -27,6 +27,7 @@ fi
 final_lm=ami_fsh.o3g.kn
 LM=$final_lm.pr1-7
 
+date
 if [ $stage -le 3 ]; then
 #  for decode_set in dev; do
   for decode_set in dev eval; do
@@ -39,9 +40,10 @@ if [ $stage -le 3 ]; then
       --rnnlm-ver tensorflow  --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}.fast.tfrnnlm.lat.${ngram_order}gram.$weight  &
+      ${decode_dir}.unk.fast.tfrnnlm.lat.${ngram_order}gram.$weight  &
 
   done
 fi
 
 wait
+date

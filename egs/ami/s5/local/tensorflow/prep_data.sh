@@ -53,7 +53,7 @@ done
 
 # OK we'll train the RNNLM on this data.
 
-touch $dir/unk.probs  # dummy file, not used for cued-rnnlm
+cat $dir/unk_class.counts | awk '{print $2, $1}' > $dir/unk.probs  # dummy file, not used for cued-rnnlm
 
 cp $dir/wordlist.rnn $dir/wordlist.rnn.final
 
