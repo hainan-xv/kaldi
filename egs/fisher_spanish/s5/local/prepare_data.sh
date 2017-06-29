@@ -23,6 +23,15 @@ cat $transpath/fisher_spa_tr/data/transcripts/* | grep -v "file;unicode" | awk -
 
   cat $tmpdir/rawtext.txt | \
       tr "A-Z" "a-z" | \
+      sed "s/´/'/g" | \
+      sed "s/¡/i/g" | \
+      sed "s/è/é/g" | \
+      sed "s/ì/í/g" | \
+      sed "s/·//g" | \
+      sed "s/ç//g" | \
+      sed "s/¨//g" | \
+      sed "s/Ñ/ñ/g" | \
+      sed "s/à/á/g" | \
       sed "s/Á/á/g" | \
       sed "s/É/é/g" | \
       sed "s/Í/í/g" | \
@@ -58,8 +67,8 @@ cat $transpath/fisher_spa_tr/data/transcripts/* | grep -v "file;unicode" | awk -
       awk '{for(i=1;i<=NF;i++) printf("%s ",$i); print""}' |\
       sed "s=LAUGH LAUGH=LAUGH=g" | \
       sed "s=NOISE NOISE=NOISE=g" | \
-      sed "s=NOISE=<noise>=g" | \
-      sed "s=LAUGH=<laugh>=g" \
+      sed "s=NOISE= <noise> =g" | \
+      sed "s=LAUGH= <laugh> =g" \
       > $tmpdir/cleantext.txt
     
   paste $tmpdir/utt-ids $tmpdir/cleantext.txt | sort | awk 'BEGIN{last=""}{if($1!=last) {print$0; last=$1};}' | grep -v -f $tmpdir/bad-utt-ids > $dir/text
@@ -78,3 +87,7 @@ if [ $stage -le 3 ]; then # segment and reco2file_and_channel and utt2spk
   cat $tmpdir/rec-ids | awk -F '-' '{print $0"-A", $1" A"; print $0"-B", $1" B"}' | sort | grep -v -f $tmpdir/bad-utt-ids | awk 'BEGIN{last=""}{if($1!=last) {print$0; last=$1};}' > $dir/reco2file_and_channel
   cat $tmpdir/utt-ids | awk -F '_' '{print $0, $1"_"$2"_"$3}' | sort -u | grep -v -f $tmpdir/bad-utt-ids > $dir/utt2spk
 fi
+
+utils/utt2spk_to_spk2utt.pl $dir/utt2spk > $dir/spk2utt
+
+utils/fix_data_dir.sh $dir/
