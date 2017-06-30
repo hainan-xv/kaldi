@@ -3,7 +3,7 @@
 . cmd.sh
 . path.sh
 
-stage=9
+stage=1
 
 mfccdir=mfcc
 
@@ -11,11 +11,19 @@ sfisher_speech=/export/a16/gkumar/corpora/LDC2010S01
 sfisher_transcripts=/export/a16/gkumar/corpora/LDC2010T04
 spanish_lexicon=/export/a16/gkumar/corpora/LDC96L16
 
+callhome_speech=/export/a16/gkumar/corpora/LDC96S35
+callhome_transcripts=/export/a16/gkumar/corpora/LDC96T17
+
 if [ $stage -le 1 ]; then
   local/prepare_data.sh $sfisher_speech $sfisher_transcripts
 
+  local/prepare_callhome_data.sh $callhome_speech $callhome_transcripts
+
   utils/fix_data_dir.sh data/train
   utils/fix_data_dir.sh data/test
+
+  utils/fix_data_dir.sh data/train_callhome
+  utils/fix_data_dir.sh data/test_callhome
 
   local/prepare_dict.sh $spanish_lexicon
   utils/prepare_lang.sh data/local/dict "<unk>" data/local/lang data/lang
