@@ -2,6 +2,7 @@
 
 set -e
 
+# first part: for compiling with kaldi
 export HOME=$PWD/tensorflow_build/
 mkdir -p $HOME
 
