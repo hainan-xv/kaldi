@@ -1,7 +1,7 @@
 #!/bin/bash
 mic=ihm
-ngram_order=3
-stage=1
+ngram_order=4
+stage=3
 weight=0.5
 
 . ./utils/parse_options.sh
@@ -10,7 +10,7 @@ weight=0.5
 
 set -e
 
-dir=data/tensorflow_fast_lstm/
+dir=data/tensorflow_fast_lstm
 mkdir -p $dir
 
 if [ $stage -le 1 ]; then
@@ -39,7 +39,7 @@ if [ $stage -le 3 ]; then
       --rnnlm-ver tensorflow  --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}.unk.fast.tfrnnlm.lat.${ngram_order}gram.$weight  &
+      ${decode_dir}.unk.fast.tfrnnlm.lat.${ngram_order}gram.$weight.xsents  &
 
   done
 fi

@@ -7,7 +7,7 @@ all:
 EXTRA_CXXFLAGS = -Wno-sign-compare -I$(TENSORFLOW)/bazel-tensorflow/external/protobuf/src -I$(TENSORFLOW)/bazel-genfiles -I$(TENSORFLOW) -I$(TENSORFLOW)/tensorflow/contrib/makefile/downloads/eigen/
 include ../kaldi.mk
 
-BINFILES = lattice-lmrescore-tf-rnnlm
+BINFILES = lattice-lmrescore-tf-rnnlm-xsents lattice-lmrescore-tf-rnnlm
 
 OBJFILES =
 

@@ -10,7 +10,7 @@
 # Begin configuration section.
 cmd=run.pl
 skip_scoring=false
-max_ngram_order=4
+max_ngram_order=3
 N=10
 inv_acwt=12
 weight=1.0  # Interpolation weight for RNNLM.
@@ -57,8 +57,8 @@ if [ "$rnnlm_ver" == "cuedrnnlm" ]; then
 fi
 
 if [ "$rnnlm_ver" == "tensorflow" ]; then
-  rescoring_binary="lattice-lmrescore-tf-rnnlm"
-  first_arg="$first_arg $rnnlm_dir/wordlist.rnn.final"
+  rescoring_binary="lattice-lmrescore-tf-rnnlm-xsents"
+  first_arg="--utt-id-compare-length=13 $first_arg $rnnlm_dir/wordlist.rnn.final"
 fi
 
 oldlm=$oldlang/G.fst

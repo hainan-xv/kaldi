@@ -70,10 +70,12 @@ class KaldiTfRnnlmWrapper {
 
   // get an all-zero Tensor of the size that matches the hidden state of the TF model
   const Tensor& GetInitialContext() const;
+  void SetInitialContext(const Tensor& t);
 
   // get the 2nd-to-last layer of RNN when feeding input of
   // (initial-context, sentence-boundary)
   const Tensor& GetInitialCell() const;
+  void SetInitialCell(const Tensor& t);
 
   // compute p(word | wseq) and return the log of that
   // the computation used the input cell,
@@ -136,6 +138,11 @@ class TfRnnlmDeterministicFst
   virtual Weight Final(StateId s);
 
   virtual bool GetArc(StateId s, Label ilabel, fst::StdArc* oarc);
+
+  void GetContextFromNgram(const std::vector<int32> &ngram,
+                           tensorflow::Tensor *context,
+                           tensorflow::Tensor *cell) const;
+
 
  private:
   typedef unordered_map<std::vector<Label>,

@@ -38,8 +38,8 @@ cd tensorflow
 ./configure
 
 tensorflow/contrib/makefile/download_dependencies.sh 
-bazel build -c opt --copt=-msse4.2 //tensorflow:libtensorflow.so
-bazel build -c opt --copt=-msse4.2 //tensorflow:libtensorflow_cc.so
+bazel build -c opt --copt=-msse4.1 --copt=-msse4.2 //tensorflow:libtensorflow.so
+bazel build -c opt --copt=-msse4.1 --copt=-msse4.2 //tensorflow:libtensorflow_cc.so
 
 echo Building tensorflow completed. You will need to go to kaldi/src/ and do
 echo \"make\" under tensorflow/ and tfbin/ to generate the binaries

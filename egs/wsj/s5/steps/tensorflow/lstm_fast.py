@@ -20,6 +20,8 @@ from __future__ import print_function
 
 import sys
 
+sys.path.insert(0,"/export/b03/hxu/kaldi-tf/egs/swbd/s5c/../../../tools/tensorflow_build/.local/lib/python2.7/site-packages/")
+
 import inspect
 import time
 

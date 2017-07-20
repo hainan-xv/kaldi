@@ -275,8 +275,34 @@ const Tensor& KaldiTfRnnlmWrapper::GetInitialContext() const {
   return initial_context_;
 }
 
+void KaldiTfRnnlmWrapper::SetInitialContext(const Tensor& t) {
+  initial_context_ = t;
+}
+
 const Tensor& KaldiTfRnnlmWrapper::GetInitialCell() const {
   return initial_cell_;
+}
+
+void KaldiTfRnnlmWrapper::SetInitialCell(const Tensor& t) {
+  initial_cell_ = t;
+}
+
+void TfRnnlmDeterministicFst::GetContextFromNgram(
+                                   const std::vector<int32> &ngram,
+                                   tensorflow::Tensor *context,
+                                   tensorflow::Tensor *cell) const {
+  std::vector<int32> rnn_id_ngram = ngram;
+  for (int i = 0; i < rnn_id_ngram.size(); i++) {
+    rnn_id_ngram[i] = rnnlm_->fst_label_to_rnn_label_[rnn_id_ngram[i]];
+  }
+
+  MapType::const_iterator iter = wseq_to_state_.find(rnn_id_ngram);
+  KALDI_ASSERT(iter != wseq_to_state_.end());
+  
+  int32 state_id = iter->second;
+  
+  *context = state_to_context_[state_id];
+  *cell    = state_to_cell_[state_id];
 }
 
 TfRnnlmDeterministicFst::TfRnnlmDeterministicFst(int32 max_ngram_order,
