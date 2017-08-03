@@ -28,7 +28,6 @@ cat $srcdir/lexicon.txt | awk '{print $1}' | sort -u | grep -v -w '!SIL' > $dir/
 cat $train_text | awk -v w=$dir/wordlist.all \
   'BEGIN{while((getline<w)>0) v[$1]=1;}
   {for (i=2;i<=NF;i++) if ($i in v) printf $i" ";else printf "<unk> ";print ""}' | sed 's=$= </s>=g' \
-  | perl -e ' use List::Util qw(shuffle); @A=<>; print join("", shuffle(@A)); ' \
   | gzip -c > $dir/all.gz
 
 echo "Splitting data into train and validation sets."

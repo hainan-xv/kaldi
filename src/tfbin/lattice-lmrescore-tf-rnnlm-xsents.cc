@@ -105,7 +105,7 @@ int main(int argc, char *argv[]) {
 
     for (; !compact_lattice_reader.Done(); compact_lattice_reader.Next()) {
       std::string key = compact_lattice_reader.Key();
-//      KALDI_LOG << "key is " << key;
+      KALDI_LOG << "key is " << key;
       if (last_key.size() >= length || key.substr(0, length) == last_key.substr(0, length)) {
         // same recording
         is_same_recording = true;

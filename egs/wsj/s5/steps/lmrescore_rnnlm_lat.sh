@@ -91,9 +91,17 @@ cp $indir/num_jobs $outdir
 
 oldlm_weight=`perl -e "print -1.0 * $weight;"`
 if [ "$oldlm" == "$oldlang/G.fst" ]; then
+
+  for i in `seq 1 $nj`; do
+    lattice-copy "ark:gunzip -c $indir/lat.$i.gz|" "ark,scp:$outdir/lat.junk.$i,$outdir/lat.$i.scp"
+    cat $outdir/lat.$i.scp | sed "s:_: :g" | sort -k5 | sed "s: :_:g" | sed "s:_exp: exp:"  > $outdir/lat.scp.sorted.$i
+    lattice-copy "scp:$outdir/lat.scp.sorted.$i" "ark,t,scp:$outdir/lat.$i.sorted,$outdir/lat.$i.scp"
+
+  done
+
   $cmd JOB=1:$nj $outdir/log/rescorelm.JOB.log \
     lattice-lmrescore --lm-scale=$oldlm_weight \
-    "ark:gunzip -c $indir/lat.JOB.gz|" "$oldlm_command" ark:-  \| \
+    "ark:$outdir/lat.JOB.sorted" "$oldlm_command" ark:-  \| \
     $rescoring_binary $extra_arg --lm-scale=$weight \
     --max-ngram-order=$max_ngram_order \
     $first_arg $oldlang/words.txt ark:- "$rnnlm_dir/rnnlm" \
