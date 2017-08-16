@@ -26,7 +26,8 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
-
+#sys.path.insert(0,"/home/hxu/.local/lib/python2.7/site-packages/")
+sys.path.insert(0,"/export/b03/hxu/tf-pr/kaldi/egs/swbd/s5c/../../../tools/tensorflow_build/.local/lib/python2.7/site-packages/")
 import inspect
 import time
 

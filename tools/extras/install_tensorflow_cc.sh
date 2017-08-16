@@ -2,7 +2,7 @@
 
 set -e
 
-#export JAVA_HOME=/LOCATION_ON_YOUR_MACHINE/java/jdk1.8.0_121
+export JAVA_HOME=/export/b02/hxu/TensorFlow/java/jdk1.8.0_121
 PATH=$PATH:$PWD/bazel/output
 export HOME=$PWD/tensorflow_build/
 mkdir -p $HOME

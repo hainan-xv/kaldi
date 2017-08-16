@@ -1,0 +1,80 @@
+á	-> á	:	__
+é 	-> é :	__
+í	-> í :	__
+ï	-> 	:	__
+ñ	-> N	:	__
+ó	-> ó :	__
+ú	-> ú	:	__
+ü	-> w	: 	__ [eiéí]
+ü	-> u	: 	__ 
+a 	-> a 	:  	__ 
+bv	-> bB	:	__
+b	-> B	: [^#mn]	__
+b	-> b	: [#mn]	__
+cq	-> k	:	__
+ck	-> k	:	__ 
+ch	-> C	:	__
+c	-> s	: 	__ [eiéíï]
+c	-> k	:	__
+dd	-> d	:	__
+d	-> D	: [^#mnl]	__
+d	-> d	: [#mnl]	__ 
+e 	-> e 	: 	__
+ff 	-> f	:	__
+f	-> f	:	__
+g	-> h	: __ [eiéíï] 
+g	-> G	: [aeiouáéíóú] __ [aeiouáéíóú]
+g	-> g	:	__
+h	-> 	:	__
+i	-> y	:	__ [aeiouáéíóú]
+i	-> y	: [aeoáéíóú] __
+i	-> i	:	__
+j	-> h	:	__
+k	-> k	:	__
+ll	-> y	:	__
+l	-> l	:	__
+mm	-> m	:	__
+m	-> m	:	__
+nn	-> n	:	__
+n	-> n	: 	__
+o	-> o	:	__
+pp 	-> p 	:	__
+p	-> p	:	__
+q	-> k	:	__ 
+r	-> R	: [#]	__
+rr	-> R	:	__
+r 	-> r	:	__
+ss 	-> s	:	__
+sc	-> s 	:	__ [eiéíï]	 
+s 	-> z 	: 	__ [mnrdlgb]
+s	-> s	:	__
+tt	-> t	:	__
+t	-> t	:	__
+u 	-> u	: estado	__	nidense	
+u	-> 	: g	__ [ei]
+u	-> 	: q	__
+u	-> w	:	__ [aeiouáéíóú]
+u	-> w	: [aeoáéúíú] __
+u	-> u	:	__
+v	-> b	: [#mn]	__ 
+v	-> B	: [^#mn]	__
+xc	-> ks	:	__
+x	-> h	: me	__ icano
+x	-> h	: me	__ ico
+x	-> h	: mé	__ ico
+x	-> h 	: __ avier
+x	-> h 	: __ imena
+x	-> h 	: __ imenita
+x	-> ks	: 	__
+yy	-> y	:	__
+y 	-> y	: 	[aeiouáéíóú] __
+y	-> y	:	__ [aeiouáéíóú]
+y	-> i	:	__
+zz	-> s	:	__
+z	-> s	:	__
+-	-> 	:	__
+
+
+
+
+

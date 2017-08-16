@@ -12,7 +12,7 @@ tmpdir=data/local/dict/tmp
 mkdir -p $tmpdir
 
 if [ $stage -le 1 ]; then
-  cat data/train/text | cut -f2- | sed "s= =\n=g" | sort -u | grep -v "<" | grep . > $tmpdir/wordlist.txt
+  cat data/train_fisher/text data/train_callhome/text data/local/gigatmp/text | cut -f2- | sed "s= =\n=g" | sort | grep -v "<" | grep . | uniq -c | sort -k1nr | head -n 60000 | awk '{print $2}' > $tmpdir/wordlist.txt
 
   cat $lexicon/callhome_spanish_lexicon_970908/preferences | iconv -f iso-8859-1 -t utf-8 > local/preferences
   cat $lexicon/callhome_spanish_lexicon_970908/basic_rules | iconv -f iso-8859-1 -t utf-8 > local/basic_rules
