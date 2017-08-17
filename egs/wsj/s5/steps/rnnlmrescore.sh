@@ -67,7 +67,7 @@ elif [ ! -f $oldlm ]; then
 fi
 
 for f in $rnndir/rnnlm $data/feats.scp $indir/lat.1.gz; do
-  [ ! -f $f ] && echo "$0: expected file $f to exist." && exit 1;
+  [ ! -f $f ] && [ ! -d $f ] && echo "$0: expected file $f to exist." && exit 1;
 done
 
 nj=`cat $indir/num_jobs` || exit 1;

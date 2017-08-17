@@ -26,6 +26,7 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
+sys.path.insert(0,"/home/hxu/.local/lib/python2.7/site-packages/")
 
 import inspect
 import time
@@ -119,6 +120,11 @@ class RnnlmModel(object):
     # first implement the less efficient version
     test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
 
+    # for nbest rescoring
+    test_sentences_in = tf.placeholder(tf.int32, [1, None], name="test_sentences") # for n-best rescoring
+#    test_sentences_lengths = tf.placeholder(tf.int32, [1], name="test_sentences_pengths")
+
+#    tmp1 = tf.reduce_sum(test_sentences_in, name="tmp")
     state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 1, size], name="test_state_in")
     # unpacking the input state context 
     l = tf.unstack(state_placeholder, axis=0)
@@ -132,6 +138,12 @@ class RnnlmModel(object):
 
       inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
+
+      # for n-best rescoring
+
+      bos_sentence = tf.concat([[[0]], test_sentences_in], 1)
+
+      sentence_inputs = tf.nn.embedding_lookup(self.embedding, bos_sentence)
 
     # test time
     with tf.variable_scope("RNN"):
@@ -177,11 +189,16 @@ class RnnlmModel(object):
     #     cell, inputs, initial_state=self._initial_state)
     outputs = []
     state = self._initial_state
+
     with tf.variable_scope("RNN"):
       for time_step in range(num_steps):
         if time_step > -1: tf.get_variable_scope().reuse_variables()
         (cell_output, state) = self.cell(inputs[:, time_step, :], state)
         outputs.append(cell_output)
+
+    nbest_state = self.cell.zero_state(1, data_type())
+    nbest_outputs, _ = tf.nn.dynamic_rnn(self.cell, sentence_inputs, initial_state=nbest_state, dtype=data_type(), time_major=False)
+
 
     output = tf.reshape(tf.stack(axis=1, values=outputs), [-1, size])
     logits = tf.matmul(output, softmax_w) + softmax_b
@@ -191,6 +208,17 @@ class RnnlmModel(object):
         [tf.ones([batch_size * num_steps], dtype=data_type())])
     self._cost = cost = tf.reduce_sum(loss) / batch_size
     self._final_state = state
+
+    nbest_outputs = tf.reshape(nbest_outputs, [-1, size])
+
+    nbest_logits = tf.matmul(nbest_outputs, softmax_w) + softmax_b
+
+    sentence_eos = tf.concat([test_sentences_in, [[0]]], 1)
+
+    nbest_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(sentence_eos, [-1]), logits=nbest_logits)
+#    nbest_l = tf.identity(nbest_logits, name="nbest_logits")
+#    nbest_loss_out = tf.identity(nbest_loss, name="nbest_loss")
+    nbest_out = tf.reduce_sum(nbest_loss, name="nbest_out")
 
     if not is_training:
       return
