@@ -33,7 +33,7 @@ fi
 final_lm=ami_fsh.o3g.kn
 LM=$final_lm.pr1-7
 
-N=200
+N=1000
 if [ $stage -le 3 ]; then
   for decode_set in dev eval; do
     basedir=exp/$mic/nnet3/tdnn_sp/
@@ -41,6 +41,7 @@ if [ $stage -le 3 ]; then
 
     # Lattice rescoring
     steps/rnnlmrescore.sh \
+      --stage 6 \
       --cmd "$tfrnnlm_cmd --mem 16G" --rnnlm-ver tensorflow --N $N \
       0.5 data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \

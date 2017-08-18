@@ -53,6 +53,8 @@ flags.DEFINE_string("text-path", None,
                     "text file to score.")
 flags.DEFINE_string("wordmap-path", None,
                     "map file from word to word-id.")
+flags.DEFINE_integer("batch-size", 64,
+                    "batch size for RNN computation.")
 
 FLAGS = flags.FLAGS
 
@@ -64,33 +66,97 @@ def main(_):
 
   oos_id = wordmap["<oos>"]
 
-
+  batch_size = FLAGS.batch_size
 
   with tf.Session() as session:
     # restore the model
     saver = tf.train.import_meta_graph(FLAGS.model_path + ".meta")
     saver.restore(session, FLAGS.model_path)
 
-#    for i in range(0, 10000):
+#    for i in range(0, 10):
 ##      for j in range(0, 10000):
-#      x = np.array([[0, i]], dtype=np.int32).astype(np.int32)
-#      result = session.run("Train/Model/nbest_out:0", feed_dict={"Train/Model/test_sentences:0": x})
+#      x = np.array([[0, i], [0, i], [0, i+1]], dtype=np.int32)
+#      y = np.array([[i, 0], [i, 0], [i+1, 0]], dtype=np.int32)
+#      lengths = np.array([[1, 1], [1, 1], [1, 1]])
+#
+#      result = session.run("Train/Model/nbest_out:0", feed_dict={"Train/Model/bos_sentences:0": x, "Train/Model/sentences_eos:0": y, "Train/Model/test_sentence_lengths:0": lengths})
 #      print (result)
 #    return
 
+    sentences = []
+    sentences_lengths = []
+    max_length = 0
     with open(FLAGS.text_path, "r") as f:
       for line in f:
         word_ids = []
+        ones = [1]
         for word in line.split():
+          ones.append(1)
           if word in wordmap:
             word_ids.append(wordmap[word])
           else:
             word_ids.append(oos_id)
+        
+        if len(word_ids) > max_length:
+          max_length = len(word_ids)
+        sentences.append(word_ids)
+        sentences_lengths.append(ones)
 
 #        print (word_ids)
-        x = np.array(np.asarray([word_ids]), dtype=np.int32).astype(np.int32)
-        result = session.run("Train/Model/nbest_out:0", feed_dict={"Train/Model/test_sentences:0": x})
-#        print (line, result)
+        if len(sentences) == batch_size:
+          for i in range(0, len(sentences)):
+            for n in range(len(sentences[i]), max_length):
+              sentences[i].append(0) # pad zeros
+              sentences_lengths[i].append(0) # pad zeros
+#          print (sentences)
+#          print (sentences_lengths)
+          raw_sentence = np.asarray(sentences, dtype=np.int32)
+#          print ("tensor is: ", raw_sentence)
+          bos_sentence = np.concatenate((np.zeros((len(sentences), 1), dtype=np.int32), sentences), axis=1)
+#          bos_sentence = np.delete(bos_sentence, max_length, 1)
+#          print ("bos tensor is: ", bos_sentence)
+          sentence_eos = np.concatenate((sentences, np.zeros((len(sentences), 1), dtype=np.int32)), axis=1)
+#          sentence_eos = np.delete(sentence_eos, 0, 1)
+#          print ("eos tensor is: ", sentence_eos)
+          sentence_lengths = np.asarray(sentences_lengths, dtype=np.int32)
+#          print ("length tensor is: ", sentences_lengths)
+          result = session.run("Train/Model/nbest_out:0", feed_dict={"Train/Model/bos_sentences:0": bos_sentence, "Train/Model/sentences_eos:0": sentence_eos, "Train/Model/test_sentence_lengths:0": sentence_lengths})
+          if result.shape[0] != batch_size:
+            print ("wrong dimensions!")
+            exit(1)
+          print (result)
+
+          sentences = []
+          sentences_lengths = []
+          max_length = 0
+
+      if len(sentences) != 0:
+        for i in range(0, len(sentences)):
+          for n in range(len(sentences[i]), max_length):
+            sentences[i].append(0) # pad zeros
+            sentences_lengths[i].append(0) # pad zeros
+
+#          print (sentences)
+#          print (sentences_lengths)
+
+        raw_sentence = np.asarray(sentences, dtype=np.int32)
+#          print ("tensor is: ", raw_sentence)
+        bos_sentence = np.concatenate((np.zeros((len(sentences), 1), dtype=np.int32), sentences), axis=1)
+#          bos_sentence = np.delete(bos_sentence, max_length, 1)
+#          print ("bos tensor is: ", bos_sentence)
+
+        sentence_eos = np.concatenate((sentences, np.zeros((len(sentences), 1), dtype=np.int32)), axis=1)
+#          sentence_eos = np.delete(sentence_eos, 0, 1)
+#          print ("eos tensor is: ", sentence_eos)
+
+        sentence_lengths = np.asarray(sentences_lengths, dtype=np.int32)
+#          print ("length tensor is: ", sentences_lengths)
+
+        result = session.run("Train/Model/nbest_out:0", feed_dict={"Train/Model/bos_sentences:0": bos_sentence, "Train/Model/sentences_eos:0": sentence_eos, "Train/Model/test_sentence_lengths:0": sentence_lengths})
+
+        sentences = []
+        sentences_lengths = []
+        max_length = 0
         print (result)
 
 #    x = np.array([[]], dtype=np.int32).astype(np.int32)

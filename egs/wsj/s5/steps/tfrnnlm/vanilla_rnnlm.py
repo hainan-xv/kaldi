@@ -112,8 +112,8 @@ class RnnlmModel(object):
     self.cell = tf.contrib.rnn.MultiRNNCell(
         [attn_cell() for _ in range(config.num_layers)], state_is_tuple=True)
 
-    self._initial_state = self.cell.zero_state(batch_size, data_type())
     self._initial_state_single = self.cell.zero_state(1, data_type())
+    self._initial_state = self.cell.zero_state(batch_size, data_type())
 
     self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 1, size], name="test_initial_state")
 
@@ -121,8 +121,12 @@ class RnnlmModel(object):
     test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
 
     # for nbest rescoring
-    test_sentences_in = tf.placeholder(tf.int32, [1, None], name="test_sentences") # for n-best rescoring
-#    test_sentences_lengths = tf.placeholder(tf.int32, [1], name="test_sentences_pengths")
+    bos_sentence = tf.placeholder(tf.int32, [None, None], name="bos_sentences") # for n-best rescoring
+    sentence_eos = tf.placeholder(tf.int32, [None, None], name="sentences_eos") # for n-best rescoring
+    test_sentence_lengths = tf.placeholder(tf.float32, [None, None], name="test_sentence_lengths")
+# all tensors above have the same sizes
+    nbest_batch_size = tf.shape(bos_sentence)[0]
+    nbest_max_length = tf.shape(bos_sentence)[1]
 
 #    tmp1 = tf.reduce_sum(test_sentences_in, name="tmp")
     state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 1, size], name="test_state_in")
@@ -140,9 +144,6 @@ class RnnlmModel(object):
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
 
       # for n-best rescoring
-
-      bos_sentence = tf.concat([[[0]], test_sentences_in], 1)
-
       sentence_inputs = tf.nn.embedding_lookup(self.embedding, bos_sentence)
 
     # test time
@@ -196,9 +197,8 @@ class RnnlmModel(object):
         (cell_output, state) = self.cell(inputs[:, time_step, :], state)
         outputs.append(cell_output)
 
-    nbest_state = self.cell.zero_state(1, data_type())
+    nbest_state = self.cell.zero_state(nbest_batch_size, data_type())
     nbest_outputs, _ = tf.nn.dynamic_rnn(self.cell, sentence_inputs, initial_state=nbest_state, dtype=data_type(), time_major=False)
-
 
     output = tf.reshape(tf.stack(axis=1, values=outputs), [-1, size])
     logits = tf.matmul(output, softmax_w) + softmax_b
@@ -213,12 +213,13 @@ class RnnlmModel(object):
 
     nbest_logits = tf.matmul(nbest_outputs, softmax_w) + softmax_b
 
-    sentence_eos = tf.concat([test_sentences_in, [[0]]], 1)
-
     nbest_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(sentence_eos, [-1]), logits=nbest_logits)
+    nbest_loss = tf.reshape(nbest_loss, [nbest_batch_size, nbest_max_length])
+
+    nbest_true_loss = tf.multiply(nbest_loss, test_sentence_lengths)
 #    nbest_l = tf.identity(nbest_logits, name="nbest_logits")
 #    nbest_loss_out = tf.identity(nbest_loss, name="nbest_loss")
-    nbest_out = tf.reduce_sum(nbest_loss, name="nbest_out")
+    nbest_out = tf.reduce_sum(nbest_true_loss, name="nbest_out", axis=1)
 
     if not is_training:
       return

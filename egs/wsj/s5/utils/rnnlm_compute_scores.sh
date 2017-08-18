@@ -85,7 +85,8 @@ if [ $rnnlm_ver == "faster-rnnlm" ]; then
 elif [ $rnnlm_ver == "tensorflow" ]; then
 #  cat $tempdir/text.nounk | cut -f2- -d ' ' | sed "s=$= </s>=g" > $tempdir/text.nounk.2
 #  cat $tempdir/text.nounk | sed "s=$= </s>=g" > $tempdir/text.nounk.2
-  python -u steps/tfrnnlm/nbest_rescoring.py --model-path=$dir/rnnlm --wordmap-path=$dir/wordlist.rnn.final --text=$tempdir/text.nounk | awk '{print -$1}' > $tempdir/loglikes.rnn
+  echo python -u steps/tfrnnlm/nbest_rescoring.py --model-path=$dir/rnnlm --wordmap-path=$dir/wordlist.rnn.final --text=$tempdir/text.nounk
+  python -u steps/tfrnnlm/nbest_rescoring.py --model-path=$dir/rnnlm --wordmap-path=$dir/wordlist.rnn.final --text=$tempdir/text.nounk | sed "s=\[==g" | sed "s=\]==g" | awk '{for(i=1;i<=NF;i++)print $i}' | awk '{print -$1}' > $tempdir/loglikes.rnn
 else
   # add the utterance_id as required by Mikolove's rnnlm
   paste $tempdir/ids $tempdir/text.nounk > $tempdir/id_text.nounk
