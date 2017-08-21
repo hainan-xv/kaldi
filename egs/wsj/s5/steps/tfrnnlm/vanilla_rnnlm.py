@@ -117,9 +117,6 @@ class RnnlmModel(object):
 
     self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 1, size], name="test_initial_state")
 
-    # first implement the less efficient version
-    test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
-
     # for nbest rescoring
     bos_sentence = tf.placeholder(tf.int32, [None, None], name="bos_sentences") # for n-best rescoring
     sentence_eos = tf.placeholder(tf.int32, [None, None], name="sentences_eos") # for n-best rescoring
@@ -128,7 +125,7 @@ class RnnlmModel(object):
     nbest_batch_size = tf.shape(bos_sentence)[0]
     nbest_max_length = tf.shape(bos_sentence)[1]
 
-#    tmp1 = tf.reduce_sum(test_sentences_in, name="tmp")
+    test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
     state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 1, size], name="test_state_in")
     # unpacking the input state context 
     l = tf.unstack(state_placeholder, axis=0)

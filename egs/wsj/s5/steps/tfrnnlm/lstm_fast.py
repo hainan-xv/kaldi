@@ -26,6 +26,7 @@ from __future__ import division
 from __future__ import print_function
 
 import sys
+sys.path.insert(0,"/home/hxu/.local/lib/python2.7/site-packages/")
 
 import inspect
 import time
@@ -60,7 +61,7 @@ class Config(object):
   num_steps = 20
   hidden_size = 200
   max_epoch = 4
-  max_max_epoch = 13
+  max_max_epoch = 10
   keep_prob = 1.0
   lr_decay = 0.8
   batch_size = 64
@@ -131,9 +132,15 @@ class RnnlmModel(object):
 
     self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="test_initial_state")
 
-    # first implement the less efficient version
-    test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
+    # for nbest rescoring
+    bos_sentence = tf.placeholder(tf.int32, [None, None], name="bos_sentences") # for n-best rescoring
+    sentence_eos = tf.placeholder(tf.int32, [None, None], name="sentences_eos") # for n-best rescoring
+    test_sentence_lengths = tf.placeholder(tf.float32, [None, None], name="test_sentence_lengths")
+# all tensors above have the same sizes
+    nbest_batch_size = tf.shape(bos_sentence)[0]
+    nbest_max_length = tf.shape(bos_sentence)[1]
 
+    test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
     state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 2, 1, size], name="test_state_in")
     # unpacking the input state context 
     l = tf.unstack(state_placeholder, axis=0)
@@ -148,6 +155,9 @@ class RnnlmModel(object):
 
       inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
+
+      # for n-best rescoring
+      sentence_inputs = tf.nn.embedding_lookup(self.embedding, bos_sentence)
 
     # test time
     with tf.variable_scope("RNN"):
@@ -178,6 +188,31 @@ class RnnlmModel(object):
 
     p_word = test_logits[0, 0]
     test_out = tf.identity(p_word, name="test_out")
+
+    nbest_state = self.cell.zero_state(nbest_batch_size, data_type())
+    nbest_outputs, _ = tf.nn.dynamic_rnn(self.cell, sentence_inputs, initial_state=nbest_state, dtype=data_type(), time_major=False)
+    nbest_outputs = tf.reshape(nbest_outputs, [-1, size])
+
+    nbest_logits = tf.matmul(nbest_outputs, softmax_w) + softmax_b
+
+    nbest_labels = tf.reshape(sentence_eos, [-1])
+    nbest_t2 = tf.expand_dims(nbest_labels, 1)
+    nbest_range = tf.expand_dims(tf.range(tf.shape(nbest_labels)[0]), 1)
+    ind = tf.concat([nbest_range, nbest_t2], 1)
+    nbest_loss = tf.gather_nd(nbest_logits, ind)
+
+#    nbest_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.reshape(sentence_eos, [-1]), logits=nbest_logits)
+    nbest_loss = -tf.reshape(nbest_loss, [nbest_batch_size, nbest_max_length])
+
+    nbest_true_loss = tf.multiply(nbest_loss, test_sentence_lengths)
+#    nbest_l = tf.identity(nbest_logits, name="nbest_logits")
+#    nbest_loss_out = tf.identity(nbest_loss, name="nbest_loss")
+    nbest_out = tf.reduce_sum(nbest_true_loss, name="nbest_out", axis=1)
+
+
+#    sanity_check = tf.reduce_sum(tf.exp(nbest_logits), axis=1)
+#    sanity_output = tf.identity(sanity_check, name="sanity")
+
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)
