@@ -23,9 +23,10 @@ BINFILES = lattice-best-path lattice-prune lattice-equivalent lattice-to-nbest \
            lattice-minimize lattice-limit-depth lattice-depth-per-frame \
            lattice-confidence lattice-determinize-phone-pruned \
            lattice-determinize-phone-pruned-parallel lattice-expand-ngram \
-           lattice-lmrescore-const-arpa lattice-lmrescore-rnnlm nbest-to-prons \
+           lattice-lmrescore-const-arpa nbest-to-prons \
            lattice-arc-post lattice-determinize-non-compact lattice-lmrescore-kaldi-rnnlm \
-           lattice-lmrescore-pruned lattice-lmrescore-kaldi-rnnlm-pruned
+           lattice-lmrescore-pruned lattice-lmrescore-kaldi-rnnlm-pruned \
+           lattice-lmrescore-cuedrnnlm lattice-lmrescore-cuedrnnlm-pruned
 
 OBJFILES =
 
@@ -38,6 +39,8 @@ ADDLIBS = ../rnnlm/kaldi-rnnlm.a ../lat/kaldi-lat.a ../nnet3/kaldi-nnet3.a ../lm
           ../fstext/kaldi-fstext.a ../hmm/kaldi-hmm.a ../tree/kaldi-tree.a \
           ../util/kaldi-util.a \
           ../cudamatrix/kaldi-cudamatrix.a ../matrix/kaldi-matrix.a \
-          ../base/kaldi-base.a
+          ../base/kaldi-base.a ../cuedlmcpu/cued-lm.a
+
+LDLIBS += -fopenmp
 
 include ../makefiles/default_rules.mk
