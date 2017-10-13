@@ -931,7 +931,9 @@ float RNNLM::host_forward (int prevword, int curword)
            layers[i+1]->host_copyLSTMhighwayc (layers[i]);
        }
    }
-   return neu_ac[num_layer]->fetchhostvalue(curword, 0);
+   float ans = neu_ac[num_layer]->fetchhostvalue(curword, 0);
+   assert(ans == ans);
+   return ans;
 }
 
 // added for Kaldi
@@ -1052,6 +1054,7 @@ bool RNNLM::calLogProb(string input, int fvocsize, float &output_logp, float &ou
 
 float RNNLM::computeConditionalLogprob(std::string current_word, const std::vector<std::string> &history_words, const std::vector<float> &context_in, std::vector<float> *context_out)
 {
+//  cout << "current word is " << current_word << endl;
   int i, j, cnt;
   vector<string> linevec;
   float prob_rnn, logp_rnn;
@@ -1082,6 +1085,7 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
   }
 
   word = linevec[cnt-1];
+  cout << "pre: " << word << endl;
   if(outputmap.find(word) == outputmap.end())
   {
     prevword = outOOSindex;
@@ -1100,6 +1104,10 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
     curword = outputmap[word];
   }
   prob_rnn = host_forward (prevword, curword);
+
+  cout << prob_rnn << endl;
+  if (prob_rnn != prob_rnn) {cout << curword << " " << outOOSindex << " " << current_word << endl; prob_rnn = 1e-20;}
+
   if (curword == outOOSindex)
   {
     j = (fullvocsize - layersizes[num_layer]);
@@ -1120,7 +1128,6 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
 	  printf ("xiexie1 context_in[0]=%f, context_out[0]=%f, prob_rnn=%f\n", context_in[0], (*context_out)[0], prob_rnn);
   }
 #endif
-
 
   return logp_rnn;
 }

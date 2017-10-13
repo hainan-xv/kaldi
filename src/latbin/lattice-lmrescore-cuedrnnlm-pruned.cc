@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
 
     po.Read(argc, argv);
 
-    if (po.NumArgs() != 7) {
+    if (po.NumArgs() != 8) {
       po.PrintUsage();
       exit(1);
     }
@@ -211,7 +211,6 @@ int main(int argc, char *argv[]) {
         n_done++;
       }
       delete lm_to_add;
-      delete lm_to_add_orig;
     }
     delete lm_to_subtract_fst;
 

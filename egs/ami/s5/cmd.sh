@@ -27,7 +27,7 @@ export tfrnnlm_cmd="queue.pl -l hostname=b*"  # this is specific to the CLSP gri
 # want to limit the job only on the GPU that you reserve
 
 # the use of cuda_cmd is deprecated, used only in 'nnet1',
-export cuda_cmd="queue.pl --gpu 1 --mem 20G"
+export cuda_cmd="queue.pl --gpu 1 --mem 4G"
 
 if [ "$(hostname -d)" == "fit.vutbr.cz" ]; then
   queue_conf=$HOME/queue_conf/default.conf # see example /homes/kazi/iveselyk/queue_conf/default.conf,
