@@ -931,15 +931,19 @@ float RNNLM::host_forward (int prevword, int curword)
            layers[i+1]->host_copyLSTMhighwayc (layers[i]);
        }
    }
-   float ans = neu_ac[num_layer]->fetchhostvalue(curword, 0);
-   assert(ans == ans);
-   return ans;
+   return neu_ac[num_layer]->fetchhostvalue(curword, 0);
 }
 
 // added for Kaldi
 int RNNLM::getOneHiddenLayerSize()
 {
-  return layersizes[num_layer-1];
+	int l;
+	int hiddensize = 0;
+	for (l=1; l<num_layer; l++)
+	{
+		hiddensize += layers[l]->GetHiddenSize();
+	}
+	return hiddensize;
 }
 
 void RNNLM::setFullVocabSize(int fvocsize)
@@ -950,34 +954,81 @@ void RNNLM::setFullVocabSize(int fvocsize)
 void RNNLM::saveContextToVector(std::vector <float> *context_out)
 {
   assert(context_out != NULL);
-  context_out->resize(layersizes[num_layer-1]);
 
   float *srcac;
-#if 0
-  srcac = neu_ac[num_layer]->gethostdataptr();
-  for (int i = 0; i  <  layersizes[num_layer-1]; i++)
+  int l, pos=0, i=0;
+  for (l=1; l<num_layer; l++)
   {
-    (*context_out)[i] = srcac[i];
+	  int size = layers[l]->GetHiddenSize();
+	  if (size > 0)
+	  {
+		  if (size == layers[l]->ncols) // sigmoid or gru layer
+		  {
+			  for (i=0; i<size; i++)
+			  {
+				  srcac = layers[l]->gethidden_ac()->gethostdataptr();
+				  (*context_out)[pos++] = srcac[i];
+			  }
+		  }
+		  else if (size == layers[l]->ncols*2) // lstm layer
+		  {
+			  for (i=0; i<layers[l]->ncols; i++)
+			  {
+				  srcac = layers[l]->gethidden_ac()->gethostdataptr();
+				  (*context_out)[pos++] = srcac[i];
+			  }
+			  for (i=0; i<layers[l]->ncols; i++)
+			  {
+				  srcac = layers[l]->gethidden_c()->gethostdataptr();
+				  (*context_out)[pos++] = srcac[i];
+			  }
+		  }
+		  else
+		  {
+			  printf ("Error: unknow hidden structure detected!\n");
+			  exit (0);
+		  }
+	  }
   }
-#else
-  // printf ("xiexie0: size=%d\n", (*context_out).size());
-  srcac = neu_ac[num_layer-1]->gethostdataptr();
-  for (int i = 0; i  <  layersizes[num_layer-1]; i++)
-  {
-    (*context_out)[i] = srcac[i];
-  }
-#endif
 }
 
 void RNNLM::restoreContextFromVector(const std::vector<float> &context_in)
 {
-  float *dstac;
-  dstac = layers[num_layer-2]->gethidden_ac()->gethostdataptr();
-
-  assert(context_in.size() == layersizes[num_layer-1]);
-  for (int i = 0; i  <  layersizes[num_layer-1]; i++) {
-    dstac[i] = context_in[i];
-  }
+	float *dstac;
+	int l, pos=0, i=0;
+	for (l=1; l<num_layer; l++)
+	{
+		int size = layers[l]->GetHiddenSize();
+		if (size > 0)
+		{
+			if (size == layers[l]->ncols) // sigmoid or gru layer
+			{
+				for (i=0; i<size; i++)
+				{
+					dstac = layers[l]->gethidden_ac()->gethostdataptr();
+					dstac[i] = context_in[pos++];
+				}
+			}
+			else if (size == layers[l]->ncols*2) // lstm layer
+			{
+				for (i=0; i<layers[l]->ncols; i++)
+				{
+					dstac = layers[l]->gethidden_ac()->gethostdataptr();
+					dstac[i] = context_in[pos++];
+				}
+				for (i=0; i<layers[l]->ncols; i++)
+				{
+					dstac = layers[l]->gethidden_c()->gethostdataptr();
+					dstac[i] = context_in[pos++];
+				}
+			}
+			else
+			{
+				printf ("Error: unknow hidden structure detected!\n");
+				exit (0);
+			}
+		}
+	}
 }
 
 bool RNNLM::calLogProb(string input, int fvocsize, float &output_logp, float &output_ppl)
@@ -1054,7 +1105,6 @@ bool RNNLM::calLogProb(string input, int fvocsize, float &output_logp, float &ou
 
 float RNNLM::computeConditionalLogprob(std::string current_word, const std::vector<std::string> &history_words, const std::vector<float> &context_in, std::vector<float> *context_out)
 {
-//  cout << "current word is " << current_word << endl;
   int i, j, cnt;
   vector<string> linevec;
   float prob_rnn, logp_rnn;
@@ -1085,7 +1135,6 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
   }
 
   word = linevec[cnt-1];
-  cout << "pre: " << word << endl;
   if(outputmap.find(word) == outputmap.end())
   {
     prevword = outOOSindex;
@@ -1104,10 +1153,6 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
     curword = outputmap[word];
   }
   prob_rnn = host_forward (prevword, curword);
-
-  cout << prob_rnn << endl;
-  if (prob_rnn != prob_rnn) {cout << curword << " " << outOOSindex << " " << current_word << endl; prob_rnn = 1e-20;}
-
   if (curword == outOOSindex)
   {
     j = (fullvocsize - layersizes[num_layer]);
@@ -1125,9 +1170,11 @@ float RNNLM::computeConditionalLogprob(std::string current_word, const std::vect
 #if 0
   if (context_in.size() > 0 && (*context_out).size() > 0)
   {
-	  printf ("xiexie1 context_in[0]=%f, context_out[0]=%f, prob_rnn=%f\n", context_in[0], (*context_out)[0], prob_rnn);
+	  // printf ("xiexie1 context_in[0]=%f, c_in[0]=%f, context_out[0]=%f, c_out[0]=%f, prob_rnn=%f\n", context_in[0], context_in[200], (*context_out)[0], (*context_out)[200], prob_rnn);
+	  printf ("xiexie1 context_in[0]=%f, c_in[0]=%f, context_out[0]=%f, c_out[0]=%f, prob_rnn=%f\n", context_in[0], context_in[200], (*context_out)[0], (*context_out)[200], prob_rnn);
   }
 #endif
+
 
   return logp_rnn;
 }
