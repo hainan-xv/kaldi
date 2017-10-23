@@ -75,6 +75,7 @@ oldlm_weight=`perl -e "print -1.0 * $weight;"`
 #  "ark:gunzip -c $indir/lat.JOB.gz|" "$oldlm_command" ark:-  \| \
 $cmd JOB=1:$nj $outdir/log/rescorelm.JOB.log \
   lattice-lmrescore-cuedrnnlm-pruned --lm-scale=$weight \
+  --acoustic-scale=$acwt \
   --max-ngram-order=$max_ngram_order \
   --nthread=$nthread \
   "$oldlm_command" \

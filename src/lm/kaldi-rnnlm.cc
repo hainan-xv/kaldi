@@ -88,11 +88,14 @@ KaldiRnnlmWrapper::KaldiRnnlmWrapper(
     else {
         cuedrnnlm_ptr_ = new RNNLM(lsizes, fvocsize);
         // text rnn model, minibatch 1 for evaluation, debug 0
+        cout << "full size is " << cuedrnnlm_ptr_->fullvocsize << endl;
         cuedrnnlm_ptr_->loadfresh(rnnlm_rxfilename, inputwlist, outputwlist, false, 1, 0);
         /* cuedrnnlm_ptr_->loadfresh(rnnlm_rxfilename, inputwlist, outputwlist, false, 1, 0, 0, false); */
         /* cuedrnnlm_ptr_->setLognormConst(-1.0);  // default lognormconst value: -1.0 in cued rnnlm
            cuedrnnlm_ptr_->setNthread(nthread);          // default nthread value: 1 in cued rnnlm */
         lsizes = cuedrnnlm_ptr_->layersizes;
+        cuedrnnlm_ptr_->fullvocsize = fvocsize;
+        cout << "full size is " << cuedrnnlm_ptr_->fullvocsize << endl;
     }
 
     // Reads symbol table.
@@ -113,6 +116,7 @@ KaldiRnnlmWrapper::KaldiRnnlmWrapper(
     }
     label_to_word_[label_to_word_.size() - 1] = opts.eos_symbol;
     eos_ = label_to_word_.size() - 1;
+    delete word_symbols;
 }
 
 BaseFloat KaldiRnnlmWrapper::GetLogProb(
@@ -128,10 +132,10 @@ BaseFloat KaldiRnnlmWrapper::GetLogProb(
   }
 
   if(use_cued_lm)
-  return cuedrnnlm_ptr_->computeConditionalLogprob(label_to_word_[word], wseq_symbols,
+    return cuedrnnlm_ptr_->computeConditionalLogprob(label_to_word_[word], wseq_symbols,
                                           context_in, context_out);
   else
-  return rnnlm_.computeConditionalLogprob(label_to_word_[word], wseq_symbols,
+    return rnnlm_.computeConditionalLogprob(label_to_word_[word], wseq_symbols,
                                           context_in, context_out);
 }
 
@@ -188,6 +192,7 @@ fst::StdArc::Weight RnnlmDeterministicFst::Final(StateId s) {
   KALDI_ASSERT(static_cast<size_t>(s) < state_to_wseq_.size());
 
   std::vector<Label> wseq = state_to_wseq_[s];
+  cout << "computing final " << endl;
   BaseFloat logprob = rnnlm_->GetLogProb(rnnlm_->GetEos(), wseq,
                                          state_to_context_[s], NULL);
   return Weight(-logprob);
@@ -201,6 +206,7 @@ bool RnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc) {
   std::vector<float> new_context(rnnlm_->GetHiddenLayerSize());
   BaseFloat logprob = rnnlm_->GetLogProb(ilabel, wseq,
                                          state_to_context_[s], &new_context);
+  cout << "new weight is " << logprob << endl;
 
   wseq.push_back(ilabel);
   if (max_ngram_order_ > 0) {
@@ -231,6 +237,7 @@ bool RnnlmDeterministicFst::GetArc(StateId s, Label ilabel, fst::StdArc *oarc) {
   oarc->nextstate = result.first->second;
   oarc->weight = Weight(-logprob);
 
+  cout << "new weight is " << oarc->weight << endl;
   return true;
 }
 

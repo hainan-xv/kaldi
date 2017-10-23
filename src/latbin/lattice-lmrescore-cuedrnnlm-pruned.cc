@@ -162,6 +162,8 @@ int main(int argc, char *argv[]) {
     }
     infile.close();
 
+    cout << "full size is " << fullvocsize << endl;
+
     // Reads the language model.
     KaldiRnnlmWrapper rnnlm(opts, unk_prob_rspecifier, word_symbols_rxfilename, rnnlm_rxfilename, true, inputwordlist, outputwordlist, layersizes, fullvocsize, nthread);
 

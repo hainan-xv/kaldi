@@ -186,6 +186,7 @@ int main (int argc, char **argv)
             printf ("\n");
         }
 
+        using cuedrnnlm::RNNLM;
         if (!isEmpty(arg.find ("-ppl")))
         {
             RNNLM rnnlm (inmodelname, inputwlist, outputwlist, fullvocsize, binformat, debug);

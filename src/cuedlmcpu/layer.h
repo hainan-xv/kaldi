@@ -82,17 +82,9 @@ public:
     {
         printf ("virtual function (gethidden_ac) called!\n");
     }
-    virtual matrix* gethidden_c ()
-    {
-        printf ("virtual function (gethidden_c) called!\n");
-    }
     virtual void setCurword (int n)
     {
         printf ("virtual function (setCurword) called!\n");
-    }
-    virtual int GetHiddenSize ()
-    {
-        return 0;
     }
     void setChunkIter (int iter)  { chunkiter = iter;}
     layer (int nr, int nc, int mbsize, int cksize);
@@ -172,10 +164,6 @@ public:
     {
         return hidden_ac;
     }
-    virtual int GetHiddenSize ()
-    {
-        return ncols;
-    }
 };
 
 class feedforwardlayer : public layer
@@ -219,10 +207,6 @@ public:
     {
         return hidden_ac;
     }
-    virtual int GetHiddenSize ()
-    {
-        return ncols;
-    }
 };
 
 class gruhighwaylayer : public grulayer
@@ -259,14 +243,6 @@ public:
     virtual matrix* gethidden_ac ()
     {
         return hidden_ac;
-    }
-    virtual matrix* gethidden_c ()
-    {
-        return c;
-    }
-    virtual int GetHiddenSize ()
-    {
-        return ncols*2;
     }
     lstmlayer (int nr, int nc, int minibatch, int chunksize);
     ~lstmlayer ();
