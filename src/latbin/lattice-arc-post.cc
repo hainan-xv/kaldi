@@ -171,7 +171,6 @@ int main(int argc, char *argv[]) {
       output_wxfilename = po.GetArg(2);
     }
 
-
     kaldi::Output output(output_wxfilename, false);
 
     // Read as regular lattice
