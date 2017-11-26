@@ -117,7 +117,7 @@ class RnnlmComputeState {
   /// given the previous history determined by the sequence of calls to AddWord()
   /// (implicitly starting with the BOS symbol).
   BaseFloat LogProbOfWord(int32 word_index) const;
-  void GetLogProbOfWords(CuVector<BaseFloat>*) const;
+  void GetLogProbOfWords(CuMatrixBase<BaseFloat>*) const;
   /// Advance the state of the RNNLM by appending this word to the word sequence.
   void AddWord(int32 word_index);
  private:

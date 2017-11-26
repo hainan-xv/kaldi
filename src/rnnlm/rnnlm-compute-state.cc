@@ -117,11 +117,14 @@ BaseFloat RnnlmComputeState::LogProbOfWord(int32 word_index) const {
   return log_prob;
 }
 
-void RnnlmComputeState::GetLogProbOfWords(CuVector<BaseFloat> *probs) const {
+void RnnlmComputeState::GetLogProbOfWords(CuMatrixBase<BaseFloat> *probs) const {
   const CuMatrix<BaseFloat> &word_embedding_mat = info_.word_embedding_mat;
 
-  probs->AddMatVec(0.0, word_embedding_mat, kNoTrans,
-                   predicted_word_embedding_->Row(0), 1.0);
+  KALDI_ASSERT(probs->NumRows() == 1);
+  probs->Row(0).AddMatVec(1.0, word_embedding_mat, kNoTrans,
+                   predicted_word_embedding_->Row(0), 0.0);
+
+  probs->ColRange(0, 1).Set(-99999999999);
 
   // Even without explicit normalization, the log-probs will be close to
   // correctly normalized due to the way the model was trained.
