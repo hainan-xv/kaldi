@@ -422,8 +422,7 @@ class RectifiedLinearComponent: public NonlinearComponent {
   virtual std::string Type() const { return "RectifiedLinearComponent"; }
   virtual Component* Copy() const { return new RectifiedLinearComponent(*this); }
   virtual int32 Properties() const {
-    return kSimpleComponent|kBackpropNeedsOutput|kPropagateInPlace|
-        kStoresStats|(block_dim_ != dim_ ? kInputContiguous : 0);
+    return kSimpleComponent|kBackpropNeedsOutput|kPropagateInPlace|kStoresStats;
   }
   virtual void* Propagate(const ComponentPrecomputedIndexes *indexes,
                          const CuMatrixBase<BaseFloat> &in,

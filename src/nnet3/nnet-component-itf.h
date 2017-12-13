@@ -52,17 +52,18 @@ enum ComponentProperties {
                               // Note: if doing backprop, you'd also need to check
                               // that the kBackpropNeedsInput property is not true.
   kPropagateAdds = 0x008,  // true if the Propagate function adds to, rather
-                           // than setting, its output, for non-in-place
-                           // propagation.  The Component chooses whether to add
-                           // or set, and the calling code has to accommodate
-                           // it.
+                           // than setting, its output.  The Component chooses
+                           // whether to add or set, and the calling code has to
+                           // accommodate it.  This flag is incompatible with
+                           // the kPropagateInPlace flag.
   kReordersIndexes = 0x010,  // true if the ReorderIndexes function might reorder
                              // the indexes (otherwise we can skip calling it).
                              // Must not be set for simple components.
   kBackpropAdds = 0x020,   // true if the Backprop function adds to, rather than
-                           // setting, the "in_deriv" output for non-in-place
-                           // backprop.  The Component chooses whether to add or
-                           // set, and the calling code has to accommodate it.
+                           // setting, the "in_deriv" output.  The Component
+                           // chooses whether to add or set, and the calling
+                           // code has to accommodate it.  Note: in the case of
+                           // in-place backprop, this flag is
   kBackpropNeedsInput = 0x040,  // true if backprop operation needs access to
                                 // forward-pass input.
   kBackpropNeedsOutput = 0x080,  // true if backprop operation needs access to
