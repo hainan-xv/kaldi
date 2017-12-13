@@ -27,7 +27,7 @@ ensure_normalized_probs=false  # if true then we add the neccesary options to
 
 rnnlm=$KALDI_ROOT/tools/$rnnlm_ver/rnnlm
 
-[ ! -f $rnnlm ] && echo No such program $rnnlm && exit 1;
+[ $rnnlm_ver != "tensorflow" ] && [ ! -f $rnnlm ] && echo No such program $rnnlm && exit 1;
 
 if [ $# != 4 ]; then
   echo "Usage: rnnlm_compute_scores.sh <rnn-dir> <temp-dir> <input-text> <output-scores>"
@@ -39,19 +39,29 @@ tempdir=$2
 text_in=$3
 scores_out=$4
 
-for x in rnnlm wordlist.rnn unk.probs; do
-  if [ ! -f $dir/$x ]; then 
-    echo "rnnlm_compute_scores.sh: expected file $dir/$x to exist."
-    exit 1;
-  fi
-done
+if [ "$rnnlm_ver" != "tensorflow" ]; then
+  for x in rnnlm wordlist.rnn unk.probs; do
+    if [ ! -f $dir/$x ]; then
+      echo "rnnlm_compute_scores.sh: expected file $dir/$x to exist."
+      exit 1;
+    fi
+  done
+else
+  for x in rnnlm.meta wordlist.rnn.final unk.probs; do
+    if [ ! -f $dir/$x ]; then
+      echo "rnnlm_compute_scores.sh: expected file $dir/$x to exist."
+      exit 1;
+    fi
+  done
+fi
 
 mkdir -p $tempdir
 cat $text_in | awk '{for (x=2;x<=NF;x++) {printf("%s ", $x)} printf("\n");}' >$tempdir/text
 cat $text_in | awk '{print $1}' > $tempdir/ids # e.g. utterance ids.
-cat $tempdir/text | awk -v voc=$dir/wordlist.rnn -v unk=$dir/unk.probs \
+unk_prob_sum=$(cat $dir/unk.probs | awk '{a+=$2}END{print a}')
+cat $tempdir/text | awk -v voc=$dir/wordlist.rnn -v unk=$dir/unk.probs -v d=$unk_prob_sum \
   -v logprobs=$tempdir/loglikes.oov \
- 'BEGIN{ while((getline<voc)>0) { invoc[$1]=1; } while ((getline<unk)>0){ unkprob[$1]=$2;} }
+ 'BEGIN{ while((getline<voc)>0) { invoc[$1]=1; } while ((getline<unk)>0){ unkprob[$1]=$2 / d;} }
   { logprob=0;
     if (NF==0) { printf "<RNN_UNK>"; logprob = log(1.0e-07);
       print "Warning: empty sequence." | "cat 1>&2"; }
@@ -72,6 +82,11 @@ if [ $rnnlm_ver == "faster-rnnlm" ]; then
   fi
   $rnnlm $extra_options -independent -rnnlm $dir/rnnlm -test $tempdir/text.nounk -nbest -debug 0 | \
      awk '{print $1*log(10);}' > $tempdir/loglikes.rnn
+elif [ $rnnlm_ver == "tensorflow" ]; then
+  echo python -u steps/tfrnnlm/nbest_rescoring.py --model-path=$dir/rnnlm --wordmap-path=$dir/wordlist.rnn.final --text=$tempdir/text.nounk
+  python -u steps/tfrnnlm/nbest_rescoring.py --model-path=$dir/rnnlm --wordmap-path=$dir/wordlist.rnn.final \
+      --text=$tempdir/text.nounk | sed "s=\[==g" | sed "s=\]==g" \
+      | awk '{for(i=1;i<=NF;i++)print $i}' | awk '{print -$1}' > $tempdir/loglikes.rnn
 else
   # add the utterance_id as required by Mikolove's rnnlm
   paste $tempdir/ids $tempdir/text.nounk > $tempdir/id_text.nounk
