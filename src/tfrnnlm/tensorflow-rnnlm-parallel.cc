@@ -118,7 +118,7 @@ TfRnnlmDeterministicFstParallel::~TfRnnlmDeterministicFstParallel() {
 }
 
 
-void TfRnnlmDeterministicFstParallel::FinalParallel(std::vector<StateId> s2_vector_final,
+void TfRnnlmDeterministicFstParallel::FinalParallel(const std::vector<StateId>& s2_vector_final,
                                                     std::vector<Weight>* det_fst_final_vector) {
   int32 eos_ = rnnlm_->GetEos();
   int s2_size = s2_vector_final.size();
@@ -158,8 +158,8 @@ void TfRnnlmDeterministicFstParallel::FinalParallel(std::vector<StateId> s2_vect
 }
 
 // Parallel version of <GetArc>.
-void TfRnnlmDeterministicFstParallel::GetArcsParallel(std::vector<StateId> s2_vector, 
-                                              std::vector<Label> ilabel_vector,
+void TfRnnlmDeterministicFstParallel::GetArcsParallel(const std::vector<StateId> &s2_vector, 
+                                              const std::vector<Label> &ilabel_vector,
                                               std::vector<fst::StdArc>* arc2_vector) {
   KALDI_ASSERT(s2_vector.size() == ilabel_vector.size());
 

@@ -14,7 +14,7 @@ weight=0.5   # when we do lattice-rescoring, instead of replacing the lm-weights
 
 set -e
 
-dir=data/tensorflow_fast_lstm
+dir=data/tensorflow_lstm_fast
 mkdir -p $dir
 
 steps/tfrnnlm/check_tensorflow_installed.sh
@@ -27,7 +27,7 @@ mkdir -p $dir
 if [ $stage -le 2 ]; then
 # the following script uses TensorFlow. You could use tools/extras/install_tensorflow_py.sh to install it
   $cuda_cmd $dir/train_rnnlm.log utils/parallel/limit_num_gpus.sh \
-    python -u steps/tfrnnlm/lstm_fast.py --data-path=$dir --save-path=$dir/rnnlm --vocab-path=$dir/wordlist.rnn.final
+    python -u steps/tfrnnlm/train_lstm_fast.py --data-path=$dir --save-path=$dir/rnnlm --vocab-path=$dir/wordlist.rnn.final
 fi
 
 final_lm=ami_fsh.o3g.kn

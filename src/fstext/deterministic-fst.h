@@ -96,12 +96,11 @@ class DeterministicOnDemandFstParallel {
 
   virtual StateId Start() = 0;
 
-  // dgao
-  virtual void FinalParallel(std::vector<StateId> s2_vector_final,
+  virtual void FinalParallel(const std::vector<StateId> &s2_vector_final,
                      std::vector<Weight>* det_fst_vector) = 0;
 
-  virtual void GetArcsParallel(std::vector<StateId> s1_vector,
-                       std::vector<Label> olabel_vector,
+  virtual void GetArcsParallel(const std::vector<StateId> &s1_vector,
+                       const std::vector<Label> &olabel_vector,
                        std::vector<fst::StdArc>* arc2_vector) = 0;
 
   virtual ~DeterministicOnDemandFstParallel() { }
