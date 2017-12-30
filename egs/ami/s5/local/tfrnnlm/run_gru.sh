@@ -1,7 +1,7 @@
 #!/bin/bash
 
 mic=ihm
-ngram_order=4 # this option when used, the rescoring binary makes an approximation
+ngram_order=3 # this option when used, the rescoring binary makes an approximation
     # to merge the states of the FST generated from RNNLM. e.g. if ngram-order = 4
     # then any history that shares last 3 words would be merged into one state
 stage=1
@@ -15,7 +15,7 @@ weight=0.5   # when we do lattice-rescoring, instead of replacing the lm-weights
 
 set -e
 
-dir=data/tensorflow_gru
+dir=data/tensorflow_gru_parallel
 mkdir -p $dir
 
 steps/tfrnnlm/check_tensorflow_installed.sh
@@ -40,13 +40,13 @@ if [ $stage -le 3 ]; then
     basedir=exp/$mic/nnet3/tdnn_sp/
     decode_dir=${basedir}/decode_${decode_set}
 
-    # Lattice rescoring
-    steps/tfrnnlm/lmrescore_rnnlm_lat_pruned.sh \
+    # Lattice rescoring, unpruned parallel version
+    steps/tfrnnlm/lmrescore_rnnlm_lat_parallel.sh \
       --cmd "$tfrnnlm_cmd --mem 4G" \
       --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_tfrnnlm_lat_gru_${ngram_order}gram &
+      ${decode_dir}_lat_gru_${ngram_order}gram_unpruned &
 
   done
 fi

@@ -15,7 +15,7 @@
 # limitations under the License.
 # ==============================================================================
 
-# this script trains a GRU RNNLM with TensorFlow. 
+# this script trains a vanilla RNNLM with TensorFlow. 
 # to call the script, do
 # python steps/tfrnnlm/gru.py --data-path=$datadir \
 #        --save-path=$savepath --vocab-path=$rnn.wordlist [--hidden-size=$size]
@@ -61,7 +61,7 @@ class Config(object):
   hidden_size = 200
   max_epoch = 4
   max_max_epoch = 13
-  keep_prob = 1.0
+  keep_prob = 0.6
   lr_decay = 0.5
   batch_size = 64
 
@@ -116,10 +116,10 @@ class RnnlmModel(object):
     self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 1, size], name="test_initial_state")
 
     # first implement the less efficient version
-    # one word for test
-    test_word_in = tf.placeholder(tf.int32, [1, 1], name="test_word_in")
+    # multiple words for test (parallel composition)
+    test_word_in = tf.placeholder(tf.int32, [None, 1], name="test_word_in")
     # set up gru state(tuple of two layers: first get a tensor, then change it to tuple)
-    state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 1, size], name="test_state_in")
+    state_placeholder = tf.placeholder(tf.float32, [config.num_layers, None, size], name="test_state_in")
     state_placeholder_tensor = tf.unstack(state_placeholder, axis=0)
     test_input_state_tuple = tuple([state_placeholder_tensor[idx] for idx in range(config.num_layers)])
 
@@ -132,12 +132,12 @@ class RnnlmModel(object):
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
 
     # test time
-    # get the out put of test word(one is gru out state, one is for computing sorfmax)
+    # get the out put of test word(one is gru out state, one is for computing softmax)
     with tf.variable_scope("RNN"):
       (test_cell_output, test_output_state) = self.cell(test_inputs[:, 0, :], test_input_state_tuple)
 
-    test_state_out = tf.reshape(tf.stack(axis=0, values=test_output_state), [config.num_layers, 1, size], name="test_state_out")
-    test_cell_out = tf.reshape(test_cell_output, [1, size], name="test_cell_out")
+    test_state_out = tf.reshape(tf.stack(axis=0, values=test_output_state), [config.num_layers, -1, size], name="test_state_out")
+    test_cell_out = tf.reshape(test_cell_output, [-1, size], name="test_cell_out")
     # above is the first part of the graph for test
     # test-word-in
     #               > ---- > test-state-out
@@ -149,19 +149,25 @@ class RnnlmModel(object):
     #               > prob(word | test-word-out)
     # test-cell-in
 
-    test_word_out = tf.placeholder(tf.int32, [1, 1], name="test_word_out")
-    # what is the difference between test_cell_out and cellout_placeholder?
-    cellout_placeholder = tf.placeholder(tf.float32, [1, size], name="test_cell_in")
+    test_word_out = tf.placeholder(tf.int32, [None, 1], name="test_word_out")
+    cellout_placeholder = tf.placeholder(tf.float32, [None, size], name="test_cell_in")
 
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
 
     test_logits = tf.matmul(cellout_placeholder, softmax_w) + softmax_b
-    test_softmaxed = tf.nn.log_softmax(test_logits)
+    test_softmaxed = tf.nn.log_softmax(test_logits, 1)
 
-    p_word = test_softmaxed[0, test_word_out[0,0]]
-    test_out = tf.identity(p_word, name="test_out")
+    this_size = tf.size(tf.reshape(test_word_out, [-1]))
+
+    # this_concat is a column of index that we want to concat with test_word_out
+    # so that we can use tf.gather_nd to extract related log probabilities from
+    # test_softmaxed and combine them into a tensor.
+    this_concat = tf.reshape(tf.range(this_size), [-1, 1])
+    indices = tf.concat([this_concat, test_word_out], 1)
+    p_word = tf.gather_nd(test_softmaxed, indices)
+    test_out = tf.reshape(p_word, [-1], name="test_out")
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)

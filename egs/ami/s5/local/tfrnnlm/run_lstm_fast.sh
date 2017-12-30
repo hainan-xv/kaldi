@@ -23,7 +23,6 @@ if [ $stage -le 1 ]; then
   local/tfrnnlm/rnnlm_data_prep.sh $dir
 fi
 
-mkdir -p $dir
 if [ $stage -le 2 ]; then
 # the following script uses TensorFlow. You could use tools/extras/install_tensorflow_py.sh to install it
   $cuda_cmd $dir/train_rnnlm.log utils/parallel/limit_num_gpus.sh \
@@ -39,20 +38,20 @@ if [ $stage -le 3 ]; then
     decode_dir=${basedir}/decode_${decode_set}
 
 # pruned lattice rescoring
-    steps/tfrnnlm/lmrescore_rnnlm_lat_pruned.sh \
-      --cmd "$tfrnnlm_cmd --mem 4G" \
-      --weight $weight --max-ngram-order $ngram_order \
-      data/lang_$LM $dir \
-      data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_tfrnnlm_lat_${ngram_order}gram  &
-
-# Lattice rescoring, unpruned (slow) version
-#    steps/tfrnnlm/lmrescore_rnnlm_lat.sh \
+#    steps/tfrnnlm/lmrescore_rnnlm_lat_pruned.sh \
 #      --cmd "$tfrnnlm_cmd --mem 4G" \
 #      --weight $weight --max-ngram-order $ngram_order \
 #      data/lang_$LM $dir \
 #      data/$mic/${decode_set}_hires ${decode_dir} \
-#      ${decode_dir}_lat_${ngram_order}gram_unpruned  &
+#      ${decode_dir}_tfrnnlm_lat_${ngram_order}gram  &
+
+# Lattice rescoring, unpruned (slow) version, parallel
+    steps/tfrnnlm/lmrescore_rnnlm_lat.sh \
+      --cmd "$tfrnnlm_cmd --mem 4G" \
+      --weight $weight --max-ngram-order $ngram_order \
+      data/lang_$LM $dir \
+      data/$mic/${decode_set}_hires ${decode_dir} \
+      ${decode_dir}_lat_${ngram_order}gram_unpruned  &
 
   done
 fi
