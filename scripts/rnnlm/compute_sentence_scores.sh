@@ -1,25 +1,16 @@
 #!/bin/bash
 
-# Compute scores from RNNLM.  This script takes a directory
-# $dir (e.g. dir=local/rnnlm/rnnlm.voc30.hl30 ),
-# where it expects the files:
-#  rnnlm  wordlist.rnn  unk.probs,
-# and also an input file location where it can get the sentences to score, and
-# an output file location to put the scores (negated logprobs) for each
-# sentence.  This script uses the Kaldi-style "archive" format, so the input and
-# output files will have a first field that corresponds to some kind of
-# utterance-id or, in practice, utterance-id-1, utterance-id-2, etc., for the
-# N-best list.
-#
-# Here, "wordlist.rnn" is the set of words, like a vocabulary,
-# that the RNN was trained on (note, it won't include <s> or </s>),
-# plus <RNN_UNK> which is a kind of class where we put low-frequency
-# words; unk.probs gives the probs for words given this class, and it
-# has, on each line, "word prob".
+# This script is very similar to utils/rnnlm_compute_scores.sh, and it computes
+# log-likelihoods from a Kaldi-RNNLM model instead of that of Mikolov's RNNLM.
+# Because Kaldi-RNNLM uses letter-features which does not need an <OOS> symbol,
+# we don't need the "unk.probs" file any more to add as a penalty term in sentence
+# likelihoods.
 
-ensure_normalized_probs=false  # if true then we add the neccesary options to
-                               # normalize the probabilities of RNNLM
-                               # e.g. when using faster-rnnlm in the nce mode
+ensure_normalized_probs=false  # If true then the probabilities computed by the
+                               # RNNLM will be correctly normalized. Note it is
+                               # OK to set it to false because Kaldi-RNNLM is
+                               # trained in a way that ensures the sum of probabilities
+                               # is close to 1.
 
 . ./path.sh || exit 1;
 . utils/parse_options.sh
@@ -49,7 +40,6 @@ for x in final.raw config/words.txt; do
   fi
 done
 
-mkdir -p $tempdir
 cat $text_in | awk '{for (x=2;x<=NF;x++) {printf("%s ", $x)} printf("\n");}' >$tempdir/text
 cat $text_in | awk '{print $1}' > $tempdir/ids # e.g. utterance ids.
 
@@ -57,7 +47,7 @@ cat $tempdir/text | sym2int.pl $dir/config/words.txt > $tempdir/text.int
 
 special_symbol_opts=$(cat $dir/special_symbol_opts.txt)
 
-#rnnlm-sentence-probs $special_symbol_opts $dir/final.raw "$word_embedding" $tempdir/text.int > $tempdir/loglikes.rnn
+rnnlm-sentence-probs $special_symbol_opts $dir/final.raw "$word_embedding" $tempdir/text.int > $tempdir/loglikes.rnn
 
 [ $(cat $tempdir/loglikes.rnn | wc -l) -ne $(cat $tempdir/text | wc -l) ] && \
   echo "rnnlm rescoring failed" && exit 1;
@@ -66,5 +56,25 @@ paste $tempdir/loglikes.rnn | awk '{sum=0;for(i=1;i<=NF;i++)sum-=$i; print sum}'
 
 # scores out, with utterance-ids.
 paste $tempdir/ids $tempdir/scores  > $scores_out
+cat $text_in | sym2int.pl -f 2- $dir/config/words.txt > $tempdir/text.int
 
+special_symbol_opts=$(cat $dir/special_symbol_opts.txt)
 
+rnnlm-sentence-probs --normalize-probs=$ensure_normalized_probs \
+       $special_symbol_opts $dir/final.raw "$word_embedding" $tempdir/text.int > $tempdir/loglikes.rnn
+# Now $tempdir/loglikes.rnn has the following structure
+# utt-id log P(word1 | <s>) log P(word2 | <s> word1) ... log P(</s> | all word histories)
+# for example,
+#
+# en_4156-A_058697-058813-2 -3.57205 -2.70411 -4.29876 -3.63707 -6.00299 -2.11093 -2.03955
+# en_4156-A_058697-058813-3 -6.6074 -1.21244 -3.89991 -3.23747 -5.35102 -1.90448 -1.77809
+# en_4156-A_058697-058813-4 -5.09022 -1.24148 -4.76337 -4.75594 -5.77118 -2.08555 -2.18403
+# en_4156-A_058697-058813-5 -4.54489 -2.97485 -3.93646 -3.28041 -5.18779 -2.83356 -1.72601
+# en_4156-A_058697-058813-6 -2.31464 -3.74738 -4.03309 -3.22942 -5.66818 -2.0396 -1.64734
+# en_4156-A_058697-058813-7 -5.0728 -2.96303 -4.6539 -3.20266 -5.40682 -2.10625 -1.90956
+
+[ $(cat $tempdir/loglikes.rnn | wc -l) -ne $(cat $tempdir/text.int | wc -l) ] && \
+  echo "$0: rnnlm rescoring failed" && exit 1;
+
+# We need the negative log-probabilities
+cat $tempdir/loglikes.rnn | awk '{sum=0;for(i=2;i<=NF;i++)sum-=$i; print $1,sum}' >$scores_out

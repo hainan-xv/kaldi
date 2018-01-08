@@ -1,6 +1,7 @@
-// rnnlmbin/rnnlm-nbest-probs.cc
+// rnnlmbin/rnnlm-sentence-probs.cc
 
 // Copyright 2015-2017  Johns Hopkins University (author: Daniel Povey)
+//           2017 Hainan Xu
 
 // See ../../COPYING for clarification regarding multiple authors
 //
@@ -27,14 +28,6 @@
 #include <fstream>
 #include <sstream>
 
-void GetNumbersFromLine(std::string line, std::vector<int32> *v) {
-  std::stringstream ss(line);
-  int32 i;
-  while (ss >> i) {
-    v->push_back(i);
-  }
-}
-
 int main(int argc, char *argv[]) {
   try {
     using namespace kaldi;
@@ -43,10 +36,12 @@ int main(int argc, char *argv[]) {
     typedef kaldi::int64 int64;
 
     const char *usage =
-        "This program takes input of a text corpus (with words represented by "
-        "symbol-id's), and an already trained RNNLM model, and prints the log"
-        "-probabilities of each word in the corpus. The RNNLM resets its hidden"
-        " state for each new line. This is used in n-best rescoring with RNNLMs"
+        "This program takes input of a text corpus (with words represented by\n"
+        "symbol-id's), and an already trained RNNLM model, and prints the log\n"
+        "-probabilities of each word in the corpus. The RNNLM resets its hidden\n"
+        "state for each new line. This is used in n-best rescoring with RNNLMs\n"
+        "An example the n-best rescoring usage is at "
+        "egs/swbd/s5c$ vi local/rnnlm/run_tdnn_lstm.sh"
         "\n"
         "Usage:\n"
         " rnnlm-sentence-probs [options] <rnnlm> <word-embedding-matrix> "
@@ -105,17 +100,18 @@ int main(int argc, char *argv[]) {
 
     std::ifstream ifile(text_filename.c_str());
 
-    std::string line;
-    while (getline(ifile, line)) {
-      std::vector<int> v;
-      GetNumbersFromLine(line, &v);
+    std::string key, line;
+    while (ifile >> key) {
+      getline(ifile, line);
+      std::vector<int32> v;
+      KALDI_ASSERT(SplitStringToIntegers(line, " ", true, &v));
       RnnlmComputeState rnnlm_compute_state(info, opts.bos_index);
+
+      std::cout << key << " ";
       for (int32 i = 0; i < v.size(); i++) {
         int32 word_id = v[i];
         std::cout << rnnlm_compute_state.LogProbOfWord(word_id) << " ";
 
-//        CuMatrix<BaseFloat> word_logprobs(1, word_embedding_mat.NumRows());
-//        rnnlm_compute_state.GetLogProbOfWords(&word_logprobs);
         rnnlm_compute_state.AddWord(word_id);
       }
       // add the </s> symbol
