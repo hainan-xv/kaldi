@@ -40,22 +40,6 @@ for x in final.raw config/words.txt; do
   fi
 done
 
-cat $text_in | awk '{for (x=2;x<=NF;x++) {printf("%s ", $x)} printf("\n");}' >$tempdir/text
-cat $text_in | awk '{print $1}' > $tempdir/ids # e.g. utterance ids.
-
-cat $tempdir/text | sym2int.pl $dir/config/words.txt > $tempdir/text.int
-
-special_symbol_opts=$(cat $dir/special_symbol_opts.txt)
-
-rnnlm-sentence-probs $special_symbol_opts $dir/final.raw "$word_embedding" $tempdir/text.int > $tempdir/loglikes.rnn
-
-[ $(cat $tempdir/loglikes.rnn | wc -l) -ne $(cat $tempdir/text | wc -l) ] && \
-  echo "rnnlm rescoring failed" && exit 1;
-
-paste $tempdir/loglikes.rnn | awk '{sum=0;for(i=1;i<=NF;i++)sum-=$i; print sum}' >$tempdir/scores
-
-# scores out, with utterance-ids.
-paste $tempdir/ids $tempdir/scores  > $scores_out
 cat $text_in | sym2int.pl -f 2- $dir/config/words.txt > $tempdir/text.int
 
 special_symbol_opts=$(cat $dir/special_symbol_opts.txt)
