@@ -14,7 +14,7 @@ weight=0.5   # when we do lattice-rescoring, instead of replacing the lm-weights
 
 set -e
 
-dir=data/tensorflow_lstm_fast
+dir=data/tensorflow_lstm_bf_fast_2l
 mkdir -p $dir
 
 steps/tfrnnlm/check_tensorflow_installed.sh
@@ -26,7 +26,7 @@ fi
 if [ $stage -le 2 ]; then
 # the following script uses TensorFlow. You could use tools/extras/install_tensorflow_py.sh to install it
   $cuda_cmd $dir/train_rnnlm.log utils/parallel/limit_num_gpus.sh \
-    python -u steps/tfrnnlm/train_lstm_fast.py --data-path=$dir --save-path=$dir/rnnlm --vocab-path=$dir/wordlist.rnn.final
+    python -u steps/tfrnnlm/train_lstm_bf_fast_2l.py --data-path=$dir --save-path=$dir/rnnlm --vocab-path=$dir/wordlist.rnn.final
 fi
 
 final_lm=ami_fsh.o3g.kn
@@ -45,13 +45,13 @@ if [ $stage -le 3 ]; then
 #      data/$mic/${decode_set}_hires ${decode_dir} \
 #      ${decode_dir}_tfrnnlm_lat_${ngram_order}gram  &
 
-# Lattice rescoring, unpruned (slow) version, parallel
+# Lattice rescoring, unpruned (slow) version, unparallel
     steps/tfrnnlm/lmrescore_rnnlm_lat.sh \
       --cmd "$tfrnnlm_cmd --mem 4G" \
       --weight $weight --max-ngram-order $ngram_order \
       data/lang_$LM $dir \
       data/$mic/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_lat_${ngram_order}gram_unpruned  &
+      ${decode_dir}_lat_lstm_bf_${ngram_order}gram_unpruned  &
 
   done
 fi
