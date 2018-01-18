@@ -162,21 +162,21 @@ class RnnlmModel(object):
           "embedding", [vocab_size, size], dtype=data_type())
 
       input_data = tf.transpose(input_.input_data)
-      #inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
       inputs = tf.nn.embedding_lookup(self.embedding, input_data)
-      #inputs = tf.reshape(inputs, [num_steps, batch_size, size])
       test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
       # reshape test_inputs to be (1, ?, size) for LSTMBlockFusedCell.
       test_inputs = tf.expand_dims(test_inputs[:, 0, :], 0)
 
     # test time
     with tf.variable_scope("RNN"):
+      test_state_out = []
       for layer in range(config.num_layers):
         test_inputs = test_inputs if layer == 0 else test_cell_output
         with tf.variable_scope("layer{}".format(layer)):
           (test_cell_output, test_output_state) = self.cell[layer](test_inputs, initial_state=test_input_state[layer])
+          test_state_out.append(test_output_state)
 
-    test_state_out = tf.reshape(tf.stack(axis=0, values=test_output_state), [config.num_layers, 2, -1, size], name="test_state_out")
+    test_state_out = tf.reshape(tf.stack(axis=0, values=test_state_out), [config.num_layers, 2, -1, size], name="test_state_out")
     test_cell_out = tf.reshape(test_cell_output, [-1, size], name="test_cell_out")
 
     # above is the first part of the graph for test
@@ -221,7 +221,7 @@ class RnnlmModel(object):
       final_state = []
       for layer in range(config.num_layers):
         inputs = inputs if layer == 0 else cell_output
-        if is_training and config.keep_prob < 1 and layer != (config.num_layers - 1):
+        if is_training and config.keep_prob < 1:
           inputs = tf.nn.dropout(inputs, config.keep_prob)
         with tf.variable_scope("layer{}".format(layer)):
           (cell_output, state) = self.cell[layer](inputs, initial_state=self._initial_state[layer])
