@@ -22,7 +22,7 @@ EXTRA_CXXFLAGS = -Wno-sign-compare -I$(TENSORFLOW)/bazel-tensorflow/external/pro
 include ../kaldi.mk
 
 BINFILES = lattice-lmrescore-tf-rnnlm lattice-lmrescore-tf-rnnlm-parallel \
-           lattice-lmrescore-tf-rnnlm-pruned
+           lattice-lmrescore-tf-rnnlm-pruned lattice-lmrescore-tf-rnnlm-pruned-parallel
 
 OBJFILES =
 

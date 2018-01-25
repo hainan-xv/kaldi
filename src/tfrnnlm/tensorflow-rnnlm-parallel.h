@@ -76,6 +76,8 @@ class TfRnnlmDeterministicFstParallel:
                                const std::vector<Label> &olabel_vector,
                                std::vector<fst::StdArc>* arc2_vector);
 
+  virtual void Clear();
+
  private:
   typedef unordered_map<std::vector<Label>,
                         StateId, VectorHasher<Label> > MapType;

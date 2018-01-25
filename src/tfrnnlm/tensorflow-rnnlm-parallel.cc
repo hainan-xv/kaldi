@@ -117,6 +117,22 @@ TfRnnlmDeterministicFstParallel::~TfRnnlmDeterministicFstParallel() {
   }
 }
 
+void TfRnnlmDeterministicFstParallel::Clear() {
+  // similar to the destructor but we ratain the 0-th entried in each map
+  // which corresponds to the <bos> state 
+  for (int i = 1; i < state_to_context_.size(); ++i) {
+    delete state_to_context_[i];
+  } 
+  for (int i = 1; i < state_to_cell_.size(); ++i) {
+    delete state_to_cell_[i];
+  }
+
+  state_to_context_.resize(1);
+  state_to_cell_.resize(1);
+  state_to_wseq_.resize(1);
+  wseq_to_state_.clear();
+  wseq_to_state_[state_to_wseq_[0]] = 0;
+}
 
 void TfRnnlmDeterministicFstParallel::FinalParallel(const std::vector<StateId>& s2_vector_final,
                                                     std::vector<Weight>* det_fst_final_vector) {
@@ -131,6 +147,7 @@ void TfRnnlmDeterministicFstParallel::FinalParallel(const std::vector<StateId>& 
 
   for (int i = 0; i < s2_size; ++i) {
     StateId s = s2_vector_final[i];
+    KALDI_ASSERT(static_cast<size_t>(s) < state_to_context_.size());
     state_to_context_vector.push_back(state_to_context_[s]);
     state_to_cell_vector.push_back(state_to_cell_[s]);  
   }
@@ -237,7 +254,7 @@ void TfRnnlmDeterministicFstParallel::GetArcsParallel(const std::vector<StateId>
 
     // If the pair was just inserted, then also add it to <state_to_wseq_> and
     // <state_to_context_>.
-    // In the Parallel case should never fail(?)
+    // In the Parallel case it should never fail (?)
     if (result.second == true) {
       state_to_wseq_.push_back(wseq);
       state_to_context_.push_back(new_context);

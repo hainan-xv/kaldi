@@ -3,6 +3,7 @@
 // Copyright 2011-2012 Gilles Boulianne
 //                2014 Telepoint Global Hosting Service, LLC. (Author: David Snyder)
 //           2012-2015 Johns Hopkins University (author: Daniel Povey)
+//           2017-2018 Dongji Gao
 
 // See ../../COPYING for clarification regarding multiple authors
 //
@@ -204,6 +205,119 @@ bool ComposeDeterministicOnDemandFst<Arc>::GetArc(StateId s, Label ilabel,
     state_vec_.push_back(new_pair);
   }
   return true;
+}
+
+template<class Arc>
+ComposeDeterministicOnDemandFstParallel<Arc>::ComposeDeterministicOnDemandFstParallel(
+    DeterministicOnDemandFst<Arc> *fst1,
+    DeterministicOnDemandFstParallel<Arc> *fst2): fst1_(fst1), fst2_(fst2) {
+  KALDI_ASSERT(fst1 != NULL && fst2 != NULL);
+  if (fst1_->Start() == -1 || fst2_->Start() == -1) {
+    start_state_ = -1;
+    next_state_ = 0; // actually we don't care about this value.
+  } else {
+    start_state_ = 0;
+    std::pair<StateId,StateId> start_pair(fst1_->Start(), fst2_->Start());
+    state_map_[start_pair] = start_state_;
+    state_vec_.push_back(start_pair);
+    next_state_ = 1;
+  }
+}
+
+template<class Arc>
+void ComposeDeterministicOnDemandFstParallel<Arc>::FinalParallel(const std::vector<StateId> &s_vector_final,
+                                                                 std::vector<typename Arc::Weight> *det_fst_final_vector) {
+  fst2_->FinalParallel(s_vector_final, det_fst_final_vector);
+  KALDI_ASSERT(s_vector_final.size() == det_fst_final_vector->size());
+  int i = 0;
+  for (typename std::vector<typename Arc::Weight>::iterator iter = det_fst_final_vector->begin();
+       iter != det_fst_final_vector->end(); ++iter) {
+    StateId s = s_vector_final[i];
+    KALDI_ASSERT(s < static_cast<StateId>(state_vec_.size()));
+    const std::pair<StateId, StateId> &pr (state_vec_[s]);
+    *iter = Times(fst1_->Final(pr.first), *iter);
+    ++i;
+  }
+}
+
+template<class Arc>
+void ComposeDeterministicOnDemandFstParallel<Arc>::GetArcsParallel(const std::vector<StateId> &s2_vector,
+                                                                   const std::vector<Label> &ilabel_vector,
+                                                                   std::vector<Arc> *oarc_vector) {
+  typedef typename MapType::iterator IterType;
+  KALDI_ASSERT(s2_vector.size() == ilabel_vector.size());
+
+  // vector for GetArcsParallel()
+  std::vector<int> oarc_index_vector;
+  std::vector<StateId> s2_none0_vector;
+  std::vector<Label> ilabel_none0_vector;
+  std::vector<Arc> arc1_none0_vector, arc2_none0_vector;
+
+  for (int i = 0; i < s2_vector.size(); ++i) {
+    StateId s = s2_vector[i];
+    Label ilabel = ilabel_vector[i];
+
+    KALDI_ASSERT(ilabel != 0 &&
+           "This program expects epsilon-free compact lattices as input");
+    KALDI_ASSERT(s < static_cast<StateId>(state_vec_.size()));
+    const std::pair<StateId, StateId> pr (state_vec_[s]);
+  
+    Arc arc1, oarc;
+    fst1_->GetArc(pr.first, ilabel, &arc1);
+    if (arc1.olabel == 0) { // There is no output label on the
+      // arc, so only the first state changes.
+      std::pair<const std::pair<StateId, StateId>, StateId> new_value(
+          std::pair<StateId, StateId>(arc1.nextstate, pr.second),
+          next_state_);
+  
+      std::pair<IterType, bool> result = state_map_.insert(new_value);
+      oarc.ilabel = ilabel;
+      oarc.olabel = 0;
+      oarc.nextstate = result.first->second;
+      oarc.weight = arc1.weight;
+      oarc_vector->push_back(oarc);
+      if (result.second == true) { // was inserted
+        next_state_++;
+        const std::pair<StateId, StateId> &new_pair (new_value.first);
+        state_vec_.push_back(new_pair);
+      }
+    } else {
+      // Here oarc is a fake arc just as placeholder. 
+      oarc_vector->push_back(oarc);
+      // Add the related index to <orac_index_vecotr>.
+      oarc_index_vector.push_back(oarc_vector->size() - 1);
+      s2_none0_vector.push_back(pr.second);
+      ilabel_none0_vector.push_back(arc1.olabel);
+      arc1_none0_vector.push_back(arc1);
+    }
+  }
+  
+  // Get all related arcs from the second fst.
+  fst2_->GetArcsParallel(s2_none0_vector, ilabel_none0_vector, &arc2_none0_vector);
+  KALDI_ASSERT(oarc_index_vector.size() == arc2_none0_vector.size());
+
+  for (int i = 0; i < oarc_index_vector.size(); ++i) {
+    int index = oarc_index_vector[i];
+    Label ilabel = ilabel_none0_vector[i];
+    Arc arc1 = arc1_none0_vector[i], arc2 = arc2_none0_vector[i];
+    Arc oarc;
+
+    std::pair<const std::pair<StateId, StateId>, StateId> new_value(
+        std::pair<StateId, StateId>(arc1.nextstate, arc2.nextstate),
+        next_state_);
+    std::pair<IterType, bool> result =
+        state_map_.insert(new_value);
+    oarc.ilabel = ilabel;
+    oarc.olabel = arc2.olabel;
+    oarc.nextstate = result.first->second;
+    oarc.weight = Times(arc1.weight, arc2.weight);
+    (*oarc_vector)[index] = oarc;
+    if (result.second == true) { // was inserted
+      next_state_++;
+      const std::pair<StateId, StateId> &new_pair (new_value.first);
+      state_vec_.push_back(new_pair);
+    }
+  }
 }
 
 template<class Arc>
