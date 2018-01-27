@@ -121,10 +121,15 @@ struct ComposeLatticePrunedOptions {
   // heuristics will be less accurate).
   BaseFloat growth_ratio;
 
+  // 'max_parallel_size' is the maximum number of states that we can expand at 
+  // the same time.
+  int max_parallel_size;
+
   ComposeLatticePrunedOptions(): lattice_compose_beam(6.0),
                                  max_arcs(100000),
                                  initial_num_arcs(100),
-                                 growth_ratio(1.5) { }
+                                 growth_ratio(1.5), 
+                                 max_parallel_size(1) { }
   void Register(OptionsItf *po) {
     po->Register("lattice-compose-beam", &lattice_compose_beam,
                  "Beam used in pruned lattice composition, which determines how "
@@ -171,6 +176,11 @@ void ComposeCompactLatticePruned(
     fst::DeterministicOnDemandFst<fst::StdArc> *det_fst,
     CompactLattice* composed_clat);
 
+void ComposeCompactLatticePrunedParallel(
+    const ComposeLatticePrunedOptions &opts,
+    const CompactLattice &clat,
+    fst::DeterministicOnDemandFstParallel<fst::StdArc> *det_fst,
+    CompactLattice* composed_clat);
 
 
 

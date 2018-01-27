@@ -3,6 +3,7 @@
 // Copyright 2011-2012 Gilles Boulianne
 //                2014 Telepoint Global Hosting Service, LLC. (Author: David Snyder)
 //           2012-2015 Johns Hopkins University (author: Daniel Povey)
+//           2017-2018 Dongji Gao
 
 // See ../../COPYING for clarification regarding multiple authors
 //
@@ -178,6 +179,47 @@ class ScaleDeterministicOnDemandFst:  public DeterministicOnDemandFst<StdArc> {
   DeterministicOnDemandFst<StdArc> &det_fst_;
 };
 
+class ScaleDeterministicOnDemandFstParallel:  public DeterministicOnDemandFstParallel<StdArc> {
+ public:
+  typedef StdArc::Weight Weight;
+  typedef StdArc::StateId StateId;
+  typedef StdArc::Label Label;
+
+  // Constructor does not take ownership of 'det_fst'.
+  ScaleDeterministicOnDemandFstParallel(float scale,
+                                        DeterministicOnDemandFstParallel<StdArc> *det_fst):
+      scale_(scale), det_fst_(*det_fst) { }
+
+  StateId Start() { return det_fst_.Start(); }
+
+  void FinalParallel(const std::vector<StateId> &s_vector_final,
+                     std::vector<Weight> *det_fst_final_vector) {
+    // Note: Weight is indirectly a typedef to TropicalWeight.
+    det_fst_.FinalParallel(s_vector_final, det_fst_final_vector);
+    for (std::vector<Weight>::iterator iter = det_fst_final_vector->begin();
+        iter != det_fst_final_vector->end(); ++iter) {
+      if (*iter != Weight::Zero()) {
+        *iter = TropicalWeight(iter->Value() * scale_);
+      }
+    }
+  }
+
+  void GetArcsParallel(const std::vector<StateId> &s2_vector, 
+                      const std::vector<Label> &ilabel_vector, 
+                      std::vector<fst::StdArc> *orac_vector) {
+    det_fst_.GetArcsParallel(s2_vector, ilabel_vector, orac_vector);
+                              
+    for (std::vector<fst::StdArc>::iterator iter = orac_vector->begin();
+         iter != orac_vector->end(); ++iter) {
+      iter->weight = TropicalWeight(iter->weight.Value() * scale_);
+    }
+  }
+
+ private:
+  float scale_;
+  DeterministicOnDemandFstParallel<StdArc> &det_fst_;
+};
+
 /**
   The class UnweightedNgramFst is a DeterministicOnDemandFst whose states encode
   an n-gram history. Conceptually, for n-gram order n and k labels, the FST is an
@@ -232,10 +274,45 @@ class ComposeDeterministicOnDemandFst: public DeterministicOnDemandFst<Arc> {
   virtual Weight Final(StateId s);
 
   virtual bool GetArc(StateId s, Label ilabel, Arc *oarc);
+  
 
  private:
   DeterministicOnDemandFst<Arc> *fst1_;
   DeterministicOnDemandFst<Arc> *fst2_;
+  typedef unordered_map<std::pair<StateId, StateId>, StateId, kaldi::PairHasher<StateId> > MapType;
+  MapType state_map_;
+  std::vector<std::pair<StateId, StateId> > state_vec_; // maps from
+  // StateId to pair.
+  StateId next_state_;
+  StateId start_state_;
+};
+
+template<class Arc>
+class ComposeDeterministicOnDemandFstParallel: public DeterministicOnDemandFstParallel<Arc> {
+ public:
+  typedef typename Arc::StateId StateId;
+  typedef typename Arc::Weight Weight;
+  typedef typename Arc::Label Label;
+
+  /// Note: constructor does not "take ownership" of the input fst's.  The input
+  /// fst's should be treated as const, in that their contents do not change,
+  /// but they are not const as the DeterministicOnDemandFst's data-access
+  /// functions are not const, for reasons relating to caching.
+  ComposeDeterministicOnDemandFstParallel(DeterministicOnDemandFst<Arc> *fst1,
+                                          DeterministicOnDemandFstParallel<Arc> *fst2);
+
+  virtual StateId Start() { return start_state_; }
+
+  virtual void FinalParallel(const std::vector<StateId> &s_vector_final,
+                        std::vector<typename Arc::Weight> *det_fst_final_vector);
+
+  virtual void GetArcsParallel(const std::vector<StateId> &s2_vector,
+                          const std::vector<Label> &ilabel_vector,
+                          std::vector<Arc> *oarc_vector);
+
+ private:
+  DeterministicOnDemandFst<Arc> *fst1_;
+  DeterministicOnDemandFstParallel<Arc> *fst2_;
   typedef unordered_map<std::pair<StateId, StateId>, StateId, kaldi::PairHasher<StateId> > MapType;
   MapType state_map_;
   std::vector<std::pair<StateId, StateId> > state_vec_; // maps from
