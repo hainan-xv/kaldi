@@ -227,15 +227,24 @@ ComposeDeterministicOnDemandFstParallel<Arc>::ComposeDeterministicOnDemandFstPar
 template<class Arc>
 void ComposeDeterministicOnDemandFstParallel<Arc>::FinalParallel(const std::vector<StateId> &s_vector_final,
                                                                  std::vector<typename Arc::Weight> *det_fst_final_vector) {
-  fst2_->FinalParallel(s_vector_final, det_fst_final_vector);
-  KALDI_ASSERT(s_vector_final.size() == det_fst_final_vector->size());
-  int i = 0;
-  for (typename std::vector<typename Arc::Weight>::iterator iter = det_fst_final_vector->begin();
-       iter != det_fst_final_vector->end(); ++iter) {
+  // build vector
+  std::vector<StateId> fst1_final_vector, fst2_final_vector;
+  for (int i = 0; i < s_vector_final.size(); ++i) {
     StateId s = s_vector_final[i];
     KALDI_ASSERT(s < static_cast<StateId>(state_vec_.size()));
     const std::pair<StateId, StateId> &pr (state_vec_[s]);
-    *iter = Times(fst1_->Final(pr.first), *iter);
+    fst1_final_vector.push_back(pr.first);
+    fst2_final_vector.push_back(pr.second);
+  }
+
+  fst2_->FinalParallel(fst2_final_vector, det_fst_final_vector);
+  KALDI_ASSERT(s_vector_final.size() == det_fst_final_vector->size());
+
+  int i = 0;
+  for (typename std::vector<typename Arc::Weight>::iterator iter = det_fst_final_vector->begin();
+       iter != det_fst_final_vector->end(); ++iter) {
+    StateId s1 = fst1_final_vector[i];
+    *iter = Times(fst1_->Final(s1), *iter);
     ++i;
   }
 }
