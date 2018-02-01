@@ -199,7 +199,7 @@ void KaldiTfRnnlmWrapper::AcquireInitialTensors() {
       {"Train/Model/test_state_in", initial_context_},
     };
 
-    status = session_->Run(inputs, {"Train/Model/test_cell_out"}, {}, &state);
+    status = session_->Run(inputs, {"Train/Model/test_predicted_embedding_output"}, {}, &state);
     if (!status.ok()) {
       KALDI_ERR << status.ToString();
     }
@@ -225,7 +225,7 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(int32 word,
       {"Train/Model/test_word_in", thisword},
       {"Train/Model/test_word_out", thisword},
       {"Train/Model/test_state_in", context_in},
-      {"Train/Model/test_cell_in", cell_in},
+      {"Train/Model/test_predicted_embedding_in", cell_in},
     };
 
     // The session will initialize the outputs
@@ -233,7 +233,7 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(int32 word,
     Status status = session_->Run(inputs,
         {"Train/Model/test_out",
          "Train/Model/test_state_out",
-         "Train/Model/test_cell_out"}, {}, &outputs);
+         "Train/Model/test_predicted_embedding_output"}, {}, &outputs);
     if (!status.ok()) {
       KALDI_ERR << status.ToString();
     }
@@ -243,7 +243,7 @@ BaseFloat KaldiTfRnnlmWrapper::GetLogProb(int32 word,
   } else {
     inputs = {
       {"Train/Model/test_word_out", thisword},
-      {"Train/Model/test_cell_in", cell_in},
+      {"Train/Model/test_predicted_embedding_in", cell_in},
     };
 
     // Run the session, evaluating our "c" operation from the graph
