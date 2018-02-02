@@ -15,18 +15,23 @@
 # limitations under the License.
 # ==============================================================================
 
-# this script trains a vanilla RNNLM with TensorFlow. 
+# This script trains a LSTM RNNLM with TensorFlow using a different objf than
+# cross-entropy, which ensures the output of the LSTM is normalized and thus
+# there is no need to normalize output during test time, hence the name "fast"
+# The objf is described in http://www.danielpovey.com/files/2018_icassp_rnnlm.pdf
+
 # to call the script, do
 # python steps/tfrnnlm/train_lstm_fast.py --data-path=$datadir \
 #        --save-path=$savepath --vocab-path=$rnn.wordlist [--hidden-size=$size]
 #
-# One example recipe is at egs/ami/s5/local/tfrnnlm/run_vanilla_rnnlm.sh
+# One example recipe is at egs/ami/s5/local/tfrnnlm/run_lstm_fast.sh
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import sys
+
 import inspect
 import time
 
@@ -52,9 +57,8 @@ flags.DEFINE_bool("use-fp16", False,
 FLAGS = flags.FLAGS
 
 class Config(object):
-  """Small config."""
   init_scale = 0.1
-  learning_rate = 1
+  learning_rate = 1.0
   max_grad_norm = 5
   num_layers = 2
   num_steps = 20
@@ -68,9 +72,10 @@ class Config(object):
 def data_type():
   return tf.float16 if FLAGS.use_fp16 else tf.float32
 
-# this new "softmax" function we show can train a "self-normalized" RNNLM where
+# This new "softmax" function we show can train a "self-normalized" RNNLM where
 # the sum of the output is automatically (close to) 1.0
 # which saves a lot of computation for lattice-rescoring
+# The details of this function is described in http://www.danielpovey.com/files/2018_icassp_rnnlm.pdf
 def new_softmax(labels, logits):
   target = tf.reshape(labels, [-1])
   f_logits = tf.exp(logits)
@@ -93,7 +98,6 @@ class RnnlmInput(object):
     self.input_data, self.targets = reader.rnnlm_producer(
         data, batch_size, num_steps, name=name)
 
-
 class RnnlmModel(object):
   """The RNNLM model."""
 
@@ -113,11 +117,11 @@ class RnnlmModel(object):
       if 'reuse' in inspect.getargspec(
           tf.contrib.rnn.BasicLSTMCell.__init__).args:
         return tf.contrib.rnn.BasicLSTMCell(
-            size, forget_bias=0.0, state_is_tuple=True,
+            size, forget_bias=1.0, state_is_tuple=True,
             reuse=tf.get_variable_scope().reuse)
       else:
         return tf.contrib.rnn.BasicLSTMCell(
-            size, forget_bias=0.0, state_is_tuple=True)
+            size, forget_bias=1.0, state_is_tuple=True)
     attn_cell = lstm_cell
     if is_training and config.keep_prob < 1:
       def attn_cell():
@@ -129,15 +133,16 @@ class RnnlmModel(object):
     self._initial_state = self.cell.zero_state(batch_size, data_type())
     self._initial_state_single = self.cell.zero_state(1, data_type())
 
-    self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="test_initial_state")
+    self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="lat_initial_state")
 
-    test_word_in = tf.placeholder(tf.int32, [None, 1], name="test_word_in")
-    state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 2, None, size], name="test_state_in")
+    lat_word_in = tf.placeholder(tf.int32, [None, 1], name="lat_word_in")
+    lat_state_in = tf.placeholder(tf.float32, [config.num_layers, 2, None, size], name="lat_state_in")
 
-    l = tf.unstack(state_placeholder, axis=0)
-    test_state_in_tuple = tuple(
+    # unpacking the input state context 
+    l = tf.unstack(lat_state_in, axis=0)
+    lat_state_in_tuple = tuple(
                [tf.contrib.rnn.LSTMStateTuple(l[idx][0],l[idx][1])
-                   for idx in range(config.num_layers)]
+                 for idx in range(config.num_layers)]
     )
 
     with tf.device("/cpu:0"):
@@ -145,43 +150,43 @@ class RnnlmModel(object):
           "embedding", [vocab_size, size], dtype=data_type())
 
       inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
-      test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
+      lat_inputs = tf.nn.embedding_lookup(self.embedding, lat_word_in)
 
     # test time
     with tf.variable_scope("RNN"):
-      (test_predicted_embedding_output, test_state_out_tuple) = self.cell(test_inputs[:, 0, :], test_state_in_tuple)
+      (lat_predicted_embedding_out, lat_state_out_tuple) = self.cell(lat_inputs[:, 0, :], lat_state_in_tuple)
 
-    test_predicted_embedding_output = tf.reshape(test_predicted_embedding_output, [-1, size], name="test_predicted_embedding_output")
+    lat_predicted_embedding_out = tf.reshape(lat_predicted_embedding_out, [-1, size], name="lat_predicted_embedding_out")
 
-    test_state_out = tf.reshape(tf.stack(axis=0, values=test_state_out_tuple), [config.num_layers, 2, -1, size], name="test_state_out")
+    lat_state_out = tf.reshape(tf.stack(axis=0, values=lat_state_out_tuple), [config.num_layers, 2, -1, size], name="lat_state_out")
 
-    # above is the first part of the graph for test
-    # test-word-in
-    #               > ---- > test-predicted-embedding-output
-    # test-state-in        > test-state-out
+    # above is the first part of the graph for lattice rescoring
+    # lat-word-in
+    #               > ---- > lat-predicted-embedding-out
+    # lat-state-in         > lat-state-out
 
 
-    # below is the second part of the graph for test
-    # test-word-out
-    #                             > prob(word | test-word-out)
-    # test-predicted-embedding-in
+    # below is the second part of the graph for lattice rescoring
+    # lat-word-out
+    #                             > prob(word | lat-predicted-embedding-in)
+    # lat-predicted-embedding-in
 
-    test_word_out = tf.placeholder(tf.int32, [None, 1], name="test_word_out")
-    test_predicted_embedding_in = tf.placeholder(tf.float32, [None, size], name="test_predicted_embedding_in")
+    lat_word_out = tf.placeholder(tf.int32, [None, 1], name="lat_word_out")
+    lat_predicted_embedding_in = tf.placeholder(tf.float32, [None, size], name="lat_predicted_embedding_in")
 
-    indices = tf.reshape(test_word_out, [-1])
+    lat_indices = tf.reshape(lat_word_out, [-1])
 
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
-    softmax_b = softmax_b - 9.0
+    softmax_b = softmax_b - 10.0  # this helps prevent training instabilities
 
-    this_softmax_w = tf.gather(softmax_w, indices, axis=1)
-    this_softmax_b = tf.gather(softmax_b, indices)
-  
-    test_logits = tf.diag_part(tf.matmul(test_predicted_embedding_in, this_softmax_w)) + this_softmax_b
+    lat_softmax_w = tf.gather(softmax_w, lat_indices, axis=1)
+    lat_softmax_b = tf.gather(softmax_b, lat_indices)
 
-    test_out = tf.reshape(test_logits, [-1], name="test_out")
+    lat_logits = tf.diag_part(tf.matmul(lat_predicted_embedding_in, lat_softmax_w)) + lat_softmax_b
+
+    lat_out = tf.reshape(lat_logits, [-1], name="lat_out")
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)
@@ -200,8 +205,8 @@ class RnnlmModel(object):
     with tf.variable_scope("RNN"):
       for time_step in range(num_steps):
         if time_step > -1: tf.get_variable_scope().reuse_variables()
-        (cell_output, state) = self.cell(inputs[:, time_step, :], state)
-        outputs.append(cell_output)
+        (predicted_embedding_output, state) = self.cell(inputs[:, time_step, :], state)
+        outputs.append(predicted_embedding_output)
 
     output = tf.reshape(tf.stack(axis=1, values=outputs), [-1, size])
     logits = tf.matmul(output, softmax_w) + softmax_b
@@ -279,7 +284,6 @@ def run_epoch(session, model, eval_op=None, verbose=False):
     vals = session.run(fetches, feed_dict)
     cost = vals["cost"]
     state = vals["final_state"]
-
 
     costs += cost
     iters += model.input.num_steps

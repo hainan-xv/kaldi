@@ -15,9 +15,9 @@
 # limitations under the License.
 # ==============================================================================
 
-# this script trains a vanilla RNNLM with TensorFlow. 
+# this script trains a LSTM RNNLM with TensorFlow. 
 # to call the script, do
-# python steps/tfrnnlm/lstm.py --data-path=$datadir \
+# python steps/tfrnnlm/train_lstm.py --data-path=$datadir \
 #        --save-path=$savepath --vocab-path=$rnn.wordlist [--hidden-size=$size]
 #
 # One example recipe is at egs/ami/s5/local/tfrnnlm/run_lstm.sh
@@ -79,7 +79,6 @@ class RnnlmInput(object):
     self.input_data, self.targets = reader.rnnlm_producer(
         data, batch_size, num_steps, name=name)
 
-
 class RnnlmModel(object):
   """The RNNLM model."""
 
@@ -115,16 +114,14 @@ class RnnlmModel(object):
     self._initial_state = self.cell.zero_state(batch_size, data_type())
     self._initial_state_single = self.cell.zero_state(1, data_type())
 
-    self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="test_initial_state")
+    self.initial = tf.reshape(tf.stack(axis=0, values=self._initial_state_single), [config.num_layers, 2, 1, size], name="lat_initial_state")
 
+    lat_word_in = tf.placeholder(tf.int32, [None, 1], name="lat_word_in")
+    lat_state_in = tf.placeholder(tf.float32, [config.num_layers, 2, None, size], name="lat_state_in")
 
-    # first implement the less efficient version
-    test_word_in = tf.placeholder(tf.int32, [None, 1], name="test_word_in")
-
-    state_placeholder = tf.placeholder(tf.float32, [config.num_layers, 2, None, size], name="test_state_in")
     # unpacking the input state context 
-    l = tf.unstack(state_placeholder, axis=0)
-    test_state_in_tuple = tuple(
+    l = tf.unstack(lat_state_in, axis=0)
+    lat_state_in_tuple = tuple(
                [tf.contrib.rnn.LSTMStateTuple(l[idx][0],l[idx][1])
                  for idx in range(config.num_layers)]
     )
@@ -134,42 +131,43 @@ class RnnlmModel(object):
           "embedding", [vocab_size, size], dtype=data_type())
 
       inputs = tf.nn.embedding_lookup(self.embedding, input_.input_data)
-      test_inputs = tf.nn.embedding_lookup(self.embedding, test_word_in)
+      lat_inputs = tf.nn.embedding_lookup(self.embedding, lat_word_in)
 
     # test time
     with tf.variable_scope("RNN"):
-      (test_predicted_embedding_output, test_state_out_tuple) = self.cell(test_inputs[:, 0, :], test_state_in_tuple)
+      (lat_predicted_embedding_out, lat_state_out_tuple) = self.cell(lat_inputs[:, 0, :], lat_state_in_tuple)
 
-    test_predicted_embedding_output = tf.reshape(test_predicted_embedding_output, [-1, size], name="test_predicted_embedding_output")
+    lat_predicted_embedding_out = tf.reshape(lat_predicted_embedding_out, [-1, size], name="lat_predicted_embedding_out")
 
-    test_state_out = tf.reshape(tf.stack(axis=0, values=test_state_out_tuple), [config.num_layers, 2, -1, size], name="test_state_out")
-    # above is the first part of the graph for test
-    # test-word-in
-    #               > ---- > test-predicted-embedding-output
-    # test-state-in        > test-state-out
+    lat_state_out = tf.reshape(tf.stack(axis=0, values=lat_state_out_tuple), [config.num_layers, 2, -1, size], name="lat_state_out")
+
+    # above is the first part of the graph for lattice rescoring
+    # lat-word-in
+    #               > ---- > lat-predicted-embedding-out
+    # lat-state-in         > lat-state-out
 
 
-    # below is the 2nd part of the graph for test
-    # test-word-out
-    #               > prob(word | test-word-out)
-    # test-predicted-embedding-in
+    # below is the second part of the graph for lattice rescoring
+    # lat-word-out
+    #                             > prob(word | lat-predicted-embedding-in)
+    # lat-predicted-embedding-in
 
-    test_word_out = tf.placeholder(tf.int32, [None, 1], name="test_word_out")
-    test_predicted_embedding_in = tf.placeholder(tf.float32, [None, size], name="test_predicted_embedding_in")
+    lat_word_out = tf.placeholder(tf.int32, [None, 1], name="lat_word_out")
+    lat_predicted_embedding_in = tf.placeholder(tf.float32, [None, size], name="lat_predicted_embedding_in")
 
     softmax_w = tf.get_variable(
         "softmax_w", [size, vocab_size], dtype=data_type())
     softmax_b = tf.get_variable("softmax_b", [vocab_size], dtype=data_type())
 
-    test_logits = tf.matmul(test_predicted_embedding_in, softmax_w) + softmax_b
-    test_softmaxed = tf.nn.log_softmax(test_logits, 1)
+    lat_logits = tf.matmul(lat_predicted_embedding_in, softmax_w) + softmax_b
+    lat_softmaxed = tf.nn.log_softmax(lat_logits, 1)
 
-    this_size = tf.size(tf.reshape(test_word_out, [-1]))
+    lat_size = tf.size(tf.reshape(lat_word_out, [-1]))
 
-    this_concat = tf.reshape(tf.range(this_size), [-1, 1])
-    indices = tf.concat([this_concat, test_word_out], 1)
-    p_word = tf.gather_nd(test_softmaxed, indices)
-    test_out = tf.reshape(p_word, [-1], name="test_out")
+    lat_concat = tf.reshape(tf.range(lat_size), [-1, 1])
+    indices = tf.concat([lat_concat, lat_word_out], 1)
+    p_word = tf.gather_nd(lat_softmaxed, indices)
+    lat_out = tf.reshape(p_word, [-1], name="lat_out")
 
     if is_training and config.keep_prob < 1:
       inputs = tf.nn.dropout(inputs, config.keep_prob)
@@ -188,8 +186,8 @@ class RnnlmModel(object):
     with tf.variable_scope("RNN"):
       for time_step in range(num_steps):
         if time_step > -1: tf.get_variable_scope().reuse_variables()
-        (cell_output, state) = self.cell(inputs[:, time_step, :], state)
-        outputs.append(cell_output)
+        (predicted_embedding, state) = self.cell(inputs[:, time_step, :], state)
+        outputs.append(predicted_embedding)
 
     output = tf.reshape(tf.stack(axis=1, values=outputs), [-1, size])
     logits = tf.matmul(output, softmax_w) + softmax_b

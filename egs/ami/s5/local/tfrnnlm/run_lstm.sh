@@ -1,4 +1,13 @@
 #!/bin/bash
+
+# unrescored baseline
+# %WER 24.2 | 13098 94476 | 79.2 12.0 8.8 3.4 24.2 57.4 | -0.157 | exp/ihm/nnet3/tdnn_sp/decode_dev/ascore_12/dev_hires.ctm.filt.sys
+# %WER 25.4 | 12643 89973 | 77.7 14.0 8.3 3.1 25.4 56.5 | -0.144 | exp/ihm/nnet3/tdnn_sp/decode_eval/ascore_11/eval_hires.ctm.filt.sys
+
+# rescored numbers
+# %WER 23.7 | 13098 94474 | 79.7 11.9 8.4 3.4 23.7 57.0 | -0.270 | exp/ihm/nnet3/tdnn_sp/decode_dev_lat_lstm_3gram_unpruned/ascore_11/dev_hires.ctm.filt.sys
+# %WER 24.6 | 12643 89982 | 78.4 13.4 8.2 3.0 24.6 55.7 | -0.188 | exp/ihm/nnet3/tdnn_sp/decode_eval_lat_lstm_3gram_unpruned/ascore_11/eval_hires.ctm.filt.sys
+
 mic=ihm
 ngram_order=3 # this option when used, the rescoring binary makes an approximation
     # to merge the states of the FST generated from RNNLM. e.g. if ngram-order = 4
@@ -25,7 +34,6 @@ fi
 
 mkdir -p $dir
 if [ $stage -le 2 ]; then
-# the following script uses TensorFlow. You could use tools/extras/install_tensorflow_py.sh to install it
   $cuda_cmd $dir/train_rnnlm.log utils/parallel/limit_num_gpus.sh \
     python -u steps/tfrnnlm/train_lstm.py --data-path=$dir --save-path=$dir/rnnlm --vocab-path=$dir/wordlist.rnn.final
 fi
