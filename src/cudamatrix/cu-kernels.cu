@@ -7,7 +7,7 @@
 //                2013  Xiaohui Zhang
 //           2013-2015  Guoguo Chen
 //           2016-2017  Shiyin Kang
-//                2017  Hossein Hadian
+//                2017  Hossein Hadian, Daniel Galvez
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1879,8 +1879,7 @@ static void _apply_floor(Real* mat, Real floor_val, MatrixDim d) {
   int index = i + j * d.stride;
 
   if (i < d.cols && j < d.rows) {
-    if (mat[index] < floor_val)
-      mat[index] = floor_val;
+    mat[index] = max(mat[index], floor_val);
   }
 }
 
@@ -2036,8 +2035,7 @@ static void _apply_ceiling(Real* mat, Real ceiling_val, MatrixDim d) {
   int index = i + j * d.stride;
 
   if (i < d.cols && j < d.rows) {
-    if (mat[index] > ceiling_val)
-      mat[index] = ceiling_val;
+    mat[index] = min(mat[index], ceiling_val);
   }
 }
 
@@ -2360,6 +2358,42 @@ static void _diff_tanh(Real*eout, const Real*e, const Real*y, MatrixDim d,
   int y_index = i + j * y_stride;
   if (i < d.cols && j < d.rows)
     eout[dst_index] = (1.0 - y[y_index] * y[y_index]) * e[e_index];
+}
+
+
+
+/*
+  This function copies x to y while bounding the elements
+  away from zero using the scalar function:
+     y =  x if x <= -epsilon or x >= +epsilon
+          +epsilon if 0 <= x < epsilon
+          -epsilon if -epsilon < x < 0.
+  where:
+     x is the source matrix, of dimension and stride given by d
+     epsilon > 0
+     y is the destination matrix, with the num-rows and num-cols
+     given by d, but stride given by y_stride.
+ */
+template<typename Real>
+__global__
+static void _ensure_nonzero(const Real *x, MatrixDim d, Real epsilon,
+                            int y_stride, Real *y) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int x_index = i + j * d.stride,
+      y_index = i + j * y_stride;
+  if (i < d.cols && j < d.rows) {
+    Real src = x[x_index], dst;
+    if (src <= -epsilon || src >= epsilon)
+      dst = src;
+    else if (src >= 0)
+      dst = epsilon;
+    else
+      dst = -epsilon;
+    __syncthreads();  // This allows it to do consolidated write below, which
+                      // should improve speed.
+    y[y_index] = dst;
+  }
 }
 
 template<typename Real>
@@ -3524,6 +3558,104 @@ static void _diff_lstm_nonlinearity(const int cell_dim, const int have_dropout_m
   }
 }
 
+
+__global__
+static void _cuda_compress_uint8_sign(const BaseFloat *src, MatrixDim dim,
+                                      unsigned char *dest, int dest_stride) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int dest_index = i + j * dest_stride,
+      src_index = i + j * dim.stride;
+  if (i < dim.cols && j < dim.rows) {
+    BaseFloat f = src[src_index];
+    dest[dest_index] = (f > 0.0 ? (unsigned char)1 : (unsigned char)0);
+  }
+}
+
+
+// The following inline templated functions are a workaround for the
+// fact that (I believe) std::numeric_limits is not available in CUDA;
+// they allow us to access the minimum and maximum elements of certain
+// types from templated code.
+template <typename I> __device__ static inline int minimum_integer_value();
+template <typename I> __device__ static inline int maximum_integer_value();
+
+template<> __device__ int maximum_integer_value<int8_t>() { return 127; }
+template<> __device__ int minimum_integer_value<int8_t>() { return -128; }
+template<> __device__ int maximum_integer_value<uint8_t>() { return 255; }
+template<> __device__ int minimum_integer_value<uint8_t>() { return 0; }
+template<> __device__ int maximum_integer_value<int16_t>() { return 32767; }
+template<> __device__ int minimum_integer_value<int16_t>() { return -32768; }
+template<> __device__ int maximum_integer_value<uint16_t>() { return 65535; }
+template<> __device__ int minimum_integer_value<uint16_t>() { return 0; }
+
+
+
+template <typename I>
+__global__
+static void _cuda_compress_bounds_check(const BaseFloat *src, MatrixDim dim,
+                                        I *dest, int dest_stride, float inv_scale) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int dest_index = i + j * dest_stride,
+      src_index = i + j * dim.stride;
+  const int min_value = minimum_integer_value<I>(),
+      max_value = maximum_integer_value<I>();
+  int compressed_value;
+  int ok = (i < dim.cols && j < dim.rows);
+  if  (ok) {
+    float f = src[src_index];
+    // note: I'm not sure what __float2int_rn does if input is outside of
+    // integer range, but it doesn't matter much as in the situations where this
+    // type of compression would make sense, the input should be well inside the
+    // range of 'int', and if it fails, we've probably already catastrophically
+    // diverged.
+    int i = __float2int_rn(f * inv_scale);
+    if (i < min_value) compressed_value = min_value;
+    else if (i > max_value) compressed_value = max_value;
+    else compressed_value = i;
+  }
+  __syncthreads();
+  if (ok) {
+    dest[dest_index] = compressed_value;
+  }
+}
+
+
+template <typename I>
+__global__
+static void _cuda_compress_no_bounds_check(const BaseFloat *src, MatrixDim dim,
+                                           I *dest, int dest_stride,
+                                           float inv_scale) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int dest_index = i + j * dest_stride,
+      src_index = i + j * dim.stride;
+  if (i < dim.cols && j < dim.rows) {
+    float f = src[src_index];
+    int i = __float2int_rn(f * inv_scale);
+    I s = i;
+    dest[dest_index] = s;
+  }
+}
+
+template <typename I>
+__global__
+static void _cuda_uncompress(BaseFloat *dest, MatrixDim dim,
+                             const I *src, int src_stride,
+                             float scale) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  int j = blockIdx.y * blockDim.y + threadIdx.y;
+  int src_index = i + j * src_stride,
+      dest_index = i + j * dim.stride;
+  if (i < dim.cols && j < dim.rows) {
+    I s = src[src_index];
+    dest[dest_index] = float(s * scale);
+  }
+}
+
+
+
 /***********************************************************************
  * ANSI-C wrappers of CUDA kernels
  */
@@ -4084,6 +4216,12 @@ void cudaF_diff_tanh(dim3 Gr, dim3 Bl, float* eout, const float* e,
                      const float* y, MatrixDim d, int e_stride, int y_stride) {
   _diff_tanh<<<Gr,Bl>>>(eout, e, y, d, e_stride, y_stride);
 }
+
+void cudaF_ensure_nonzero(dim3 Gr, dim3 Bl, const float *x, MatrixDim d,
+                          float epsilon, int y_stride, float *y) {
+  _ensure_nonzero<<<Gr,Bl>>>(x, d, epsilon, y_stride, y);
+}
+
 
 void cudaF_parametric_relu(dim3 Gr, dim3 Bl, float* y, const float* x,
                            MatrixDim d, int src_stride,
@@ -4761,6 +4899,11 @@ void cudaD_diff_tanh(dim3 Gr, dim3 Bl, double* eout, const double* e,
   _diff_tanh<<<Gr,Bl>>>(eout, e, y, d, e_stride, y_stride);
 }
 
+void cudaD_ensure_nonzero(dim3 Gr, dim3 Bl, const double *x, MatrixDim d,
+                          double epsilon, int y_stride, double *y) {
+  _ensure_nonzero<<<Gr,Bl>>>(x, d, epsilon, y_stride, y);
+}
+
 void cudaD_parametric_relu(dim3 Gr, dim3 Bl, double* y, const double* x,
                            MatrixDim d, int src_stride,
                            const double* a, const double* b) {
@@ -5175,3 +5318,69 @@ void cudaF_apply_exp_special(dim3 Gr, dim3 Bl, float* out, MatrixDim out_dim,
   _apply_exp_special<<<Gr, Bl>>>(out, out_dim, in, in_stride);
 }
 
+void cuda_compress_uint8_sign(dim3 Gr, dim3 Bl, const BaseFloat *src, MatrixDim dim,
+                              unsigned char *dest, int dest_stride) {
+  _cuda_compress_uint8_sign<<<Gr, Bl>>>(src, dim, dest, dest_stride);
+}
+
+void cuda_compress_int16(dim3 Gr, dim3 Bl, const BaseFloat *src,
+                         MatrixDim dim, int16_t *dest,
+                         int dest_stride, float inv_scale,
+                         bool bounds_check) {
+  if (bounds_check) {
+    _cuda_compress_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  } else {
+    _cuda_compress_no_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  }
+}
+void cuda_compress_uint16(dim3 Gr, dim3 Bl, const BaseFloat *src,
+                         MatrixDim dim, uint16_t *dest,
+                         int dest_stride, float inv_scale,
+                         bool bounds_check) {
+  if (bounds_check) {
+    _cuda_compress_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  } else {
+    _cuda_compress_no_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  }
+}
+void cuda_compress_int8(dim3 Gr, dim3 Bl, const BaseFloat *src,
+                         MatrixDim dim, int8_t *dest,
+                         int dest_stride, float inv_scale,
+                         bool bounds_check) {
+  if (bounds_check) {
+    _cuda_compress_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  } else {
+    _cuda_compress_no_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  }
+}
+void cuda_compress_uint8(dim3 Gr, dim3 Bl, const BaseFloat *src,
+                         MatrixDim dim, uint8_t *dest,
+                         int dest_stride, float inv_scale,
+                         bool bounds_check) {
+  if (bounds_check) {
+    _cuda_compress_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  } else {
+    _cuda_compress_no_bounds_check<<<Gr, Bl>>>(src, dim, dest, dest_stride, inv_scale);
+  }
+}
+
+void cuda_uncompress_uint8(dim3 Gr, dim3 Bl, BaseFloat *dest,
+                           MatrixDim dim, const uint8_t *src,
+                           int src_stride, float scale) {
+  _cuda_uncompress<<<Gr, Bl>>>(dest, dim, src, src_stride, scale);
+}
+void cuda_uncompress_int8(dim3 Gr, dim3 Bl, BaseFloat *dest,
+                           MatrixDim dim, const int8_t *src,
+                           int src_stride, float scale) {
+  _cuda_uncompress<<<Gr, Bl>>>(dest, dim, src, src_stride, scale);
+}
+void cuda_uncompress_uint16(dim3 Gr, dim3 Bl, BaseFloat *dest,
+                            MatrixDim dim, const uint16_t *src,
+                            int src_stride, float scale) {
+  _cuda_uncompress<<<Gr, Bl>>>(dest, dim, src, src_stride, scale);
+}
+void cuda_uncompress_int16(dim3 Gr, dim3 Bl, BaseFloat *dest,
+                           MatrixDim dim, const int16_t *src,
+                           int src_stride, float scale) {
+  _cuda_uncompress<<<Gr, Bl>>>(dest, dim, src, src_stride, scale);
+}

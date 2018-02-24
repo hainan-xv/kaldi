@@ -28,6 +28,9 @@
 #include "matrix/compressed-matrix.h"
 #include "matrix/sparse-matrix.h"
 
+static_assert(int(kaldi::kNoTrans) == int(CblasNoTrans) && int(kaldi::kTrans) == int(CblasTrans), 
+    "kaldi::kNoTrans and kaldi::kTrans must be equal to the appropriate CBLAS library constants!");
+
 namespace kaldi {
 
 template<typename Real>
@@ -820,13 +823,14 @@ void Matrix<Real>::Resize(const MatrixIndexT rows,
   // resize_type == kCopyData.
   if (resize_type == kCopyData) {
     if (this->data_ == NULL || rows == 0) resize_type = kSetZero;  // nothing to copy.
-    else if (rows == this->num_rows_ && cols == this->num_cols_) { return; } // nothing to do.
+    else if (rows == this->num_rows_ && cols == this->num_cols_ &&
+	     (stride_type == kDefaultStride || this->stride_ == this->num_cols_)) { return; } // nothing to do.
     else {
       // set tmp to a matrix of the desired size; if new matrix
       // is bigger in some dimension, zero it.
       MatrixResizeType new_resize_type =
           (rows > this->num_rows_ || cols > this->num_cols_) ? kSetZero : kUndefined;
-      Matrix<Real> tmp(rows, cols, new_resize_type);
+      Matrix<Real> tmp(rows, cols, new_resize_type, stride_type);
       MatrixIndexT rows_min = std::min(rows, this->num_rows_),
           cols_min = std::min(cols, this->num_cols_);
       tmp.Range(0, rows_min, 0, cols_min).
@@ -1486,6 +1490,7 @@ void Matrix<Real>::Read(std::istream & is, bool binary, bool add) {
     std::string token;
     ReadToken(is, binary, &token);
     if (token != my_token) {
+      if (token.length() > 20) token = token.substr(0, 17) + "...";
       specific_error << ": Expected token " << my_token << ", got " << token;
       goto bad;
     }
@@ -1519,6 +1524,7 @@ void Matrix<Real>::Read(std::istream & is, bool binary, bool add) {
     // }
     if (str == "[]") { Resize(0, 0); return; } // Be tolerant of variants.
     else if (str != "[") {
+      if (str.length() > 20) str = str.substr(0, 17) + "...";
       specific_error << ": Expected \"[\", got \"" << str << '"';
       goto bad;
     }
@@ -1590,6 +1596,7 @@ void Matrix<Real>::Read(std::istream & is, bool binary, bool add) {
           cur_row->push_back(std::numeric_limits<Real>::quiet_NaN());
           KALDI_WARN << "Reading NaN value into matrix.";
         } else {
+          if (str.length() > 20) str = str.substr(0, 17) + "...";
           specific_error << "Expecting numeric matrix data, got " << str;
           goto cleanup;
         }

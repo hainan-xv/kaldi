@@ -168,8 +168,7 @@ std::string NnetInfo(const Nnet &nnet);
 void SetDropoutProportion(BaseFloat dropout_proportion, Nnet *nnet);
 
 
-/// Returns true if nnet has at least one component of type
-/// BatchNormComponent.
+/// Returns true if nnet has at least one component of type BatchNormComponent.
 bool HasBatchnorm(const Nnet &nnet);
 
 /// This function affects only components of type BatchNormComponent.
@@ -251,7 +250,6 @@ struct CollapseModelConfig {
 void CollapseModel(const CollapseModelConfig &config,
                    Nnet *nnet);
 
-
 /**
    ReadEditConfig() reads a file with a similar-looking format to the config file
    read by Nnet::ReadConfig(), but this consists of a sequence of operations to
@@ -300,6 +298,23 @@ void CollapseModel(const CollapseModelConfig &config,
     set-dropout-proportion [name=<name-pattern>] proportion=<dropout-proportion>
        Sets the dropout rates for any components of type DropoutComponent whose
        names match the given <name-pattern> (e.g. lstm*).  <name-pattern> defaults to "*".
+
+    apply-svd name=<name-pattern> bottleneck-dim=<dim>
+       Locates all components with names matching <name-pattern>, which are
+       type AffineComponent or child classes thereof.  If <dim> is
+       less than the minimum of the (input or output) dimension of the component,
+       it does SVD on the components' parameters, retaining only the alrgest
+       <dim> singular values, replacing these components with sequences of two
+       components, of types LinearComponent and NaturalGradientAffineComponent.
+       See also 'reduce-rank'.
+
+    reduce-rank name=<name-pattern> rank=<dim>
+       Locates all components with names matching <name-pattern>, which are
+       type AffineComponent or child classes thereof.  Does SVD on the
+       components' parameters, retaining only the largest <dim> singular values,
+       and writes the reconstructed matrix back to the component.  See also
+       'apply-svd', which structurally breaks the component into two pieces.
+
    \endverbatim
 */
 void ReadEditConfig(std::istream &config_file, Nnet *nnet);
@@ -425,6 +440,27 @@ void ApplyL2Regularization(const Nnet &nnet,
                            BaseFloat l2_regularize_scale,
                            Nnet *delta_nnet);
 
+
+/**
+   This function scales the batchorm stats of any batchnorm components
+   (components of type BatchNormComponent) in 'nnet' by the scale
+   'batchnorm_stats_scale'.
+ */
+void ScaleBatchnormStats(BaseFloat batchnorm_stats_scale,
+                         Nnet *nnet);
+
+
+/**
+   This function, to be called after processing every minibatch, is responsible
+   for enforcing the orthogonality constraint for any components of type
+   LinearComponent or inheriting from AffineComponent that have the
+   "orthonormal-constraint" value set to nonzero.
+
+   In order to make it efficient on GPU, it doesn't make it completely orthonormal,
+   it just makes it closer to being orthonormal (times the 'orthonormal_constraint'
+   value).  Over multiple iterations this rapidly makes it almost exactly orthonormal.
+ */
+void ConstrainOrthonormal(Nnet *nnet);
 
 /** This utility function can be used to obtain the number of distinct 'n'
     values in a training example.  This is the number of examples

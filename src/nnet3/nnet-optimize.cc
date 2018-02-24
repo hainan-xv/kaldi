@@ -515,13 +515,6 @@ void Optimize(const NnetOptimizeOptions &config,
       CheckComputation(nnet, *computation, true);
   }
 
-  if (config.optimize &&
-      (config.remove_assignments || config.backprop_in_place ||
-       config.propagate_in_place)) {
-    VariableMergingOptimization(config, nnet, computation);
-    if (GetVerboseLevel() >= 3)
-      CheckComputation(nnet, *computation, false);
-  }
 
   if (config.optimize && (config.snip_row_ops || config.optimize_row_ops)) {
     bool must_renumber = false;
@@ -536,6 +529,21 @@ void Optimize(const NnetOptimizeOptions &config,
     }
   }
 
+  if (config.optimize && config.extend_matrices &&
+      !config.optimize_looped_computation) {
+    ExtendMatrices(computation);
+    if (GetVerboseLevel() >= 3)
+      CheckComputation(nnet, *computation, false);
+  }
+
+
+  if (config.optimize &&
+      (config.remove_assignments || config.backprop_in_place ||
+       config.propagate_in_place)) {
+    VariableMergingOptimization(config, nnet, computation);
+    if (GetVerboseLevel() >= 3)
+      CheckComputation(nnet, *computation, false);
+  }
 
   if (config.optimize && config.initialize_undefined) {
     RemoveUnnecessaryZeroing(nnet, computation);
@@ -543,7 +551,9 @@ void Optimize(const NnetOptimizeOptions &config,
       CheckComputation(nnet, *computation, false);
   }
 
-  if (config.optimize && config.move_sizing_commands) {
+
+  if ((config.optimize && config.move_sizing_commands) ||
+      config.optimize_looped_computation) {
     MoveSizingCommands(nnet, computation);
     if (GetVerboseLevel() >= 3)
       CheckComputation(nnet, *computation, false);
@@ -552,7 +562,7 @@ void Optimize(const NnetOptimizeOptions &config,
   // the looped computation optimization has to go before
   // 'RemoveUnnecessaryAllocation()'.  We don't gate this by 'config.optimize'
   // because it's necessary for looped computation to run.
-  if (config.optimize_looped_computation){
+  if (config.optimize_looped_computation) {
     OptimizeLoopedComputation(nnet, computation);
     if (GetVerboseLevel() >= 3)
       CheckComputation(nnet, *computation, false);
@@ -576,6 +586,15 @@ void Optimize(const NnetOptimizeOptions &config,
 
   if (config.optimize_looped_computation)
     FixGotoLabel(computation);
+
+
+  if (config.memory_compression_level > 0 &&
+      !config.optimize_looped_computation) {
+    OptimizeMemoryCompression(nnet, config.memory_compression_level,
+                              computation);
+    if (GetVerboseLevel() >= 3)
+      CheckComputation(nnet, *computation, false);
+  }
 
   if (GetVerboseLevel() >= 3) {
     CheckComputation(nnet, *computation, false);
@@ -852,6 +871,10 @@ const NnetComputation* CachingOptimizingCompiler::CompileViaShortcut(
                       need_debug_info, num_n_values, ans);
     seconds_taken_expand_ += timer.Elapsed();
   }
+  if (GetVerboseLevel() >= 3) {
+    CheckComputation(nnet_, *ans, false);
+  }
+
   {
     Timer timer;
     ans->ComputeCudaIndexes();
