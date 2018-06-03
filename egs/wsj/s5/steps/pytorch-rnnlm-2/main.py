@@ -39,8 +39,8 @@ parser.add_argument('--cuda', action='store_true',
                     help='use CUDA')
 parser.add_argument('--log-interval', type=int, default=200, metavar='N',
                     help='report interval')
-parser.add_argument('--save', type=str,  default='data/pytorch-lm-3/model.pt',
-                    help='path to save the final model')
+#parser.add_argument('--save', type=str,  default='data/pytorch-lm-3/model.pt',
+#                    help='path to save the final model')
 args = parser.parse_args()
 
 # Set the random seed manually for reproducibility.
@@ -168,6 +168,11 @@ try:
                                            val_loss, math.exp(val_loss)))
         print('-' * 89)
         # Save the model if the validation loss is the best we've seen so far.
+
+        args.save = args.data + "/best.mdl"
+        with open("data/new-pytorch/epoch.%r.mdl" % epoch, 'wb') as f:                
+            torch.save(model, f)
+
         if not best_val_loss or val_loss < best_val_loss:
             with open(args.save, 'wb') as f:
                 torch.save(model, f)
