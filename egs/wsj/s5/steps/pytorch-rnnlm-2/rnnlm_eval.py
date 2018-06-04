@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import model
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--MB_SIZE', type=int, help='minibatch size', default=64)
+parser.add_argument('--MB_SIZE', type=int, help='minibatch size', default=40)
 parser.add_argument('--TEST', type=str, help='test text')
 parser.add_argument('--VOCAB', type=str, help='vocab text')
 parser.add_argument('--MODEL', type=str, help='model location')
@@ -126,7 +126,6 @@ def get_batch(sequences, volatile=False):
 #  print (sequences)
   lengths = torch.LongTensor([len(s) for s in sequences])
   batch   = torch.LongTensor(lengths.max(), len(sequences)).fill_(mask)
-#  batch   = torch.LongTensor(len(sequences), lengths.max()).fill_(mask)
   for i, s in enumerate(sequences):
     batch[:len(s), i] = s
   if args.CUDA:
@@ -136,7 +135,6 @@ def get_batch(sequences, volatile=False):
 w2i, unk_index = read_vocab(vocab_file)
 mask = w2i['<s>']
 test = list(read(test_file, unk_index))
-#test  = list(read(test_file))
 vocab_size = len(w2i)
 print ("vocab size is ", vocab_size)
 
@@ -144,10 +142,9 @@ weight = torch.FloatTensor(vocab_size).fill_(1)
 weight[mask] = 0
 loss_fn = nn.CrossEntropyLoss(weight, size_average=False, reduce=False)
 
-test_order = range(0, len(test), args.MB_SIZE)  # [x*args.MB_SIZE for x in range(int((len(train)-1)/args.MB_SIZE + 1))]
+test_order = range(0, len(test), args.MB_SIZE)
 
 with open(args.MODEL, 'rb') as f:
-#    model = torch.load(f)
     rnnlm = torch.load(f, map_location=lambda storage, loc: storage)
 
 if args.CUDA:
@@ -157,6 +154,7 @@ if args.CUDA:
 # log perplexity
 dev_loss = dev_words = 0
 for j in test_order:
+  rnnlm.zero_grad()
   batch, lengths = get_batch(test[j:j + args.MB_SIZE], volatile=True)
   hidden = rnnlm.init_hidden(lengths.size(0))
   output, h = rnnlm(batch[:-1], hidden)
@@ -172,8 +170,3 @@ for j in test_order:
   scores = row_sums.numpy().tolist()
   for i, s in enumerate(scores):
     print ("score", j + i, "is", s)
-#  dev_loss += torch.sum(loss).data[0]
-#  dev_words += lengths.sum() - lengths.size(0)  # ignore <s>
-
-#print("  nll=%.4f, ppl=%.4f, words=%r, time=%.4f, word_per_sec=%.4f" % (
-#    dev_loss / dev_words, np.exp(dev_loss / dev_words), dev_words, 0, 0))
