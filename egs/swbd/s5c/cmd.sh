@@ -12,6 +12,30 @@
 
 export train_cmd="queue.pl"
 export decode_cmd="queue.pl --mem 4G"
+#export decode_cmd="queue.pl --mem 4G -l hostname=a1[0123458]*|b1[0234678]*"
+#
+#a08
+#a10
+#a11
+#a12
+#a13
+#a14
+#a15
+#a18
+#b03
+#b04
+#b06
+#b07
+#b10
+#b12
+#b13
+#b14
+#b16
+#b17
+#b18
+#b20
+#c01
+
 # the use of cuda_cmd is deprecated, used only in 'nnet1',
 export cuda_cmd="queue.pl --gpu 1"
 

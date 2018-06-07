@@ -4,21 +4,27 @@ import torch
 
 def read_vocab(fname):
     w2i = {}
+    i2w = {}
 #    w2i["<MASK>"] = 0
 
     with open(fname, "r") as f:
         i = 0
         for line in f:
             w2i[line.strip()] = i
+            i2w[i] = line.strip()
+#            i2s[i] = max(len(line.strip()), 3)
+#            print ("len of", line.strip(), "is", len(line.strip()))
             i = i + 1
         w2i["<RNN_UNK>"] = i
+#        i2s[i] = 10
+        i2w[i] = "<RNN_UNK>"
         unk_id = i
 
-    return w2i, unk_id
+    return w2i, i2w, unk_id
         
 class Corpus(object):
     def __init__(self, path):
-        self.w2i, self.unk_id = read_vocab(os.path.join(path, 'vocab.txt'))
+        self.w2i, self.i2w, self.unk_id = read_vocab(os.path.join(path, 'vocab.txt'))
         self.train = self.tokenize(os.path.join(path, 'train.txt'))
         self.valid = self.tokenize(os.path.join(path, 'valid.txt'))
 

@@ -23,8 +23,9 @@ mkdir -p $tempdir
 cat $text_in | cut -d " " -f1  > $tempdir/utt_ids
 cat $text_in | cut -d " " -f2- > $tempdir/text.txt
 
-echo /home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/rnnlm_eval.py --MODEL data/new-pytorch/best.mdl --TEST $tempdir/text.txt --VOCAB data/pytorch-lm-2/vocab.txt
-/home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/dynamic_eval.py --MODEL data/new-pytorch/epoch.19.mdl --TEST $tempdir/text.txt --VOCAB data/pytorch-lm-2/vocab.txt | grep score | awk '{print $4}' > $tempdir/loglikes.rnn
+echo /home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/rnnlm_eval.py --MODEL $dir/epoch.3.mdl --TEST $tempdir/text.txt --VOCAB $dir/vocab.txt
+/home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/rnnlm_eval.py --MODEL $dir/best.mdl --TEST $tempdir/text.txt --VOCAB $dir/vocab.txt | grep score | awk '{print $4}' > $tempdir/loglikes.rnn
+#/home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/dynamic_eval.py --MODEL data/new-pytorch/epoch.19.mdl --TEST $tempdir/text.txt --VOCAB data/pytorch-lm-2/vocab.txt | grep score | awk '{print $4}' > $tempdir/loglikes.rnn
 #/home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm-2/rnnlm_eval.py --MODEL data/new-pytorch/epoch.19.mdl --TEST $tempdir/text.txt --VOCAB data/pytorch-lm-2/vocab.txt | grep score | awk '{print $4}' > $tempdir/loglikes.rnn
 
 [ $(cat $tempdir/loglikes.rnn | wc -l) -ne $(cat $tempdir/text.txt | wc -l) ] && \

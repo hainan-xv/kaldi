@@ -11,6 +11,8 @@ import model
 parser = argparse.ArgumentParser(description='PyTorch PennTreeBank RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, default='data/pytorch-lm',
                     help='location of the data corpus')
+parser.add_argument('--lexicon', type=str, default='data/local/dict/lexicon.txt',
+                    help='lexicon')
 parser.add_argument('--model', type=str, default='LSTM',
                     help='type of recurrent net (RNN_TANH, RNN_RELU, LSTM, GRU)')
 parser.add_argument('--emsize', type=int, default=200,
@@ -68,6 +70,21 @@ def batchify(data, bsz):
         data = data.cuda()
     return data
 
+def read_lexicon(fname):
+  lexicon = {}
+  with open(fname, "r") as f:
+    for line in f:
+      key   = line.split()[0]
+      value = " ".join(line.split()[1:])
+      lexicon[key] = value
+  print (lexicon)
+  return lexicon
+
+
+lexicon_f = args.lexicon
+
+lexicon = read_lexicon(lexicon_f)
+
 eval_batch_size = 10
 train_data = batchify(corpus.train, args.batch_size)
 val_data = batchify(corpus.valid, eval_batch_size)
@@ -82,16 +99,26 @@ model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers
 if args.cuda:
     model.cuda()
 
-mask = corpus.w2i['<s>']
+bos = corpus.w2i['<s>']
+eos = corpus.w2i['</s>']
 
 weight = torch.FloatTensor(ntokens).fill_(1)
-weight[mask] = 0
+weight[bos] = 0
 
 train_weight = torch.FloatTensor(ntokens).fill_(1)
-train_weight[mask] = 0
+train_weight[bos] = 0
 
 for i in range(ntokens):
-  train_weight[i] = 3.0 / corpus.i2s[i]
+#  train_weight[i] = 3.0 / corpus.i2s[i]
+  if corpus.i2w[i] in lexicon:
+    train_weight[i] = math.sqrt(1.0 / len(lexicon[corpus.i2w[i]].split()))
+  else:
+    train_weight[i] = 0
+
+train_weight[eos] = 1
+
+for i in range(ntokens):
+  print ("weight of", corpus.i2w[i], "is ", train_weight[i])
 #  train_weight[i] = math.sqrt(3.0 / corpus.i2s[i])
 
 if args.cuda:

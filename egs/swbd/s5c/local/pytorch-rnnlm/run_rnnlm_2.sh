@@ -22,7 +22,7 @@
 
 # Begin configuration section.
 
-dir=data/pytorch-lm-2
+dir=data/pytorch_rnnlm
 embedding_dim=1024
 lstm_rpd=256
 lstm_nrpd=256
@@ -52,7 +52,7 @@ lexicon=data/local/dict_nosp/lexiconp.txt
 mkdir -p $dir/config
 set -e
 
-mkdir -p data/pytorch-lm
+mkdir -p $dir
 
 cat data/rnnlm/text_nosp/swbd.txt data/rnnlm/text_nosp/fisher.txt | cut -d " " -f2- | shuf > $dir/all.txt
 
@@ -60,14 +60,14 @@ head -n 1000  $dir/all.txt                  > $dir/valid.txt
 tail -n +1001 $dir/all.txt > $dir/train.txt
 cat data/lang/words.txt | awk '{print $1}' > $dir/vocab.txt
 
-export PATH=/home/tongfei/app/anaconda/bin:$PATH
-
 if [ $stage -le 1 ]; then
   $cuda_cmd -l hostname=c* $dir/log.train_rnnlm CUDA_VISIBLE_DEVICES=\`free-gpu\` \&\& \
-         /home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm/rnnlm.py \
-         --CUDA --gpus \`free-gpu\` --MB_SIZE 64 \
-         --EMBED_SIZE 200 --HIDDEN_SIZE 200 --EPOCHS 10 \
-         --TRAIN $dir/train.txt --VALID $dir/valid.txt --VOCAB $dir/vocab.txt
+    python -u steps/pytorch-rnnlm-2/main.py --cuda --nhid 512 --dropout 0.2 --emsize 512 --data $dir
+
+#         /home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm/rnnlm.py \
+#         --CUDA --gpus \`free-gpu\` --MB_SIZE 64 \
+#         --EMBED_SIZE 200 --HIDDEN_SIZE 200 --EPOCHS 10 \
+#         --TRAIN $dir/train.txt --VALID $dir/valid.txt --VOCAB $dir/vocab.txt
 
 fi
 
@@ -84,6 +84,6 @@ if [ $stage -le 2 ] && $run_nbest_rescore; then
       --stage 6 \
       0.8 data/lang_$LM $dir \
       data/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_${decode_dir_suffix}_nbest_pytorch_scratch_dynamic
+      ${decode_dir}_pytorch_nbest_weighted_sqrt
   done
 fi
