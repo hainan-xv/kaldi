@@ -22,7 +22,7 @@
 
 # Begin configuration section.
 
-dir=data/pytorch_rnnlm
+dir=data/pytorch_rnnlm_weight_lexicon_sqrt
 embedding_dim=1024
 lstm_rpd=256
 lstm_nrpd=256
@@ -84,6 +84,6 @@ if [ $stage -le 2 ] && $run_nbest_rescore; then
       --stage 6 \
       0.8 data/lang_$LM $dir \
       data/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_pytorch_nbest_weighted_sqrt
+      ${decode_dir}_pytorch_nbest_weighted_lexicon_sqrt
   done
 fi
