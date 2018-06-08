@@ -22,7 +22,7 @@
 
 # Begin configuration section.
 
-dir=data/pytorch-lm
+dir=data/pytorch_rnnlm_5000
 embedding_dim=1024
 lstm_rpd=256
 lstm_nrpd=256
@@ -49,21 +49,42 @@ pruned_rescore=true
 text=data/train_nodev/text
 fisher_text=data/local/lm/fisher/text1.gz
 lexicon=data/local/dict_nosp/lexiconp.txt
-text_dir=data/rnnlm/text_nosp_1e
 mkdir -p $dir/config
 set -e
 
-mkdir -p data/pytorch-lm
+mkdir -p $dir
 
-#cat data/rnnlm/text_nosp/swbd.txt data/rnnlm/text_nosp/fisher.txt | cut -d " " -f2- | shuf > data/pytorch-lm/all.txt
-#
-#head -n 1000 data/pytorch-lm/all.txt > data/pytorch-lm/valid.txt
-#tail -n +1001 data/pytorch-lm/all.txt > data/pytorch-lm/train.txt
+if [ $stage -le 0 ]; then
+  cat data/rnnlm/text_nosp/swbd.txt data/rnnlm/text_nosp/fisher.txt | cut -d " " -f2- | shuf > $dir/all.unk.txt
+  cat $dir/all.unk.txt | awk -v w="data/lang/words.txt" 'BEGIN{while ((getline<w)>0) m[$1]=1} {for (i=1; i<=NF; i++) {word=$i; if (m[word] != 1) word="<unk>"; printf("%s ", word)} print""}' > $dir/all.txt
 
-export PATH=/home/tongfei/app/anaconda/bin:$PATH
+  head -n 1000  $dir/all.txt                  > $dir/valid.txt
+  tail -n +1001 $dir/all.txt > $dir/train.txt
+  cat data/lang/words.txt | awk '{print $1}' > $dir/vocab_all.txt
+
+  cat $dir/train.txt $dir/vocab_all.txt | sed "s= =\n=g" | grep . | sort | uniq -c | sort -k1rn > $dir/unigram_counts.txt # with add-one smoothing
+
+  cat $dir/unigram_counts.txt | awk '{print $2}' | head -n 5000 > $dir/vocab.txt
+
+  if ! grep "<s>" $dir/vocab.txt > /dev/null; then
+    echo "<s>" >> $dir/vocab.txt
+  fi
+  if ! grep "</s>" $dir/vocab.txt > /dev/null; then
+    echo "</s>" >> $dir/vocab.txt
+  fi
+
+  total_count=$(cat $dir/unigram_counts.txt | awk '{a+=$1}END{print a}')
+  total_count_in_vocab=$(cat $dir/vocab.txt | awk -v f=$dir/unigram_counts.txt 'BEGIN{while((getline<f)>0) {m[$2]=$1;}} {a+=m[$1]; } END{print a}')
+  echo total count and vocab count are $total_count $total_count_in_vocab
+  count=$(echo $total_count $total_count_in_vocab | awk '{print $1 - $2}')
+  cat $dir/unigram_counts.txt | awk -v n=$count '{print $2, $1/n}' > $dir/unk.probs
+fi
 
 if [ $stage -le 1 ]; then
-  $cuda_cmd -l hostname=c* data/pytorch-lm/log.train_rnnlm CUDA_VISIBLE_DEVICES=\`free-gpu\` \&\& /home/tongfei/app/anaconda/bin/python -u local/pytorch-rnnlm/main.py --cuda --nhid 512 --dropout 0.2 --emsize 512
+#  export PATH=/home/tongfei/app/anaconda/bin:$PATH
+  $cuda_cmd -l hostname=c* $dir/log.train_rnnlm export CUDA_VISIBLE_DEVICES=\`free-gpu\` \&\& \
+    /home/tongfei/app/anaconda/bin/python -u steps/pytorch-rnnlm/main.py --cuda --nhid 512 --dropout 0.2 --emsize 512 --data $dir
+
 fi
 
 LM=sw1_fsh_fg # using the 4-gram const arpa file as old lm
@@ -74,11 +95,11 @@ if [ $stage -le 2 ] && $run_nbest_rescore; then
     decode_dir=${ac_model_dir}/decode_${decode_set}_${LM}_looped
 
     # Lattice rescoring
-    local/pytorch-rnnlm/lmrescore_nbest.sh \
+    steps/pytorch-rnnlm/lmrescore_nbest.sh \
       --cmd "$decode_cmd --mem 4G" --N 20 \
       --stage 6 \
       0.8 data/lang_$LM $dir \
       data/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_${decode_dir_suffix}_nbest_pytorch
+      ${decode_dir}_pytorch_nbest_shortlist
   done
 fi

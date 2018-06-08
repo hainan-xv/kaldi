@@ -13,7 +13,7 @@ from torch.autograd import Variable
 import model
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--MB_SIZE', type=int, help='minibatch size', default=64)
+parser.add_argument('--MB_SIZE', type=int, help='minibatch size', default=40)
 parser.add_argument('--TEST', type=str, help='test text')
 parser.add_argument('--VOCAB', type=str, help='vocab text')
 parser.add_argument('--MODEL', type=str, help='model location')
@@ -100,9 +100,9 @@ class RNNModel(nn.Module):
 
 def read_vocab(fname):
   w2i = {}
-  w2i["<MASK>"] = 0
+#  w2i["<MASK>"] = 0
   with open(fname, "r") as f:
-    i = 1
+    i = 0
     for line in f:
       w2i[line.strip()] = i
       i = i + 1
@@ -118,15 +118,14 @@ def read(fname, unk_index):
   with open(fname, "r") as fh:
     for line in fh:
       sent = [w2i.get(x, unk_index) for x in line.strip().split()]
-      sent.insert(0, w2i["<s>"])
+      sent.insert(0, w2i["</s>"])
       sent.append(w2i["</s>"])
       yield torch.LongTensor(sent)
 
 def get_batch(sequences, volatile=False):
 #  print (sequences)
   lengths = torch.LongTensor([len(s) for s in sequences])
-  batch   = torch.LongTensor(lengths.max(), len(sequences)).fill_(mask)
-#  batch   = torch.LongTensor(len(sequences), lengths.max()).fill_(mask)
+  batch   = torch.LongTensor(lengths.max(), len(sequences)).fill_(bos)
   for i, s in enumerate(sequences):
     batch[:len(s), i] = s
   if args.CUDA:
@@ -134,23 +133,19 @@ def get_batch(sequences, volatile=False):
   return Variable(batch, volatile=volatile), lengths
 
 w2i, unk_index = read_vocab(vocab_file)
-mask = w2i['<MASK>']
-assert mask == 0
+bos = w2i['<s>']
+eos = w2i['</s>']
 test = list(read(test_file, unk_index))
-#test  = list(read(test_file))
 vocab_size = len(w2i)
-BOS = w2i['<s>']
-EOS = w2i['</s>']
 print ("vocab size is ", vocab_size)
 
 weight = torch.FloatTensor(vocab_size).fill_(1)
-weight[mask] = 0
+weight[bos] = 0
 loss_fn = nn.CrossEntropyLoss(weight, size_average=False, reduce=False)
 
-test_order = range(0, len(test), args.MB_SIZE)  # [x*args.MB_SIZE for x in range(int((len(train)-1)/args.MB_SIZE + 1))]
+test_order = range(0, len(test), args.MB_SIZE)
 
 with open(args.MODEL, 'rb') as f:
-#    model = torch.load(f)
     rnnlm = torch.load(f, map_location=lambda storage, loc: storage)
 
 if args.CUDA:
@@ -160,12 +155,13 @@ if args.CUDA:
 # log perplexity
 dev_loss = dev_words = 0
 for j in test_order:
+  rnnlm.zero_grad()
   batch, lengths = get_batch(test[j:j + args.MB_SIZE], volatile=True)
-#  hidden = rnnlm.init_hidden(lengths.size(0))
-#  output, h = rnnlm(batch[:-1], hidden)
-#  scores = output.view(-1, vocab_size)
-  output = rnnlm(batch[:-1])
+  hidden = rnnlm.init_hidden(lengths.size(0))
+  output, h = rnnlm(batch[:-1], hidden)
   scores = output.view(-1, vocab_size)
+#  output = rnnlm(batch[:-1])
+#  scores = output.view(-1, vocab_size)
   loss = loss_fn(scores, batch[1:].view(-1))
   loss = loss.view(lengths.max() - 1, -1)
 #  loss = loss.view(-1, lengths.max() - 1)
@@ -175,8 +171,3 @@ for j in test_order:
   scores = row_sums.numpy().tolist()
   for i, s in enumerate(scores):
     print ("score", j + i, "is", s)
-#  dev_loss += torch.sum(loss).data[0]
-#  dev_words += lengths.sum() - lengths.size(0)  # ignore <s>
-
-#print("  nll=%.4f, ppl=%.4f, words=%r, time=%.4f, word_per_sec=%.4f" % (
-#    dev_loss / dev_words, np.exp(dev_loss / dev_words), dev_words, 0, 0))
