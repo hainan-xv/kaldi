@@ -92,8 +92,9 @@ train_weight = torch.FloatTensor(ntokens).fill_(1)
 train_weight[bos] = 0
 
 #for i in range(ntokens):
-#  train_weight[i] = 3.0 / len(corpus.i2w[i])
-#  train_weight[i] = math.sqrt(3.0 / corpus.i2s[i])
+##  train_weight[i] = 3.0 / len(corpus.i2w[i])
+#  print (len(corpus.i2w[i]))
+#  train_weight[i] = 1.0 / math.log(1.0 * len(corpus.i2w[i]))
 
 if args.cuda:
   train_criterion = nn.CrossEntropyLoss(train_weight.cuda())

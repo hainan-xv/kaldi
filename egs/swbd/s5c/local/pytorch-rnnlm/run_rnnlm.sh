@@ -22,7 +22,6 @@
 
 # Begin configuration section.
 
-dir=data/pytorch_rnnlm_5000
 embedding_dim=1024
 lstm_rpd=256
 lstm_nrpd=256
@@ -41,6 +40,7 @@ ngram_order=4 # approximate the lattice-rescoring by limiting the max-ngram-orde
               # the same ngram history and this prevents the lattice from 
               # exploding exponentially
 pruned_rescore=true
+num_words=2500
 
 . ./cmd.sh
 . ./path.sh
@@ -49,9 +49,10 @@ pruned_rescore=true
 text=data/train_nodev/text
 fisher_text=data/local/lm/fisher/text1.gz
 lexicon=data/local/dict_nosp/lexiconp.txt
-mkdir -p $dir/config
 set -e
 
+dir=data/pytorch_rnnlm_$num_words
+mkdir -p $dir/config
 mkdir -p $dir
 
 if [ $stage -le 0 ]; then
@@ -64,20 +65,20 @@ if [ $stage -le 0 ]; then
 
   cat $dir/train.txt $dir/vocab_all.txt | sed "s= =\n=g" | grep . | sort | uniq -c | sort -k1rn > $dir/unigram_counts.txt # with add-one smoothing
 
-  cat $dir/unigram_counts.txt | awk '{print $2}' | head -n 5000 > $dir/vocab.txt
+  cat $dir/unigram_counts.txt | awk '{print $2}' | head -n $num_words > $dir/vocab.txt
 
-  if ! grep "<s>" $dir/vocab.txt > /dev/null; then
-    echo "<s>" >> $dir/vocab.txt
-  fi
-  if ! grep "</s>" $dir/vocab.txt > /dev/null; then
-    echo "</s>" >> $dir/vocab.txt
-  fi
+  for i in "<unk>" "\\[noise\\]" "\\[laughter\\]" "\\[vocalized-noise\\]" "<s>" "</s>"; do
+    if ! grep $i $dir/vocab.txt; then
+      echo adding words $i
+      echo "$i" >> $dir/vocab.txt
+    fi
+  done
 
   total_count=$(cat $dir/unigram_counts.txt | awk '{a+=$1}END{print a}')
   total_count_in_vocab=$(cat $dir/vocab.txt | awk -v f=$dir/unigram_counts.txt 'BEGIN{while((getline<f)>0) {m[$2]=$1;}} {a+=m[$1]; } END{print a}')
   echo total count and vocab count are $total_count $total_count_in_vocab
   count=$(echo $total_count $total_count_in_vocab | awk '{print $1 - $2}')
-  cat $dir/unigram_counts.txt | awk -v n=$count '{print $2, $1/n}' > $dir/unk.probs
+  cat $dir/unigram_counts.txt | awk -v n=$count '{if(n==0) n=1; print $2, $1/n}' > $dir/unk.probs
 fi
 
 if [ $stage -le 1 ]; then
@@ -97,9 +98,8 @@ if [ $stage -le 2 ] && $run_nbest_rescore; then
     # Lattice rescoring
     steps/pytorch-rnnlm/lmrescore_nbest.sh \
       --cmd "$decode_cmd --mem 4G" --N 20 \
-      --stage 6 \
       0.8 data/lang_$LM $dir \
       data/${decode_set}_hires ${decode_dir} \
-      ${decode_dir}_pytorch_nbest_shortlist
+      ${decode_dir}_pytorch_nbest_shortlist_$num_words
   done
 fi
