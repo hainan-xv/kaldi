@@ -117,12 +117,15 @@ class PrunedCompactLatticeComposer {
   // 'composed_state_queue_'.
   void ComputeDeltaBackwardCosts(const std::vector<int32> &composed_states);
 
+  void ComputeDeltaBackwardCostsNew(const std::vector<int32> &composed_states);
+
 
   // This struct contains information about a state of the input lattice.
   struct LatticeStateInfo {
     // 'backward_cost' is the total cost of the best path from this state to
     //  the final state in the source lattice, including the final-prob.
     double backward_cost;
+    double delta_backward_cost;
 
     // 'arc_delta_costs' is an array, one for each arc (and the final-prob, if
     // present), showing how much the cost to the final-state for the best path
@@ -148,6 +151,8 @@ class PrunedCompactLatticeComposer {
     // accessing the states in the output lattice in topological
     // order.
     std::vector<int32> composed_states;
+    int32 best_composed_state;
+    double best_path_cost;
   };
 
   // This struct contains information about a state of the composed
@@ -297,6 +302,8 @@ class PrunedCompactLatticeComposer {
   // lattice.
   bool output_reached_final_;
 
+  double expected_cost_diff_;
+
   // This variable, which we set initially to -1000, makes sure that in the
   // beginning of the algorithm, we always prioritize exploring the lattice
   // in a depth-first way. Once we find a path reaching a final state, this
@@ -422,7 +429,28 @@ void PrunedCompactLatticeComposer::RecomputePruningInfo() {
   GetTopsortedStateList(&all_composed_states);
   ComputeForwardCosts(all_composed_states);
   ComputeBackwardCosts(all_composed_states);
-  ComputeDeltaBackwardCosts(all_composed_states);
+
+  int32 size = lat_state_info_.size();
+  for (int32 i = 0; i < size; i++) {
+
+    lat_state_info_[i].best_path_cost = std::numeric_limits<double>::infinity();
+    lat_state_info_[i].best_composed_state = -1;
+
+    std::vector<int32> &c = lat_state_info_[i].composed_states;
+    int32 s = c.size();
+
+    for (int32 j = 0; j < s; j++) {
+      int32 composed_state = c[j];
+      double this_cost = composed_state_info_[composed_state].forward_cost
+                       + composed_state_info_[composed_state].backward_cost;
+      if (this_cost < lat_state_info_[i].best_path_cost) {
+        lat_state_info_[i].best_path_cost = this_cost;
+        lat_state_info_[i].best_composed_state = composed_state;
+      }
+    }
+  }
+
+  ComputeDeltaBackwardCostsNew(all_composed_states);
 }
 
 void PrunedCompactLatticeComposer::ComputeForwardCosts(
@@ -505,6 +533,84 @@ void PrunedCompactLatticeComposer::ComputeBackwardCosts(
   // lattice, current_cutoff_ may be +infinity, and this is OK.
   current_cutoff_ =
       output_best_cost_ - lat_best_cost_ + opts_.lattice_compose_beam;
+}
+
+void PrunedCompactLatticeComposer::ComputeDeltaBackwardCostsNew(
+    const std::vector<int32> &composed_states) {
+
+  int32 size = lat_state_info_.size();
+  for (int32 i = 0; i < size; i++) {
+    int32 best_composed_state = lat_state_info_[i].best_composed_state;
+    if (best_composed_state != -1) {
+      lat_state_info_[i].delta_backward_cost
+        = composed_state_info_[best_composed_state].backward_cost - lat_state_info_[i].backward_cost;
+    }
+  }
+
+  return;
+  int32 num_states = clat_out_->NumStates();
+  for (int32 composed_state_index = 0; composed_state_index < num_states;
+       ++composed_state_index) {
+    ComposedStateInfo &info = composed_state_info_[composed_state_index];
+    int32 lat_state = info.lat_state;
+    // Note: delta_backward_cost will be +infinity at this stage if the
+    // backward_cost was +infinity.  This is OK; we'll set them all to
+    // finite values later in this function.
+    info.delta_backward_cost =
+        info.backward_cost - lat_state_info_[lat_state].backward_cost + info.depth * depth_penalty_;
+  }
+
+  // 'queue_elements' is a list of items (expected_cost_offset,
+  // composed_state_index) that we are going to add to composed_state_queue_,
+  // after clearing it.  It's more efficient to accumulate them as a vector
+  // and add them all at once, than adding them one by one (search online for
+  // "heapify" if this seems confusing).
+  std::vector<std::pair<BaseFloat, int32> > queue_elements;
+  queue_elements.reserve(num_states);
+
+  double lat_best_cost = lat_best_cost_;
+  BaseFloat current_cutoff = current_cutoff_;
+  std::vector<int32>::const_iterator iter = composed_states.begin(),
+      end = composed_states.end();
+  for (; iter != end; ++iter) {
+    int32 composed_state_index = *iter;
+    ComposedStateInfo &info = composed_state_info_[composed_state_index];
+    if (info.delta_backward_cost - info.delta_backward_cost != 0) {
+      // if info.delta_backward_cost is +infinity...
+      int32 prev_composed_state = info.prev_composed_state;
+      if (prev_composed_state < 0) {
+        KALDI_ASSERT(composed_state_index == 0);
+        info.delta_backward_cost = 0.0;
+      } else {
+        const ComposedStateInfo &prev_info =
+            composed_state_info_[prev_composed_state];
+        // Check that prev_info.delta_backward_cost is finite.
+        KALDI_ASSERT(prev_info.delta_backward_cost -
+                     prev_info.delta_backward_cost == 0.0);
+        info.delta_backward_cost = prev_info.delta_backward_cost + depth_penalty_;
+      }
+    }
+    double lat_backward_cost = lat_state_info_[info.lat_state].backward_cost;
+    // See the formula by where expected_cost_offset is declared in the
+    // struct for explanation.
+    BaseFloat expected_cost_offset =
+        info.forward_cost + lat_backward_cost + info.delta_backward_cost +
+        info.arc_delta_cost - lat_best_cost;
+    // If info.expected_cost_offset were real, we'd set it here:
+    //info.expected_cost_offset = expected_cost_offset;
+
+    // At this point expected_cost_offset may be infinite, if arc_delta_cost was
+    // infinite (reflecting that we processed all the arcs, and the final-state
+    // if applicable, of the lattice state corresponding to this composed state.
+    if (expected_cost_offset < current_cutoff) {
+      queue_elements.push_back(std::pair<BaseFloat, int32>(
+          expected_cost_offset, composed_state_index));
+    }
+  }
+
+  // Reinitialize composed_state_queue_ from 'queue_elements'.
+  QueueType temp_queue(queue_elements.begin(), queue_elements.end());
+  composed_state_queue_.swap(temp_queue);
 }
 
 void PrunedCompactLatticeComposer::ComputeDeltaBackwardCosts(
@@ -881,6 +987,26 @@ void PrunedCompactLatticeComposer::Compose() {
     KALDI_WARN << "Input lattice to composition is empty.";
     return;
   }
+
+  {
+    CompactLattice clat_best_path, composed_clat_bestpath;
+    CompactLatticeShortestPath(clat_in_, &clat_best_path);
+
+    std::vector<std::vector<double> > scale(2, std::vector<double>(2, 0.0));
+    fst::ScaleLattice(scale, &clat_best_path);
+    ComposeCompactLatticeDeterministic(clat_best_path, det_fst_, &composed_clat_bestpath);
+    Lattice best_path;                                                        
+    ConvertLattice(composed_clat_bestpath, &best_path);
+
+    LatticeWeight tot_weight;
+    std::vector<int32> alignment;                                           
+    std::vector<int32> words;
+    GetLinearSymbolSequence(best_path, &alignment, &words, &tot_weight);
+
+    expected_cost_diff_ = tot_weight.Value1() / words.size();
+    KALDI_LOG << "the expected cost difference is " << expected_cost_diff_;
+  }
+
   ComputeLatticeStateInfo();
   AddFirstState();
   // while (we have not reached final state  ||
