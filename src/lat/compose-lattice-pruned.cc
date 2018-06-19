@@ -124,6 +124,11 @@ class PrunedCompactLatticeComposer {
   struct LatticeStateInfo {
     // 'backward_cost' is the total cost of the best path from this state to
     //  the final state in the source lattice, including the final-prob.
+
+    int32 best_prev_state;
+    int32 best_next_state;
+
+    double forward_cost;
     double backward_cost;
     double delta_backward_cost;
 
@@ -302,6 +307,7 @@ class PrunedCompactLatticeComposer {
   // lattice.
   bool output_reached_final_;
 
+  int32 best_path_length_;
   double expected_cost_diff_;
 
   // This variable, which we set initially to -1000, makes sure that in the
@@ -450,7 +456,7 @@ void PrunedCompactLatticeComposer::RecomputePruningInfo() {
     }
   }
 
-  ComputeDeltaBackwardCostsNew(all_composed_states);
+  ComputeDeltaBackwardCosts(all_composed_states);
 }
 
 void PrunedCompactLatticeComposer::ComputeForwardCosts(
@@ -544,10 +550,17 @@ void PrunedCompactLatticeComposer::ComputeDeltaBackwardCostsNew(
     if (best_composed_state != -1) {
       lat_state_info_[i].delta_backward_cost
         = composed_state_info_[best_composed_state].backward_cost - lat_state_info_[i].backward_cost;
+    } else {
+      if (i == 0) {
+        lat_state_info_[0].delta_backward_cost = -best_path_length_ * expected_cost_diff_;
+      } else {
+//      KALDI_LOG << "The corresponding state hasn't reach final yet";
+        lat_state_info_[i].delta_backward_cost
+          = lat_state_info_[lat_state_info_[i].best_prev_state].delta_backward_cost + expected_cost_diff_;
+      }
     }
   }
 
-  return;
   int32 num_states = clat_out_->NumStates();
   for (int32 composed_state_index = 0; composed_state_index < num_states;
        ++composed_state_index) {
@@ -558,7 +571,14 @@ void PrunedCompactLatticeComposer::ComputeDeltaBackwardCostsNew(
     // finite values later in this function.
     info.delta_backward_cost =
         info.backward_cost - lat_state_info_[lat_state].backward_cost + info.depth * depth_penalty_;
+//    KALDI_LOG << "original is " << info.delta_backward_cost;
+    if (0 != info.delta_backward_cost - info.delta_backward_cost) {
+      info.delta_backward_cost = lat_state_info_[lat_state].delta_backward_cost;
+//      KALDI_LOG << "infinity changes to " << info.delta_backward_cost;
+    }
   }
+
+  return;
 
   // 'queue_elements' is a list of items (expected_cost_offset,
   // composed_state_index) that we are going to add to composed_state_queue_,
@@ -690,20 +710,22 @@ void PrunedCompactLatticeComposer::ComputeLatticeStateInfo() {
 
   for (int32 s = num_lat_states - 1; s >= 0; s--) {
     LatticeStateInfo &info = lat_state_info_[s];
-    std::vector<std::pair<double, int32> > arc_costs;
+    std::vector<std::pair<double, std::pair<int32, int32> > > arc_costs;
     double backward_cost = ConvertToCost(clat_in_.Final(s));
     if (backward_cost != std::numeric_limits<double>::infinity())
-      arc_costs.push_back(std::pair<BaseFloat,int32>(backward_cost, -1));
+      arc_costs.push_back(std::make_pair(backward_cost, std::make_pair(-1, -1)));
+//      arc_costs.push_back(std::pair<BaseFloat,std::pair<int32, int32> >(backward_cost, std::pair<int32, int32>(-1, -1)));
     fst::ArcIterator<CompactLattice> aiter(clat_in_, s);
     int32 arc_index = 0;
-    for (; !aiter.Done(); aiter.Next(), ++arc_index)  {
+    for (; !aiter.Done(); aiter.Next(), arc_index++)  {
       const CompactLatticeArc &arc = aiter.Value();
       KALDI_ASSERT(arc.nextstate > s);
       backward_cost = lat_state_info_[arc.nextstate].backward_cost +
           ConvertToCost(arc.weight);
       KALDI_ASSERT(backward_cost - backward_cost == 0.0 &&
                    "Possibly not all states of input lattice are co-accessible?");
-      arc_costs.push_back(std::pair<BaseFloat,int32>(backward_cost, arc_index));
+      arc_costs.push_back(std::make_pair(backward_cost, std::make_pair(arc_index, arc.nextstate)));
+//      arc_costs.push_back(std::pair<BaseFloat,int32>(backward_cost, arc.nextstate));
     }
     std::sort(arc_costs.begin(), arc_costs.end());
     KALDI_ASSERT(!arc_costs.empty() &&
@@ -711,17 +733,50 @@ void PrunedCompactLatticeComposer::ComputeLatticeStateInfo() {
     backward_cost = arc_costs[0].first;
     info.backward_cost = backward_cost;  // this is the state's backward_cost,
                                          // reflecting the best path to the end.
+    info.best_next_state = arc_costs[0].second.second;
+//    KALDI_LOG << "best next state of " << s << " is " << info.best_next_state;
+
     info.arc_delta_costs.resize(arc_costs.size());
-    std::vector<std::pair<double, int32> >::const_iterator
+    std::vector<std::pair<double, std::pair<int32, int32> > >::const_iterator
         src_iter = arc_costs.begin(), src_end = arc_costs.end();
     std::vector<std::pair<BaseFloat, int32> >::iterator
         dest_iter = info.arc_delta_costs.begin();
     for (; src_iter != src_end; ++src_iter, ++dest_iter) {
       dest_iter->first = BaseFloat(src_iter->first - backward_cost);
-      dest_iter->second = src_iter->second;
+      dest_iter->second = src_iter->second.first;
     }
   }
   lat_best_cost_ = lat_state_info_[0].backward_cost;
+
+  // loop for computing forward cost and best_last_state
+
+// state_to_arc_costs[i] stores arcs (cost and prev-state) to state i
+  std::vector<std::vector<std::pair<double, int32> > > state_to_arc_costs(num_lat_states);
+  for (int32 s = 0; s < num_lat_states; s++) {
+    LatticeStateInfo &info = lat_state_info_[s];
+    if (s == 0) {
+      info.forward_cost = 0;
+      info.best_prev_state = -1;
+    } else {
+      std::vector<std::pair<double, int32> > &arc_costs = state_to_arc_costs[s];
+      KALDI_ASSERT(!arc_costs.empty() &&
+                   "Possibly not all states of input lattice are co-accessible?");
+      std::sort(arc_costs.begin(), arc_costs.end());
+      info.forward_cost = arc_costs[0].first;
+      info.best_prev_state = arc_costs[0].second;
+//      KALDI_LOG << "best prev state of " << s << " is " << info.best_prev_state;
+    }
+    fst::ArcIterator<CompactLattice> aiter(clat_in_, s);
+//    int32 arc_index = 0;
+    for (; !aiter.Done(); aiter.Next())  {
+      const CompactLatticeArc &arc = aiter.Value();
+      KALDI_ASSERT(arc.nextstate > s);
+      double forward_cost = info.forward_cost + ConvertToCost(arc.weight);
+      KALDI_ASSERT(forward_cost - forward_cost == 0.0 &&
+                   "Possibly not all states of input lattice are co-accessible?");
+      state_to_arc_costs[arc.nextstate].push_back(std::pair<BaseFloat,int32>(forward_cost, s));
+    }
+  }
 }
 
 PrunedCompactLatticeComposer::PrunedCompactLatticeComposer(
@@ -736,6 +791,7 @@ PrunedCompactLatticeComposer::PrunedCompactLatticeComposer(
     current_cutoff_(std::numeric_limits<double>::infinity()) {
   clat_out_->DeleteStates();
   depth_penalty_ = -1000;
+  depth_penalty_ = 0;
 }
 
 
@@ -1003,7 +1059,8 @@ void PrunedCompactLatticeComposer::Compose() {
     std::vector<int32> words;
     GetLinearSymbolSequence(best_path, &alignment, &words, &tot_weight);
 
-    expected_cost_diff_ = tot_weight.Value1() / words.size();
+    best_path_length_ = words.size();
+    expected_cost_diff_ = tot_weight.Value1() / best_path_length_;
     KALDI_LOG << "the expected cost difference is " << expected_cost_diff_;
   }
 
