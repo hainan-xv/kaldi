@@ -983,8 +983,13 @@ void PrunedCompactLatticeComposer::ProcessTransition(int32 src_composed_state,
           ConvertToCost(lat_arc.weight) + lm_arc.weight.Value();
       dest_info->backward_cost =
           std::numeric_limits<double>::infinity();
+//      dest_info->delta_backward_cost =
+//          src_info->delta_backward_cost + dest_info->depth * depth_penalty_;
       dest_info->delta_backward_cost =
-          src_info->delta_backward_cost + dest_info->depth * depth_penalty_;
+          dest_info->backward_cost - lat_state_info_[dest_lat_state].backward_cost + dest_info->depth * depth_penalty_;
+      if (0 != dest_info->delta_backward_cost - dest_info->delta_backward_cost) {
+        dest_info->delta_backward_cost = lat_state_info_[dest_lat_state].delta_backward_cost;
+      }
       // The 'prev_composed_state' field will not be read again until after it's
       // overwritten; we set it as below only for debugging purposes (the
       // negation is also for debugging purposes).
