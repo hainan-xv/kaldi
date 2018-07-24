@@ -1960,9 +1960,13 @@ class Decoder(torch.nn.Module):
         # initialization
         c_list = [self.zero_state(hpad)]
         z_list = [self.zero_state(hpad)]
+        c_list2 = [self.zero_state(hpad)]
+        z_list2 = [self.zero_state(hpad)]
         for l in six.moves.range(1, self.dlayers):
             c_list.append(self.zero_state(hpad))
             z_list.append(self.zero_state(hpad))
+            c_list2.append(self.zero_state(hpad))
+            z_list2.append(self.zero_state(hpad))
         att_w = None
         att_ws = []
         self.att.reset()  # reset pre-computation of h
