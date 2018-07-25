@@ -1802,9 +1802,11 @@ class Decoder(torch.nn.Module):
 
         # initialize hypothesis
         if rnnlm:
+            print ("rnnlm")
             hyp = {'score': 0.0, 'yseq': [y], 'c_prev': c_list,
                    'z_prev': z_list, 'a_prev': a, 'rnnlm_prev': None}
         else:
+            print ("here")
             hyp = {'score': 0.0, 'yseq': [y], 'c_prev': c_list, 'z_prev': z_list, 'a_prev': a, 'c_prev2': c_list2, 'z_prev2': z_list2}
         if lpz is not None:
             ctc_prefix_score = CTCPrefixScore(lpz.numpy(), 0, self.eos, np)
@@ -1869,6 +1871,8 @@ class Decoder(torch.nn.Module):
                     # [:] is needed!
                     new_hyp['z_prev'] = z_list[:]
                     new_hyp['c_prev'] = c_list[:]
+                    new_hyp['z_prev2'] = z_list2[:]
+                    new_hyp['c_prev2'] = c_list2[:]
                     new_hyp['a_prev'] = att_w[:]
                     new_hyp['score'] = hyp['score'] + local_best_scores[0, j]
                     new_hyp['yseq'] = [0] * (1 + len(hyp['yseq']))
